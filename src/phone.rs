@@ -113,6 +113,8 @@ pub struct Pad {
     pub seen: Option<Instant>,
     /// Menu buttons pressed this frame, for seat joining and per-seat choices.
     pub menu: MenuInput,
+    /// A racer the phone tapped on its list this frame.
+    pub pick: Option<usize>,
     /// When the socket closed; the seat is kept for [`REJOIN`].
     pub gone: Option<Instant>,
     /// The name the phone page sent, already sanitised.
@@ -162,6 +164,17 @@ impl Phones {
             .iter()
             .find(|(p, _)| *p == id)
             .map_or_else(MenuInput::default, |(_, pad)| pad.menu)
+    }
+
+    /// The racer one phone tapped this frame.
+    pub fn pick(
+        &self,
+        id: u32,
+    ) -> Option<usize> {
+        self.pads
+            .iter()
+            .find(|(p, _)| *p == id)
+            .and_then(|(_, pad)| pad.pick)
     }
 
     /// Fold the chosen live phones into one kart input, consuming item taps.
@@ -609,6 +622,7 @@ fn receive(
     let inbound: Vec<Inbound> = rx.lock().unwrap().try_iter().collect();
     for (_, pad) in &mut phones.pads {
         pad.menu = MenuInput::default();
+        pad.pick = None;
     }
     // Forget phones that stayed away too long
     if phones
@@ -683,7 +697,13 @@ fn receive(
                     "ok" => press.confirm = true,
                     "back" => press.back = true,
                     "pause" => press.pause = true,
-                    _ => {}
+                    k => {
+                        if let Some(n) = k.strip_prefix("pick").and_then(|n| n.parse().ok())
+                            && let Some((_, pad)) = phones.pads.iter_mut().find(|(p, _)| *p == id)
+                        {
+                            pad.pick = Some(n);
+                        }
+                    }
                 }
                 // Into the shared menu input, and the phone's own for its seat
                 menu.up |= press.up;

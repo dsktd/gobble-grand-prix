@@ -5,6 +5,7 @@ Add yours under the heading below, at the top.
 
 ## Unreleased
 
+- Racer select: every player picks with up and down on their own cursor, A locks in, B unlocks; phones tap a racer on their screen.
 - The lobby shows the phone join QR code too.
 - Karts slide along walls instead of stopping dead.
 - Phone pad: controls stay clear of the iPhone notch and home bar; a stale QR says so after 10 s.

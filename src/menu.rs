@@ -133,6 +133,15 @@ pub(super) fn plugin(app: &mut App) {
         )
             .before(navigate),
     );
+    app.add_systems(
+        Update,
+        tell_picks
+            .after(pick)
+            .run_if(in_state(GameState::PickRacer)),
+    );
+    app.add_systems(OnExit(GameState::PickRacer), |phones: Res<Phones>| {
+        phones.send(r#"{"t":"racers","list":null}"#.to_string());
+    });
 }
 
 /// Every screen but the race itself.
@@ -174,6 +183,8 @@ enum Bind {
     RacerBlurb,
     RacerStat(usize),
     RacerRow(usize),
+    /// Seat `1`'s tag beside racer row `0`, shown while that seat's cursor is on it.
+    RacerTag(usize, usize),
     SeatPlayer,
     SeatStrip,
 }
@@ -986,15 +997,33 @@ fn racers(
             ),
             false,
         );
+        // With several seats the rows make room for a tag per seat on the right
+        let width = if seats > 1 { 240.0 } else { 360.0 };
         for (i, racer) in ROSTER.iter().enumerate() {
+            let top = 120.0 + i as f32 * 72.0;
             list_row(
                 stage,
                 i,
-                (48.0, 120.0 + i as f32 * 72.0),
-                (360.0, 64.0),
+                (48.0, top),
+                (width, 64.0),
                 racer.name,
                 Bind::RacerRow(i),
             );
+            for seat in 0..seats.min(4) {
+                if seats < 2 {
+                    break;
+                }
+                caption(
+                    stage,
+                    (296.0 + seat as f32 * 28.0, top),
+                    (28.0, 64.0),
+                    (
+                        Bind::RacerTag(i, seat),
+                        fit_text("", Size::LABEL, Weight::Bold, seat_color(seat), 28.0, 1),
+                    ),
+                    true,
+                );
+            }
         }
         // The 3D turntable shows through here
         stage.spawn(boxed(432.0, 120.0, 440.0, 568.0));
@@ -1018,8 +1047,8 @@ fn racers(
             stage,
             &[
                 (Action::Navigate, "Choose"),
-                (Action::Confirm, "Pick"),
-                (Action::Back, "Back"),
+                (Action::Confirm, "Lock in"),
+                (Action::Back, "Unlock or back"),
             ],
         );
     });
@@ -1141,7 +1170,8 @@ fn focus(
 ) {
     let at = match state.get() {
         GameState::Menu | GameState::Options => Some(cursor.0),
-        GameState::PickRacer => setup.racers.first().copied(),
+        // Several seats show their cursors as tags and fills instead
+        GameState::PickRacer if setup.racers.len() == 1 => setup.racers.first().copied(),
         GameState::PickTrack => Some(setup.track),
         _ => None,
     };
@@ -1166,6 +1196,7 @@ fn bind(
         .copied()
         .unwrap_or(0)
         .min(ROSTER.len() - 1)];
+    let locked = |slot: usize| ready.0.get(slot).copied().unwrap_or(false);
     let stat = |i: usize| {
         let v = match i {
             0 => racer.stats.top_speed,
@@ -1197,18 +1228,26 @@ fn bind(
                 if setup.racers.len() > 1 {
                     let mut lines = Vec::new();
                     for (slot, pick) in setup.racers.iter().enumerate() {
-                        let done = if ready.0.get(slot).copied().unwrap_or(false) {
-                            "  READY"
-                        } else {
-                            ""
-                        };
-                        lines.push(format!("P{}  {}{done}", slot + 1, ROSTER[*pick].name));
+                        let done = if locked(slot) { "  LOCKED" } else { "" };
+                        lines.push(format!(
+                            "P{} {}: {}{done}",
+                            slot + 1,
+                            names.get(slot),
+                            ROSTER[*pick].name
+                        ));
                     }
                     fitted.set(lines.join("\n"));
                 } else {
                     fitted.set("");
                 }
             }
+            Bind::RacerTag(row, seat) => fitted.set(
+                if setup.racers.get(seat) == Some(&row) {
+                    format!("P{}", seat + 1)
+                } else {
+                    String::new()
+                },
+            ),
             _ => {}
         }
     }
@@ -1244,17 +1283,16 @@ fn bind(
                 *fill = Fill { idle: c, focus: c };
             }
             Bind::RacerRow(i) => {
-                // Taken by another seat: cranberry
-                let taken = setup
-                    .racers
-                    .iter()
-                    .enumerate()
-                    .skip(1)
-                    .any(|(s, r)| *r == i && ready.0.get(s).copied().unwrap_or(false));
-                fill.idle = if taken {
-                    Tone::CRANBERRY
-                } else {
-                    Tone::BROWN_800
+                // Several seats: the row takes the colour of the first seat on it, darker
+                // until that seat locks in
+                let on = setup.racers.iter().position(|r| *r == i);
+                fill.idle = match on {
+                    Some(seat) if setup.racers.len() > 1 => {
+                        let c = seat_color(seat);
+                        // Kept dark enough for the cream name on top
+                        c.mix(&Tone::BROWN_800, if locked(seat) { 0.35 } else { 0.7 })
+                    }
+                    _ => Tone::BROWN_800,
                 };
             }
             _ => {}
@@ -1533,13 +1571,21 @@ fn pick(
             continue;
         }
         let input = device_menu(device, &keys, &gamepads, &phones, &all);
-        let step = i32::from(input.right) - i32::from(input.left);
+        let step = i32::from(input.down) - i32::from(input.up);
         if step != 0 && !ready.0[slot] {
             let count = ROSTER.len() as i32;
             setup.racers[slot] = (setup.racers[slot] as i32 + step).rem_euclid(count) as usize;
             sfx.write(Sfx::Click);
         }
-        if input.confirm {
+        // A phone taps a racer on its own list
+        if let Device::Phone(id) = device
+            && let Some(racer) = phones.pick(id).filter(|r| *r < ROSTER.len())
+            && !ready.0[slot]
+        {
+            setup.racers[slot] = racer;
+            sfx.write(Sfx::Click);
+        }
+        if input.confirm && !ready.0[slot] {
             ready.0[slot] = true;
             sfx.write(Sfx::Pickup);
         }
@@ -1555,4 +1601,37 @@ fn pick(
     if ready.0.iter().all(|r| *r) {
         next.set(GameState::PickTrack);
     }
+}
+
+/// Each seated phone gets the racer list with its own pick, so it can choose by tapping.
+fn tell_picks(
+    phones: Res<Phones>,
+    seats: Res<Seats>,
+    setup: Res<Setup>,
+    ready: Res<Ready>,
+    state: Res<State<GameState>>,
+    mut told: Local<Vec<(u32, usize, bool)>>,
+) {
+    // Phones hide the list when the screen is left, so tell them again on the way back
+    if state.is_changed() {
+        told.clear();
+    }
+    let list = serde_json::to_string(&ROSTER.iter().map(|r| r.name).collect::<Vec<_>>())
+        .unwrap_or_default();
+    let mut now = Vec::new();
+    for (slot, device) in seats.0.iter().enumerate() {
+        let (Device::Phone(id), Some(pick)) = (device, setup.racers.get(slot)) else {
+            continue;
+        };
+        let locked = ready.0.get(slot).copied().unwrap_or(false);
+        let state = (*id, *pick, locked);
+        // Only on change; a phone that reconnects gets the next change
+        if !told.contains(&state) {
+            phones.send(format!(
+                r#"{{"t":"racers","id":{id},"pick":{pick},"locked":{locked},"list":{list}}}"#
+            ));
+        }
+        now.push(state);
+    }
+    *told = now;
 }

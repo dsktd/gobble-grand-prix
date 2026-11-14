@@ -195,11 +195,14 @@ fn no_text_overflows() {
                 go(&mut app, state);
                 problems.extend(check(&mut app, &tag(name), size));
             }
-            // Four seats on the racer screen
-            app.world_mut().resource_mut::<Setup>().racers = vec![0, 1, 2, 3];
-            go(&mut app, GameState::Menu);
-            go(&mut app, GameState::PickRacer);
-            problems.extend(check(&mut app, &tag("racers x4"), size));
+            // Two to four seats on the racer screen, some on the same racer
+            for seats in 2..=4 {
+                app.world_mut().resource_mut::<Setup>().racers =
+                    (0..seats).map(|s| s % 3).collect();
+                go(&mut app, GameState::Menu);
+                go(&mut app, GameState::PickRacer);
+                problems.extend(check(&mut app, &tag(&format!("racers x{seats}")), size));
+            }
             app.world_mut().resource_mut::<Setup>().racers = vec![0];
 
             for seats in 1..=4 {
