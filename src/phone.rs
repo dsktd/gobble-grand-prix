@@ -345,11 +345,11 @@ async fn socket(
                 .fetch_add(1, std::sync::atomic::Ordering::Relaxed)
                 + 1
         };
-        match join.token.is_empty() {
-            true => fresh(),
-            false => *ids
-                .entry(join.token.chars().take(64).collect())
-                .or_insert_with(fresh),
+        if join.token.is_empty() {
+            fresh()
+        } else {
+            *ids.entry(join.token.chars().take(64).collect())
+                .or_insert_with(fresh)
         }
     };
     upgrade.on_upgrade(move |ws| session(ws, shared, id))
@@ -513,16 +513,20 @@ fn tell_seats(
         return;
     }
     for (id, _) in &phones.pads {
-        let message = match seats.0.iter().position(|d| *d == Device::Phone(*id)) {
-            Some(slot) => {
-                let [r, g, b, _] = seat_color(slot).to_srgba().to_u8_array();
-                format!(
-                    r##"{{"t":"seat","id":{id},"p":{},"color":"#{r:02x}{g:02x}{b:02x}"}}"##,
-                    slot + 1
-                )
-            }
-            None => format!(r#"{{"t":"seat","id":{id},"p":null}}"#),
-        };
+        let message = seats
+            .0
+            .iter()
+            .position(|d| *d == Device::Phone(*id))
+            .map_or_else(
+                || format!(r#"{{"t":"seat","id":{id},"p":null}}"#),
+                |slot| {
+                    let [r, g, b, _] = seat_color(slot).to_srgba().to_u8_array();
+                    format!(
+                        r##"{{"t":"seat","id":{id},"p":{},"color":"#{r:02x}{g:02x}{b:02x}"}}"##,
+                        slot + 1
+                    )
+                },
+            );
         phones.send(message);
     }
 }
