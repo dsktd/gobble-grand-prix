@@ -12,6 +12,7 @@ pub(super) mod prelude {
     pub use super::label;
     pub use super::panel;
     pub use super::prompt;
+    pub use super::prompt_either;
 }
 
 pub(super) fn plugin(_app: &mut App) {
@@ -53,7 +54,10 @@ pub fn label(
         Text::new(value),
         TextFont::from_font_size(size),
         TextColor(color),
-        TextShadow::default(),
+        TextShadow {
+            offset: Vec2::splat(2.0),
+            color: Color::srgba(0.1, 0.03, 0.0, 0.9),
+        },
     )
 }
 
@@ -71,6 +75,18 @@ pub fn panel() -> impl Bundle {
     )
 }
 
+fn glyph(action: Action) -> impl Bundle {
+    (
+        Glyph(action),
+        ImageNode::default(),
+        Node {
+            width: px(Size::GLYPH),
+            height: px(Size::GLYPH),
+            ..default()
+        },
+    )
+}
+
 /// A button glyph followed by what it does. The glyph follows the last used device.
 pub fn prompt(
     action: Action,
@@ -82,17 +98,26 @@ pub fn prompt(
             column_gap: px(6),
             ..default()
         },
+        children![glyph(action), label(text, Size::SMALL, Tone::CREAM)],
+    )
+}
+
+/// Two glyphs that do the same thing, then what they do.
+pub fn prompt_either(
+    action: Action,
+    alternative: Action,
+    text: &str,
+) -> impl Bundle {
+    (
+        Node {
+            align_items: AlignItems::Center,
+            column_gap: px(6),
+            ..default()
+        },
         children![
-            (
-                Glyph(action),
-                ImageNode::default(),
-                Node {
-                    width: px(Size::GLYPH),
-                    height: px(Size::GLYPH),
-                    ..default()
-                },
-            ),
-            label(text, Size::SMALL, Tone::CREAM),
+            glyph(action),
+            glyph(alternative),
+            label(text, Size::SMALL, Tone::CREAM)
         ],
     )
 }

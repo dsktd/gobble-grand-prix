@@ -44,6 +44,9 @@ fn spawn(
                 .looking_at(flat(start, 1.0), Vec3::Y),
             DespawnOnExit(GameState::Race),
         ));
+        if !options.high_quality {
+            camera.insert(bevy::render::view::Msaa::Off);
+        }
         if options.high_quality {
             camera.insert(DistanceFog {
                 color: theme.fog,

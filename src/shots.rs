@@ -17,6 +17,12 @@ pub(super) fn plugin(app: &mut App) {
         return;
     }
     let track = args.get(2).and_then(|a| a.parse().ok()).unwrap_or(0);
+    if args.get(3).map(String::as_str) == Some("low") {
+        app.insert_resource(Options {
+            high_quality: false,
+            ..default()
+        });
+    }
     app.insert_resource(Tour {
         track,
         clock: 0.0,

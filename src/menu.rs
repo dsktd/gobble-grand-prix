@@ -57,13 +57,13 @@ struct Preview(usize);
 struct Platter;
 
 /// Controls listed on the options screen.
-const CONTROLS: [(Action, &str); 6] = [
-    (Action::Gas, "Gas"),
-    (Action::Brake, "Brake"),
-    (Action::Steer, "Steer"),
-    (Action::Drift, "Drift (hold, then release for a turbo)"),
-    (Action::Item, "Use item"),
-    (Action::Quit, "Quit race"),
+const CONTROLS: [(Action, Option<Action>, &str); 6] = [
+    (Action::Gas, Some(Action::GasButton), "Gas"),
+    (Action::Brake, Some(Action::BrakeButton), "Brake"),
+    (Action::Steer, None, "Steer"),
+    (Action::Drift, None, "Drift (hold, then release for a turbo)"),
+    (Action::Item, None, "Use item"),
+    (Action::Quit, None, "Quit race"),
 ];
 
 fn header(state: GameState) -> &'static str {
@@ -228,8 +228,15 @@ fn screen(
                 }
                 if state == GameState::Options {
                     list.spawn(panel()).with_children(|controls| {
-                        for (action, text) in CONTROLS {
-                            controls.spawn(prompt(action, text));
+                        for (action, alternative, text) in CONTROLS {
+                            match alternative {
+                                Some(alternative) => {
+                                    controls.spawn(prompt_either(action, alternative, text));
+                                }
+                                None => {
+                                    controls.spawn(prompt(action, text));
+                                }
+                            }
                         }
                     });
                 }
