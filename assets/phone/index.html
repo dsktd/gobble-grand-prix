@@ -70,7 +70,11 @@
 <script>
 "use strict";
 const $ = (id) => document.getElementById(id);
-const pin = new URLSearchParams(location.search).get("pin") || prompt("Room PIN") || "";
+// LAN: ?pin= on the game's own HTTPS page. Anywhere: #g=<game id>&pin= on GitHub Pages,
+// in the fragment so no server ever logs it, and the link goes over iroh relays.
+const hash = new URLSearchParams(location.hash.slice(1));
+const game = hash.get("g");
+const pin = hash.get("pin") || new URLSearchParams(location.search).get("pin") || prompt("Room PIN") || "";
 // A stable id for this phone, so a reload gets the same seat back
 let token = localStorage.getItem("gobble-token");
 if (!token) {
@@ -80,15 +84,38 @@ if (!token) {
 const state = { steer: 0, gas: false, brake: false, drift: false, item: false };
 let ws = null, seq = 0, gyro = false, tilt = 0, center = 0;
 
-function connect() {
+function closed() {
+  ws = null;
+  $("cover").style.display = "flex";
+  $("status").textContent = "Disconnected. Wrong PIN, or the game closed. Tap to retry.";
+}
+
+// Both transports look the same to the rest of the page: send(text), readyState 1 when open
+async function connect() {
+  if (game) {
+    $("status").textContent = "Connecting through the internet...";
+    try {
+      const pad = await import("./pkg/gobble_pad.js");
+      await pad.default();
+      const link = await pad.connect(game, (line) => receive(line), closed);
+      link.send(JSON.stringify({ t: "join", pin, token }));
+      ws = { readyState: 1, send: (text) => link.send(text) };
+      $("cover").style.display = "none";
+    } catch (e) {
+      $("status").textContent = `Could not reach the game: ${e}`;
+    }
+    return;
+  }
   ws = new WebSocket(`wss://${location.host}/ws?pin=${encodeURIComponent(pin)}&token=${token}`);
   ws.onopen = () => { $("cover").style.display = "none"; };
-  ws.onclose = () => {
-    $("cover").style.display = "flex";
-    $("status").textContent = "Disconnected. Wrong PIN, or the game closed. Tap to retry.";
-  };
-  ws.onmessage = (event) => {
-    const msg = JSON.parse(event.data);
+  ws.onclose = closed;
+  ws.onmessage = (event) => receive(event.data);
+}
+
+function receive(text) {
+  {
+    const msg = JSON.parse(text);
+    if (msg.t === "denied") { $("status").textContent = "Wrong PIN."; return; }
     if (msg.t === "buzz" && navigator.vibrate) navigator.vibrate(msg.ms);
     if (msg.t === "ack") $("ping").textContent = `${Math.round(performance.now() - msg.ms)} ms`;
     if (msg.t === "seat") {
@@ -97,7 +124,7 @@ function connect() {
       $("full").style.display = "none";
     }
     if (msg.t === "full") $("full").style.display = "flex";
-  };
+  }
 }
 
 $("go").onclick = async () => {

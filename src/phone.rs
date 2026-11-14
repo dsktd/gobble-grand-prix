@@ -43,6 +43,10 @@ pub const PORT: u16 = 7777;
 const TAKEOVER: Duration = Duration::from_secs(3);
 /// How long a disconnected phone keeps its seat.
 const REJOIN: Duration = Duration::from_secs(30);
+/// iroh application protocol for phone controllers.
+const ALPN: &[u8] = b"gobble/controller/1";
+/// The phone page on GitHub Pages; the game id and PIN ride in the fragment so no server logs them.
+const PAGES: &str = "https://dsktd.github.io/gobble-grand-prix/pad/";
 const PAGE: &str = include_str!("../assets/phone/index.html");
 
 pub(super) fn plugin(app: &mut App) {
@@ -50,15 +54,47 @@ pub(super) fn plugin(app: &mut App) {
     app.add_systems(Startup, start);
     app.add_systems(PreUpdate, receive.after(menu_input));
     app.add_systems(Update, (buzz, takeover).run_if(in_state(GameState::Race)));
-    app.add_systems(Update, (tell_seats, drop_seats));
+    app.add_systems(Update, (tell_seats, drop_seats, anywhere));
 }
 
 /// What the title screen shows so a phone can join.
 #[derive(Resource, Clone, Debug)]
 pub struct JoinInfo {
+    /// Same Wi-Fi only.
     pub url: String,
+    /// Through iroh relays, from any network; the QR shows this one when it is up.
+    pub anywhere: Option<String>,
     pub pin: String,
     pub qr: Handle<Image>,
+}
+
+/// Waits for the iroh endpoint id from the server thread.
+#[derive(Resource)]
+struct Anywhere {
+    rx: std::sync::Mutex<mpsc::Receiver<String>>,
+    pin: String,
+}
+
+/// Once iroh is up, point the QR code at the anywhere link.
+fn anywhere(
+    mut commands: Commands,
+    waiting: Option<Res<Anywhere>>,
+    join: Option<ResMut<JoinInfo>>,
+    mut images: ResMut<Assets<Image>>,
+) {
+    let (Some(waiting), Some(mut join)) = (waiting, join) else {
+        return;
+    };
+    let Ok(id) = waiting.rx.lock().unwrap().try_recv() else {
+        return;
+    };
+    let link = format!("{PAGES}#g={id}&pin={}", waiting.pin);
+    info!("Phone join anywhere {link}");
+    if let Some(image) = qr_image(&link) {
+        join.qr = images.add(image);
+    }
+    join.anywhere = Some(link);
+    commands.remove_resource::<Anywhere>();
 }
 
 /// Latest state of a phone's controls.
@@ -79,6 +115,8 @@ pub struct Pad {
     pub menu: MenuInput,
     /// When the socket closed; the seat is kept for [`REJOIN`].
     pub gone: Option<Instant>,
+    /// The seat last told to the phone page.
+    told: Option<Option<usize>>,
 }
 
 /// Connected phones and the channel back to them.
@@ -278,6 +316,11 @@ fn start(
         ids: std::sync::Arc::default(),
     };
     let addr = SocketAddr::new(ip, PORT);
+    let (id_tx, id_rx) = mpsc::channel();
+    commands.insert_resource(Anywhere {
+        rx: std::sync::Mutex::new(id_rx),
+        pin: pin.clone(),
+    });
     let _handle = std::thread::spawn(move || {
         let runtime = tokio::runtime::Builder::new_multi_thread()
             .worker_threads(2)
@@ -285,6 +328,19 @@ fn start(
             .build()
             .unwrap();
         runtime.block_on(async move {
+            // Anywhere: iroh through n0's relays, found by endpoint id
+            match iroh::Endpoint::builder(iroh::endpoint::presets::N0)
+                .alpns(vec![ALPN.to_vec()])
+                .bind()
+                .await
+            {
+                Ok(endpoint) => {
+                    let _ = id_tx.send(endpoint.id().to_string());
+                    info!("Phone controller over iroh as {}", endpoint.id());
+                    tokio::spawn(iroh_accept(endpoint, shared.clone()));
+                }
+                Err(err) => warn!("No iroh, phones need the LAN: {err}"),
+            }
             let config = match RustlsConfig::from_pem(cert, key).await {
                 Ok(config) => config,
                 Err(err) => {
@@ -310,6 +366,7 @@ fn start(
     phones.tx = Some(out);
     if let Some(image) = qr_image(&url) {
         commands.insert_resource(JoinInfo {
+            anywhere: None,
             url,
             pin,
             qr: images.add(image),
@@ -337,21 +394,7 @@ async fn socket(
     if join.pin != shared.pin {
         return (StatusCode::FORBIDDEN, "Wrong PIN").into_response();
     }
-    let id = {
-        let mut ids = shared.ids.lock().unwrap();
-        let fresh = || {
-            shared
-                .next
-                .fetch_add(1, std::sync::atomic::Ordering::Relaxed)
-                + 1
-        };
-        if join.token.is_empty() {
-            fresh()
-        } else {
-            *ids.entry(join.token.chars().take(64).collect())
-                .or_insert_with(fresh)
-        }
-    };
+    let id = claim(&shared, &join.token);
     upgrade.on_upgrade(move |ws| session(ws, shared, id))
 }
 
@@ -389,7 +432,7 @@ async fn session(
                     continue;
                 };
                 // Messages carry an id when meant for one phone
-                let mine = !text.contains(r#""id":"#) || text.contains(&format!(r#""id":{id},"#));
+                let mine = for_phone(&text, id);
                 if mine && sink.send(WsMessage::Text(text.into())).await.is_err() {
                     break;
                 }
@@ -397,6 +440,130 @@ async fn session(
         }
     }
     let _ = shared.tx.send(Inbound::Left(id));
+}
+
+/// Messages carry an id when meant for one phone only.
+fn for_phone(
+    text: &str,
+    id: u32,
+) -> bool {
+    !text.contains(r#""id":"#)
+        || text.contains(&format!(r#""id":{id},"#))
+        || text.contains(&format!(r#""id":{id}}}"#))
+}
+
+/// The connection id for a phone token, the same one again after a reconnect.
+fn claim(
+    shared: &Shared,
+    token: &str,
+) -> u32 {
+    let mut ids = shared.ids.lock().unwrap();
+    let fresh = || {
+        shared
+            .next
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+            + 1
+    };
+    if token.is_empty() {
+        fresh()
+    } else {
+        *ids.entry(token.chars().take(64).collect()).or_insert_with(fresh)
+    }
+}
+
+/// First line on an iroh stream.
+#[derive(Deserialize)]
+struct Hello {
+    pin: String,
+    #[serde(default)]
+    token: String,
+}
+
+/// Accept phones over iroh: relayed or direct QUIC, newline-delimited JSON on one stream.
+async fn iroh_accept(
+    endpoint: iroh::Endpoint,
+    shared: Shared,
+) {
+    while let Some(incoming) = endpoint.accept().await {
+        let shared = shared.clone();
+        tokio::spawn(async move {
+            let Ok(connection) = incoming.await else {
+                return;
+            };
+            let Ok((send, recv)) = connection.accept_bi().await else {
+                return;
+            };
+            iroh_session(send, recv, shared).await;
+            drop(connection);
+        });
+    }
+}
+
+async fn iroh_session(
+    mut send: iroh::endpoint::SendStream,
+    mut recv: iroh::endpoint::RecvStream,
+    shared: Shared,
+) {
+    let mut buf: Vec<u8> = Vec::new();
+    let mut chunk = vec![0u8; 4096];
+    let mut id = None;
+    let mut out = shared.out.subscribe();
+    loop {
+        tokio::select! {
+            read = recv.read(&mut chunk) => {
+                let Ok(Some(n)) = read else {
+                    break;
+                };
+                buf.extend_from_slice(&chunk[..n]);
+                if buf.len() > 65_536 {
+                    break;
+                }
+                while let Some(end) = buf.iter().position(|b| *b == b'\n') {
+                    let line: Vec<u8> = buf.drain(..=end).collect();
+                    let text = String::from_utf8_lossy(&line[..line.len() - 1]).into_owned();
+                    match id {
+                        // The first line must carry the PIN
+                        None => {
+                            let Ok(hello) = serde_json::from_str::<Hello>(&text) else {
+                                return;
+                            };
+                            if hello.pin != shared.pin {
+                                let _ = send.write_all(b"{\"t\":\"denied\"}\n").await;
+                                let _ = send.finish();
+                                return;
+                            }
+                            let phone = claim(&shared, &hello.token);
+                            id = Some(phone);
+                            let _ = shared.tx.send(Inbound::Joined(phone));
+                            let _ = send
+                                .write_all(format!("{{\"t\":\"hello\",\"id\":{phone}}}\n").as_bytes())
+                                .await;
+                        }
+                        Some(phone) => {
+                            let Ok(wire) = serde_json::from_str::<Wire>(&text) else {
+                                continue;
+                            };
+                            if shared.tx.send(Inbound::Wire(phone, wire)).is_err() {
+                                return;
+                            }
+                        }
+                    }
+                }
+            }
+            outgoing = out.recv(), if id.is_some() => {
+                let Ok(text) = outgoing else {
+                    continue;
+                };
+                let phone = id.unwrap_or_default();
+                if for_phone(&text, phone) && send.write_all(format!("{text}\n").as_bytes()).await.is_err() {
+                    break;
+                }
+            }
+        }
+    }
+    if let Some(phone) = id {
+        let _ = shared.tx.send(Inbound::Left(phone));
+    }
 }
 
 fn receive(
@@ -435,7 +602,10 @@ fn receive(
             Inbound::Joined(id) => {
                 info!("Phone {id} connected");
                 match phones.pads.iter_mut().find(|(p, _)| *p == id) {
-                    Some((_, pad)) => pad.gone = None,
+                    Some((_, pad)) => {
+                        pad.gone = None;
+                        pad.told = None;
+                    }
                     None => phones.pads.push((id, Pad::default())),
                 }
             }
@@ -506,13 +676,17 @@ fn receive(
 
 /// Tell each phone which seat it holds, so its page can show "P2".
 fn tell_seats(
-    phones: Res<Phones>,
+    mut phones: ResMut<Phones>,
     seats: Res<Seats>,
 ) {
-    if !seats.is_changed() && !phones.is_changed() {
-        return;
-    }
-    for (id, _) in &phones.pads {
+    let mut messages = Vec::new();
+    for (id, pad) in &mut phones.pads {
+        let slot = seats.0.iter().position(|d| *d == Device::Phone(*id));
+        // Only on change, or to a phone that just (re)connected
+        if pad.told == Some(slot) {
+            continue;
+        }
+        pad.told = Some(slot);
         let message = seats
             .0
             .iter()
@@ -527,6 +701,9 @@ fn tell_seats(
                     )
                 },
             );
+        messages.push(message);
+    }
+    for message in messages {
         phones.send(message);
     }
 }

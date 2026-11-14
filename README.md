@@ -57,3 +57,18 @@ own music, put files in `~/.local/share/gobble-gp/music/` (`$XDG_DATA_HOME/gobbl
 - with neither name present, every other file there becomes the race playlist.
 
 Options has a separate Music volume. Nothing from that folder is ever part of the game.
+
+## Phone controller
+
+The title screen shows a QR code. Scan it with a phone, tap "Tap to start", then press A to join a seat.
+
+- **Any network (default):** the QR opens `https://dsktd.github.io/gobble-grand-prix/pad/#g=<game id>&pin=<PIN>`.
+  The page runs iroh in WebAssembly and reaches the game through iroh's public relays, so the phone can be on
+  mobile data. The game id and PIN sit in the URL fragment, so no web server sees them; the id changes every
+  time the game starts.
+- **Same Wi-Fi:** `https://<LAN IP>:7777/?pin=<PIN>`, shown under the QR. It uses a self-signed certificate:
+  accept the warning once.
+
+Both carry the same newline-delimited JSON messages. `pad/` holds the browser module and `pad-probe`, a
+native test client (`pad/build.sh`, then `pad/target/release/pad-probe <game id> <PIN>`); `pad/publish.sh`
+updates the GitHub Pages copy.

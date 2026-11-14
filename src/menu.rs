@@ -383,7 +383,11 @@ fn invite(
                 .with_children(|text| {
                     text.spawn(label("Phone controller", Size::BODY, Tone::GOLD));
                     text.spawn(label(format!("PIN {}", join.pin), Size::BODY, Tone::CREAM));
-                    text.spawn(label(join.url.clone(), Size::SMALL, Tone::DIM));
+                    let shown = match &join.anywhere {
+                        Some(_) => format!("Any network, or same Wi-Fi: {}", join.url),
+                        None => join.url.clone(),
+                    };
+                    text.spawn(label(shown, Size::SMALL, Tone::DIM));
                     text.spawn(label(
                         "Accept the certificate warning once",
                         Size::SMALL,
