@@ -112,7 +112,12 @@ pub(super) fn plugin(app: &mut App) {
             .chain()
             .run_if(in_state(InMenus)),
     );
-    app.add_systems(Update, late_invite.run_if(in_state(GameState::Menu)));
+    app.add_systems(
+        Update,
+        late_invite.run_if(|s: Res<State<GameState>>| {
+            matches!(s.get(), GameState::Menu | GameState::Lobby)
+        }),
+    );
     app.init_resource::<Ready>();
     app.add_systems(OnEnter(GameState::Lobby), |mut seats: ResMut<Seats>| {
         seats.0.clear();
@@ -695,37 +700,50 @@ fn news_box(stage: &mut ChildSpawnerCommands) {
         });
 }
 
-/// Marks the phone invite so it is spawned once per visit to the title menu.
+/// Marks the phone invite so it is spawned once per visit to the title menu or the lobby.
 #[derive(Component, Copy, Clone, Debug)]
 struct Invite;
 
 /// The phone controller QR over the title's turntable area, once the server is up.
 fn late_invite(
     mut commands: Commands,
+    state: Res<State<GameState>>,
     join: Option<Res<JoinInfo>>,
     shown: Query<(), With<Invite>>,
 ) {
+    let state = *state.get();
     let Some(join) = join else {
         return;
     };
     if !shown.is_empty() {
         return;
     }
-    let root = stage(&mut commands, GameState::Menu);
-    commands.entity(root).insert(Invite).with_children(|root| {
-        root.spawn(Node {
-            width: px(1280),
-            height: px(800),
-            flex_shrink: 0.0,
-            ..default()
-        })
-        .with_children(|stage| invite(stage, &join));
-    });
+    // Title: over the turntable. Lobby: under the help panel
+    let at = if state == GameState::Lobby {
+        (672.0, 340.0, 560.0)
+    } else {
+        (64.0, 560.0, 600.0)
+    };
+    let root = stage(&mut commands, state);
+    // An overlay: never the solid backdrop, which would hide the screen under it
+    commands
+        .entity(root)
+        .insert((Invite, BackgroundColor(Color::NONE)))
+        .with_children(|root| {
+            root.spawn(Node {
+                width: px(1280),
+                height: px(800),
+                flex_shrink: 0.0,
+                ..default()
+            })
+            .with_children(|stage| invite(stage, &join, at));
+        });
 }
 
 fn invite(
     stage: &mut ChildSpawnerCommands,
     join: &JoinInfo,
+    (left, top, width): (f32, f32, f32),
 ) {
     stage
         .spawn((
@@ -734,7 +752,7 @@ fn invite(
                 column_gap: px(Space::M),
                 padding: UiRect::all(px(Space::S)),
                 border_radius: pill(Space::RADIUS_M),
-                ..boxed(64.0, 560.0, 600.0, 168.0)
+                ..boxed(left, top, width, 168.0)
             },
             BackgroundColor(Tone::CHIP),
         ))
@@ -755,8 +773,8 @@ fn invite(
                     ..default()
                 })
                 .with_children(|text| {
-                    // 600 - 2 * 8 padding - 150 QR - 16 gap
-                    let w = 418.0;
+                    // width - 2 * 8 padding - 150 QR - 16 gap
+                    let w = width - 182.0;
                     text.spawn(fit_text(
                         "Phone controller",
                         Size::BODY,
