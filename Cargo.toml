@@ -76,3 +76,5 @@ match_same_arms = "allow"
 while_float = "allow"
 # Bevy hands out Res<T> and many call sites pass &T through; by-value would add churn for nothing.
 trivially_copy_pass_by_ref = "allow"
+# Newer clippy wants Option::map_or_default, which older stable toolchains (and the Nix shell) lack.
+map_unwrap_or = "allow"
