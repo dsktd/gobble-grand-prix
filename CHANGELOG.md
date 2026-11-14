@@ -4,6 +4,7 @@ Newest first. One short line per change a player can see; the title screen shows
 Add yours under the heading below, at the top.
 
 ## Unreleased
+- Random tracks: a new course of hairpins, chicanes, esses and straights every race, with its seed shown to replay a good one.
 - Two-player split screen can be cut diagonally, corner to corner (Options, "2 players").
 
 - Racer select with 2-4 players: every seat gets its own card with its racer's 3D model, name and stats.

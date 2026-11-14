@@ -74,7 +74,7 @@ pub(super) fn spawn(
         track.locate(p).lateral.abs() > track.barrier() + 1.0 && !track.in_shortcut(p)
     };
 
-    match track.def().scenery {
+    match track.scenery {
         Scenery::Farm => {
             let post = kit(
                 m,
@@ -193,14 +193,20 @@ pub(super) fn spawn(
                     );
                 }
             }
-            put(&mut commands, &barn, Transform::from_xyz(20.0, 5.0, 60.0));
-            for side in [-1.0f32, 1.0] {
+            if let Some(at) = track.landmark {
                 put(
                     &mut commands,
-                    &roof,
-                    Transform::from_xyz(20.0 + side * 4.3, 12.4, 60.0)
-                        .with_rotation(Quat::from_rotation_z(side * -0.6)),
+                    &barn,
+                    Transform::from_translation(flat(at, 5.0)),
                 );
+                for side in [-1.0f32, 1.0] {
+                    put(
+                        &mut commands,
+                        &roof,
+                        Transform::from_translation(flat(at, 12.4) + Vec3::X * side * 4.3)
+                            .with_rotation(Quat::from_rotation_z(side * -0.6)),
+                    );
+                }
             }
         }
         Scenery::Table => {
@@ -236,20 +242,29 @@ pub(super) fn spawn(
             let roll = kit(m, mt, Sphere::new(1.8), Color::srgb(0.85, 0.60, 0.30));
 
             // The roast sits in the middle of the table
-            put(
-                &mut commands,
-                &roast,
-                Transform::from_xyz(0.0, 4.0, -18.0).with_scale(Vec3::new(1.3, 0.7, 1.0)),
-            );
-            for side in [-1.0f32, 1.0] {
+            if let Some(at) = track.landmark {
                 put(
                     &mut commands,
-                    &drum,
-                    Transform::from_xyz(side * 16.0, 5.0, -10.0).with_rotation(
-                        Quat::from_rotation_x(1.2) * Quat::from_rotation_z(side * 0.4),
-                    ),
+                    &roast,
+                    Transform::from_translation(flat(at, 4.0)).with_scale(Vec3::new(1.3, 0.7, 1.0)),
                 );
+                for side in [-1.0f32, 1.0] {
+                    put(
+                        &mut commands,
+                        &drum,
+                        Transform::from_translation(
+                            flat(at, 5.0) + Vec3::new(side * 16.0, 0.0, 8.0),
+                        )
+                        .with_rotation(
+                            Quat::from_rotation_x(1.2) * Quat::from_rotation_z(side * 0.4),
+                        ),
+                    );
+                }
             }
+            // Dishes stand wherever the layout leaves them room
+            let open = |x: f32, z: f32, r: f32| {
+                track.locate(Vec2::new(x, z)).lateral.abs() > track.barrier() + r
+            };
             for (x, z) in [
                 (-60.0, -15.0),
                 (60.0, -15.0),
@@ -260,6 +275,9 @@ pub(super) fn spawn(
                 (-100.0, -80.0),
                 (100.0, -80.0),
             ] {
+                if !open(x, z, 9.5) {
+                    continue;
+                }
                 put(&mut commands, &plate, Transform::from_xyz(x, 0.2, z));
                 put(&mut commands, &rim, Transform::from_xyz(x, 0.35, z));
             }
@@ -269,6 +287,9 @@ pub(super) fn spawn(
                 (-130.0, 80.0),
                 (130.0, 80.0),
             ] {
+                if !open(x, z, 1.5) {
+                    continue;
+                }
                 put(&mut commands, &candle, Transform::from_xyz(x, 6.0, z));
                 put(
                     &mut commands,

@@ -65,7 +65,11 @@ pub enum GameState {
 pub struct Setup {
     /// Racer per local player slot. One slot until split screen lands.
     pub racers: Vec<usize>,
+    /// A hand-made track, or `TRACKS.len()` for one generated from `seed`.
     pub track: usize,
+    pub seed: u32,
+    /// The seed raced before this one, to replay a good track.
+    pub last_seed: u32,
 }
 
 impl Default for Setup {
@@ -73,6 +77,8 @@ impl Default for Setup {
         Self {
             racers: vec![0],
             track: 0,
+            seed: 1,
+            last_seed: 1,
         }
     }
 }

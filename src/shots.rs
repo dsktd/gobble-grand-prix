@@ -16,7 +16,12 @@ pub(super) fn plugin(app: &mut App) {
     if args.get(1).map(String::as_str) != Some("shots") {
         return;
     }
-    let track = args.get(2).and_then(|a| a.parse().ok()).unwrap_or(0);
+    // A track index, or r<seed> for a generated track
+    let arg = args.get(2).map_or("0", String::as_str);
+    let (track, seed) = arg.strip_prefix('r').map_or_else(
+        || (arg.parse().unwrap_or(0).min(TRACKS.len() - 1), 1),
+        |seed| (TRACKS.len(), seed.parse().unwrap_or(1)),
+    );
     // Optional 6th argument: "diagonal" for the diagonal two-player split
     app.insert_resource(Options {
         high_quality: args.get(3).map(String::as_str) != Some("low"),
@@ -37,6 +42,8 @@ pub(super) fn plugin(app: &mut App) {
         app.insert_resource(Setup {
             racers: (0..seats).map(|s| s * 2 % ROSTER.len()).collect(),
             track,
+            seed,
+            last_seed: seed,
         });
     }
     let racer = args
@@ -46,6 +53,7 @@ pub(super) fn plugin(app: &mut App) {
     app.insert_resource(Tour {
         racer,
         track,
+        seed,
         clock: 0.0,
         step: 0,
     });
@@ -60,6 +68,7 @@ pub(super) fn plugin(app: &mut App) {
 struct Tour {
     racer: usize,
     track: usize,
+    seed: u32,
     clock: f32,
     step: usize,
 }
@@ -113,7 +122,10 @@ fn tour(
 ) {
     tour.clock += time.delta_secs();
     let t = tour.clock;
-    let name = TRACKS[tour.track].name.to_lowercase().replace(' ', "-");
+    let name = match TRACKS.get(tour.track) {
+        Some(def) => def.name.to_lowercase().replace(' ', "-"),
+        None => format!("random-{}", tour.seed),
+    };
     match tour.step {
         0 if t > 2.0 => shoot(&mut commands, "menu"),
         1 if t > 2.5 => whats.open = true,
@@ -135,7 +147,11 @@ fn tour(
             next.set(GameState::PickTrack);
         }
         10 if t > 11.0 => shoot(&mut commands, &format!("track-{name}")),
-        11 if t > 11.5 => next.set(GameState::Race),
+        11 if t > 11.5 => {
+            // The track page rolls a fresh seed; race the one asked for
+            setup.seed = tour.seed;
+            next.set(GameState::Race);
+        }
         12 if t > 14.0 => shoot(&mut commands, &format!("{name}-countdown")),
         13 if t > 21.0 => shoot(&mut commands, &format!("{name}-racing")),
         14 if t > 29.0 => {

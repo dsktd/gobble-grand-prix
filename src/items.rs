@@ -107,7 +107,7 @@ pub(super) fn spawn(
         base_color: Color::srgb(0.45, 0.25, 0.10),
         ..default()
     });
-    for frac in track.def().boxes {
+    for frac in &track.boxes {
         let along = track.length * frac;
         for lane in [-0.6, -0.2, 0.2, 0.6] {
             let pos = track.offset(along, lane * track.half_width);

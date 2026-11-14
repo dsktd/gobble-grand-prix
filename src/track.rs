@@ -7,9 +7,12 @@ use bevy::prelude::*;
 
 use crate::prelude::*;
 
+pub(crate) mod generate;
+
 pub(super) mod prelude {
     pub use super::Scenery;
     pub use super::TRACKS;
+    pub use super::Theme;
     pub use super::Track;
     pub use super::flat;
     pub use super::spawn_track;
@@ -54,6 +57,8 @@ pub struct TrackDef {
     pub boxes: &'static [f32],
     pub scenery: Scenery,
     pub theme: Theme,
+    /// Open ground for the theme's big centrepiece (barn, roast).
+    pub landmark: (f32, f32),
 }
 
 pub const TRACKS: [TrackDef; 3] = [
@@ -77,6 +82,7 @@ pub const TRACKS: [TrackDef; 3] = [
         shortcuts: &[],
         boxes: &[0.18, 0.47, 0.76],
         scenery: Scenery::Farm,
+        landmark: (20.0, 60.0),
         theme: Theme {
             sky: Color::srgb(0.98, 0.62, 0.36),
             ground: Color::srgb(0.47, 0.42, 0.18),
@@ -112,6 +118,7 @@ pub const TRACKS: [TrackDef; 3] = [
         shortcuts: &[((48.0, 55.0), (-48.0, 55.0), 6.0)],
         boxes: &[0.2, 0.48, 0.8],
         scenery: Scenery::Table,
+        landmark: (0.0, -18.0),
         theme: Theme {
             sky: Color::srgb(0.22, 0.08, 0.06),
             ground: Color::srgb(0.45, 0.26, 0.14),
@@ -155,6 +162,7 @@ pub const TRACKS: [TrackDef; 3] = [
         shortcuts: &[],
         boxes: &[0.15, 0.42, 0.7],
         scenery: Scenery::Maze,
+        landmark: (0.0, 40.0),
         theme: Theme {
             sky: Color::srgb(0.36, 0.30, 0.52),
             ground: Color::srgb(0.30, 0.26, 0.12),
@@ -184,68 +192,29 @@ pub struct Spot {
 /// The track being raced, sampled evenly along its centerline.
 #[derive(Resource, Clone, Debug)]
 pub struct Track {
-    pub index: usize,
+    pub name: String,
     pub points: Vec<Vec2>,
     pub dists: Vec<f32>,
     pub length: f32,
     pub half_width: f32,
     pub shortcuts: Vec<(Vec2, Vec2, f32)>,
+    /// Item box rows as fractions of a lap.
+    pub boxes: Vec<f32>,
+    pub scenery: Scenery,
+    pub theme: Theme,
+    /// Open ground for the theme's centrepiece, none when the layout leaves no room.
+    pub landmark: Option<Vec2>,
 }
 impl Track {
-    const STEP: f32 = 1.5;
+    pub const STEP: f32 = 1.5;
 
+    /// A hand-made track from [`TRACKS`].
     pub fn new(index: usize) -> Self {
         let def = &TRACKS[index];
         let control: Vec<Vec2> = def.points.iter().map(|(x, z)| Vec2::new(*x, *z)).collect();
-        let n = control.len();
-
-        // Dense Catmull-Rom curve through the control points
-        let mut dense = Vec::new();
-        for i in 0..n {
-            let p0 = control[(i + n - 1) % n];
-            let p1 = control[i];
-            let p2 = control[(i + 1) % n];
-            let p3 = control[(i + 2) % n];
-            for s in 0..32 {
-                let t = s as f32 / 32.0;
-                let t2 = t * t;
-                let t3 = t2 * t;
-                dense.push(
-                    0.5 * (2.0 * p1
-                        + (p2 - p0) * t
-                        + (2.0 * p0 - 5.0 * p1 + 4.0 * p2 - p3) * t2
-                        + (3.0 * p1 - p0 - 3.0 * p2 + p3) * t3),
-                );
-            }
-        }
-
-        // Resample at an even spacing
-        let mut points = vec![dense[0]];
-        let mut carry = 0.0;
-        for i in 0..dense.len() {
-            let a = dense[i];
-            let b = dense[(i + 1) % dense.len()];
-            let len = a.distance(b);
-            let mut t = Self::STEP - carry;
-            while t < len {
-                points.push(a.lerp(b, t / len));
-                t += Self::STEP;
-            }
-            carry = len - (t - Self::STEP);
-        }
-        if points.last().unwrap().distance(points[0]) < Self::STEP * 0.5 {
-            points.pop();
-        }
-
-        let mut dists = Vec::with_capacity(points.len());
-        let mut length = 0.0;
-        for i in 0..points.len() {
-            dists.push(length);
-            length += points[i].distance(points[(i + 1) % points.len()]);
-        }
-
+        let (points, dists, length) = centerline(&control);
         Self {
-            index,
+            name: def.name.to_string(),
             points,
             dists,
             length,
@@ -255,11 +224,20 @@ impl Track {
                 .iter()
                 .map(|(a, b, r)| (Vec2::new(a.0, a.1), Vec2::new(b.0, b.1), *r))
                 .collect(),
+            boxes: def.boxes.to_vec(),
+            scenery: def.scenery,
+            theme: def.theme,
+            landmark: Some(Vec2::new(def.landmark.0, def.landmark.1)),
         }
     }
 
-    pub const fn def(&self) -> &'static TrackDef {
-        &TRACKS[self.index]
+    /// The track a race setup asks for: hand-made, or generated from its seed.
+    pub fn of(setup: &Setup) -> Self {
+        if setup.track < TRACKS.len() {
+            Self::new(setup.track)
+        } else {
+            generate::track(setup.seed)
+        }
     }
 
     /// Distance from the centerline where the invisible wall stands.
@@ -331,6 +309,56 @@ impl Track {
     }
 }
 
+/// Even samples of a closed Catmull-Rom curve through `control`, with their distances
+/// along the lap and the lap length.
+fn centerline(control: &[Vec2]) -> (Vec<Vec2>, Vec<f32>, f32) {
+    let n = control.len();
+    let mut dense = Vec::new();
+    for i in 0..n {
+        let p0 = control[(i + n - 1) % n];
+        let p1 = control[i];
+        let p2 = control[(i + 1) % n];
+        let p3 = control[(i + 2) % n];
+        for s in 0..32 {
+            let t = s as f32 / 32.0;
+            let t2 = t * t;
+            let t3 = t2 * t;
+            dense.push(
+                0.5 * (2.0 * p1
+                    + (p2 - p0) * t
+                    + (2.0 * p0 - 5.0 * p1 + 4.0 * p2 - p3) * t2
+                    + (3.0 * p1 - p0 - 3.0 * p2 + p3) * t3),
+            );
+        }
+    }
+
+    // Resample at an even spacing
+    let mut points = vec![dense[0]];
+    let mut carry = 0.0;
+    for i in 0..dense.len() {
+        let a = dense[i];
+        let b = dense[(i + 1) % dense.len()];
+        let len = a.distance(b);
+        let mut t = Track::STEP - carry;
+        while t < len {
+            points.push(a.lerp(b, t / len));
+            t += Track::STEP;
+        }
+        carry = len - (t - Track::STEP);
+    }
+    if points.last().unwrap().distance(points[0]) < Track::STEP * 0.5 {
+        points.pop();
+    }
+
+    let mut dists = Vec::with_capacity(points.len());
+    let mut length = 0.0;
+    for i in 0..points.len() {
+        dists.push(length);
+        length += points[i].distance(points[(i + 1) % points.len()]);
+    }
+    (points, dists, length)
+}
+
 /// Lift a track-plane point into the world.
 pub const fn flat(
     p: Vec2,
@@ -397,9 +425,8 @@ pub fn spawn_track(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
-    let track = Track::new(setup.track);
-    let def = track.def();
-    let theme = def.theme;
+    let track = Track::of(&setup);
+    let theme = track.theme;
     let hw = track.half_width;
     let scope = DespawnOnExit(GameState::Race);
 

@@ -130,6 +130,12 @@ pub(super) fn plugin(app: &mut App) {
     app.add_systems(OnEnter(GameState::PickRacer), |mut ready: ResMut<Ready>| {
         ready.0.clear();
     });
+    // A new random track every visit; the one just raced stays a press away
+    app.add_systems(OnEnter(GameState::PickTrack), |mut setup: ResMut<Setup>| {
+        setup.last_seed = setup.seed;
+        setup.seed = rand::random();
+    });
+    app.add_systems(Update, seed_label.run_if(in_state(GameState::PickTrack)));
     app.add_systems(
         Update,
         (
@@ -1185,7 +1191,18 @@ fn racers(
 fn tracks(commands: &mut Commands) {
     page(commands, GameState::PickTrack, |stage| {
         heading(stage, "Pick a track", 800.0);
-        for (i, track) in TRACKS.iter().enumerate() {
+        // The hand-made tracks, then the generated one
+        let cards: Vec<(&str, &str, Theme)> = TRACKS
+            .iter()
+            .map(|t| (t.name, t.blurb, t.theme))
+            .chain([(
+                "Random",
+                "A new track every race. Up replays the last seed, down rolls another.",
+                TRACKS[0].theme,
+            )])
+            .collect();
+        let (w, gap) = (284.0, 16.0);
+        for (i, (name, blurb, theme)) in cards.into_iter().enumerate() {
             stage
                 .spawn((
                     Slot(i),
@@ -1199,7 +1216,7 @@ fn tracks(commands: &mut Commands) {
                     Node {
                         border: UiRect::all(px(Space::FOCUS)),
                         border_radius: pill(Space::RADIUS_M),
-                        ..boxed(48.0 + i as f32 * 400.0, 120.0, 384.0, 520.0)
+                        ..boxed(48.0 + i as f32 * (w + gap), 120.0, w, 520.0)
                     },
                 ))
                 .with_children(|card| {
@@ -1209,9 +1226,9 @@ fn tracks(commands: &mut Commands) {
                             overflow: Overflow::clip(),
                             flex_direction: FlexDirection::Column,
                             border_radius: pill(Space::RADIUS_M),
-                            ..boxed(12.0, 12.0, 352.0, 264.0)
+                            ..boxed(12.0, 12.0, w - 24.0, 264.0)
                         },
-                        BackgroundColor(track.theme.sky),
+                        BackgroundColor(theme.sky),
                         children![(
                             Node {
                                 width: percent(100),
@@ -1219,7 +1236,7 @@ fn tracks(commands: &mut Commands) {
                                 margin: UiRect::top(percent(60)),
                                 ..default()
                             },
-                            BackgroundColor(track.theme.ground)
+                            BackgroundColor(theme.ground)
                         )],
                     ));
                     let ink = Ink {
@@ -1229,23 +1246,16 @@ fn tracks(commands: &mut Commands) {
                     caption(
                         card,
                         (20.0, 296.0),
-                        (336.0, 44.0),
+                        (w - 48.0, 44.0),
                         (
                             Slot(i),
                             ink,
-                            fit_text(
-                                track.name,
-                                Size::H2,
-                                Weight::Bold,
-                                Tone::CREAM_100,
-                                336.0,
-                                1,
-                            ),
+                            fit_text(name, Size::H2, Weight::Bold, Tone::CREAM_100, w - 48.0, 1),
                         ),
                         false,
                     );
                     card.spawn((
-                        boxed(20.0, 348.0, 336.0, 156.0),
+                        boxed(20.0, 348.0, w - 48.0, 120.0),
                         children![(
                             Slot(i),
                             Ink {
@@ -1253,15 +1263,36 @@ fn tracks(commands: &mut Commands) {
                                 focus: Tone::BROWN_900,
                             },
                             fit_text(
-                                track.blurb,
+                                blurb,
                                 Size::BODY,
                                 Weight::Medium,
                                 Tone::CREAM_300,
-                                336.0,
-                                5
+                                w - 48.0,
+                                4
                             )
                         )],
                     ));
+                    if i == TRACKS.len() {
+                        card.spawn((
+                            boxed(20.0, 474.0, w - 48.0, 28.0),
+                            children![(
+                                Slot(i),
+                                SeedLabel,
+                                Ink {
+                                    idle: Tone::CREAM_300,
+                                    focus: Tone::BROWN_900,
+                                },
+                                fit_text(
+                                    "Seed 0000000000",
+                                    Size::LABEL,
+                                    Weight::SemiBold,
+                                    Tone::CREAM_300,
+                                    w - 48.0,
+                                    1
+                                )
+                            )],
+                        ));
+                    }
                 });
         }
         caption(
@@ -1287,6 +1318,22 @@ fn tracks(commands: &mut Commands) {
             ],
         );
     });
+}
+
+/// Marks the seed line on the Random card.
+#[derive(Component, Clone, Debug)]
+struct SeedLabel;
+
+fn seed_label(
+    setup: Res<Setup>,
+    mut labels: Query<&mut Text, With<SeedLabel>>,
+) {
+    for mut text in &mut labels {
+        let want = format!("Seed {}", setup.seed);
+        if text.0 != want {
+            text.0 = want;
+        }
+    }
 }
 
 /// Which row the screen shows as focused.
@@ -1581,8 +1628,18 @@ fn navigate(
         GameState::Lobby | GameState::PickRacer => {}
         GameState::PickTrack => {
             if step != 0 {
-                let n = TRACKS.len() as i32;
+                let n = TRACKS.len() as i32 + 1;
                 setup.track = (setup.track as i32 + step).rem_euclid(n) as usize;
+            }
+            if setup.track == TRACKS.len() {
+                if input.up {
+                    let seed = setup.seed;
+                    setup.seed = setup.last_seed;
+                    setup.last_seed = seed;
+                }
+                if input.down {
+                    setup.seed = rand::random();
+                }
             }
             if input.confirm {
                 next.set(GameState::Race);

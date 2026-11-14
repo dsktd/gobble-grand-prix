@@ -63,14 +63,16 @@ pub fn on_track(
 struct Load;
 
 fn start(world: &mut World) {
-    let track = world.resource::<Setup>().track;
-    load(world, track);
+    let setup = world.resource::<Setup>();
+    let (track, seed) = (setup.track, setup.seed);
+    load(world, track, seed);
 }
 
 /// Swap the race behind the menus for a fresh all-CPU race on `track`, already rolling.
 fn load(
     world: &mut World,
     track: usize,
+    seed: u32,
 ) {
     let old: Vec<Entity> = world
         .query::<(Entity, &DespawnOnExit<GameState>)>()
@@ -88,6 +90,8 @@ fn load(
     *world.resource_mut::<Setup>() = Setup {
         racers: Vec::new(),
         track,
+        seed,
+        last_seed: seed,
     };
     world.run_schedule(Load);
     *world.resource_mut::<Setup>() = saved;
@@ -128,7 +132,8 @@ fn rotate(world: &mut World) {
         .max()
         .unwrap_or(0);
     if laps > Attract::LAPS || time > Attract::STAY {
-        load(world, (track + 1) % TRACKS.len());
+        // Generated tracks take their turn too, a new one each time
+        load(world, (track + 1) % (TRACKS.len() + 1), rand::random());
         for mut director in world.query::<&mut Director>().iter_mut(world) {
             director.left = 0.0;
         }
@@ -215,7 +220,7 @@ fn cameras(
 }
 
 fn fog(track: &Track) -> DistanceFog {
-    let theme = track.def().theme;
+    let theme = track.theme;
     DistanceFog {
         color: theme.fog,
         directional_light_color: Color::NONE,

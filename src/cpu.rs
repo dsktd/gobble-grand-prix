@@ -139,60 +139,91 @@ fn drive(
 mod test {
     use super::*;
 
-    /// Drive one CPU kart around each track alone with the real physics step and walls,
-    /// printing lap times and wall contacts. Run with --ignored --nocapture when tuning.
+    /// Drive one CPU kart alone for up to `laps` laps or `limit` s with the real physics
+    /// step and walls; lap times and wall contacts.
+    fn solo(
+        track: &Track,
+        laps: usize,
+        limit: f32,
+    ) -> (Vec<f32>, u32) {
+        let start = track.length - 6.0;
+        let pos = track.offset(start, 0.0);
+        let dir = track.sample(start).1;
+        let mut kart = Kart::new(0, pos, (-dir.x).atan2(-dir.y));
+        kart.frozen = false;
+        let stats = kart.stats();
+        let top = Kart::TOP_SPEED * stats.top_speed;
+        let mut along = start;
+        let mut walls = 0;
+        let mut on_wall = false;
+        let mut t = 0.0;
+        let mut lap_times = Vec::new();
+        let mut last = 0.0;
+        while lap_times.len() < laps && t < limit {
+            let (steer, throttle) = pursue(&kart, track, along, 0.0);
+            let input = KartInput {
+                throttle,
+                steer,
+                drift: false,
+                item: false,
+            };
+            crate::kart::step(&mut kart, &input, stats, top, Kart::STEP);
+            let spot = track.locate(kart.pos);
+            if spot.lateral.abs() > track.barrier() {
+                kart.pos = track.offset(spot.along, track.barrier() * spot.lateral.signum());
+                kart.speed *= 0.6;
+                kart.vel *= 0.4;
+                kart.yaw_rate *= 0.5;
+                if !on_wall {
+                    walls += 1;
+                }
+                on_wall = true;
+            } else {
+                on_wall = false;
+            }
+            if spot.along < along - track.length / 2.0 {
+                lap_times.push(t - last);
+                last = t;
+            }
+            along = spot.along;
+            t += Kart::STEP;
+        }
+        (lap_times, walls)
+    }
+
+    /// Print lap times and wall contacts per hand-made track. Run with --ignored
+    /// --nocapture when tuning.
     #[test]
     #[ignore = "tuning aid: prints lap times, run with --ignored --nocapture"]
     fn test_solo_laps() {
-        for (index, def) in TRACKS.iter().enumerate() {
+        for index in 0..TRACKS.len() {
             let track = Track::new(index);
-            let start = track.length - 6.0;
-            let pos = track.offset(start, 0.0);
-            let dir = track.sample(start).1;
-            let mut kart = Kart::new(0, pos, (-dir.x).atan2(-dir.y));
-            kart.frozen = false;
-            let stats = kart.stats();
-            let top = Kart::TOP_SPEED * stats.top_speed;
-            let mut along = start;
-            let mut laps = 0;
-            let mut walls = 0;
-            let mut on_wall = false;
-            let mut t = 0.0;
-            let mut lap_times = Vec::new();
-            let mut last = 0.0;
-            while laps < 3 && t < 400.0 {
-                let (steer, throttle) = pursue(&kart, &track, along, 0.0);
-                let input = KartInput {
-                    throttle,
-                    steer,
-                    drift: false,
-                    item: false,
-                };
-                crate::kart::step(&mut kart, &input, stats, top, Kart::STEP);
-                let spot = track.locate(kart.pos);
-                if spot.lateral.abs() > track.barrier() {
-                    kart.pos = track.offset(spot.along, track.barrier() * spot.lateral.signum());
-                    kart.speed *= 0.6;
-                    kart.vel *= 0.4;
-                    kart.yaw_rate *= 0.5;
-                    if !on_wall {
-                        walls += 1;
-                    }
-                    on_wall = true;
-                } else {
-                    on_wall = false;
-                }
-                if spot.along < along - track.length / 2.0 {
-                    laps += 1;
-                    lap_times.push(t - last);
-                    last = t;
-                }
-                along = spot.along;
-                t += Kart::STEP;
-            }
-            println!(
-                "{}: laps {:?} total {:.1} walls {walls}",
-                def.name, lap_times, t
+            let (laps, walls) = solo(&track, 3, 400.0);
+            println!("{}: laps {laps:?} walls {walls}", track.name);
+        }
+    }
+
+    /// A CPU kart gets round every generated track at a sane pace: no corner it cannot
+    /// make, no spot it gets stuck in.
+    #[test]
+    fn test_generated_tracks_lap() {
+        for seed in 0..50 {
+            let track = crate::track::generate::track(seed);
+            // The first lap starts from a standstill; time the second
+            let (laps, walls) = solo(&track, 2, 240.0);
+            assert_eq!(
+                laps.len(),
+                2,
+                "seed {seed} ({}): stuck after {laps:?}",
+                track.name
+            );
+            // Mean speed over the lap: at least a third of top speed
+            let pace = track.length / laps[1];
+            assert!(
+                pace > Kart::TOP_SPEED / 3.0,
+                "seed {seed} ({}): {pace:.1} m/s over {:.0} m, {walls} wall hits",
+                track.name,
+                track.length
             );
         }
     }

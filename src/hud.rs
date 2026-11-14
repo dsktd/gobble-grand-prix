@@ -712,7 +712,7 @@ fn results(
             }
         })
         .collect();
-    spawn_results(&mut commands, board_id, track.def().name, &rows);
+    spawn_results(&mut commands, board_id, &track.name, &rows);
 }
 
 /// One line of the results board.

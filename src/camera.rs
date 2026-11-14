@@ -99,7 +99,7 @@ fn spawn(
     mut images: ResMut<Assets<Image>>,
     mut masks: ResMut<Assets<DiagonalMask>>,
 ) {
-    let theme = track.def().theme;
+    let theme = track.theme;
     let seats = setup.racers.len();
     let diagonal = diagonal(seats, options.split);
     // Diagonal: P2 renders to its own window-sized texture, masked onto its triangle
