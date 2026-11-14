@@ -17,12 +17,16 @@ pub(super) fn plugin(app: &mut App) {
         return;
     }
     let track = args.get(2).and_then(|a| a.parse().ok()).unwrap_or(0);
-    if args.get(3).map(String::as_str) == Some("low") {
-        app.insert_resource(Options {
-            high_quality: false,
-            ..default()
-        });
-    }
+    // Optional 6th argument: "diagonal" for the diagonal two-player split
+    app.insert_resource(Options {
+        high_quality: args.get(3).map(String::as_str) != Some("low"),
+        split: match args.get(6).map(String::as_str) {
+            Some("diagonal") => Split::Diagonal,
+            Some("side") => Split::SideBySide,
+            _ => Split::TopBottom,
+        },
+        ..default()
+    });
     let seats: usize = args
         .get(5)
         .and_then(|a| a.parse().ok())
