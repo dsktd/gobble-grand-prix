@@ -136,7 +136,7 @@ fn tour(
         13 if t > 21.0 => shoot(&mut commands, &format!("{name}-racing")),
         14 if t > 29.0 => {
             shoot(&mut commands, &format!("{name}-pack"));
-            virtual_time.set_relative_speed(4.0);
+            virtual_time.set_relative_speed(2.0);
         }
         15 if clock.is_some_and(|c| c.phase == Phase::Done) => {
             virtual_time.set_relative_speed(1.0);

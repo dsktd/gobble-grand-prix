@@ -97,6 +97,9 @@ pub struct Kart {
     pub steer: f32,
     /// Visual body slide in radians, eased in and out of drifts.
     pub slide: f32,
+    /// Wall contacts this race, for tuning logs.
+    pub walls: u32,
+    on_wall: bool,
     /// Boost the last release earned, read by sound and HUD.
     pub fired: u8,
     /// Knocked into a spin this frame.
@@ -154,6 +157,8 @@ impl Kart {
             item: None,
             steer: 0.0,
             slide: 0.0,
+            walls: 0,
+            on_wall: false,
             fired: 0,
             struck: false,
         }
@@ -292,6 +297,13 @@ fn drive(
             kart.pos = edge;
             kart.speed *= 0.6;
             kart.vel *= 0.4;
+            // Count separate wall contacts, not every frame against it
+            if !kart.on_wall {
+                kart.walls += 1;
+            }
+            kart.on_wall = true;
+        } else {
+            kart.on_wall = false;
         }
     }
 }

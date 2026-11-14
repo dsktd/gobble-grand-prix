@@ -233,17 +233,21 @@ fn finish(
     mut commands: Commands,
     time: Res<Time>,
     mut clock: ResMut<RaceClock>,
-    karts: Query<(Entity, &Progress, Has<Human>), Without<Finished>>,
+    karts: Query<(Entity, &Kart, &Progress, Has<Human>), Without<Finished>>,
     finished: Query<&Finished>,
     humans: Query<Has<Finished>, With<Human>>,
     mut sfx: MessageWriter<Sfx>,
 ) {
     let mut place = finished.iter().count();
-    for (id, progress, human) in karts {
+    for (id, kart, progress, human) in karts {
         if progress.lap <= LAPS {
             continue;
         }
         place += 1;
+        info!(
+            "Finished {} place {place} time {:.2} walls {}",
+            ROSTER[kart.racer].name, clock.time, kart.walls
+        );
         commands.entity(id).insert(Finished {
             time: clock.time,
             place,
