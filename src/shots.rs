@@ -23,7 +23,12 @@ pub(super) fn plugin(app: &mut App) {
             ..default()
         });
     }
+    let racer = args
+        .get(4)
+        .and_then(|a| a.parse().ok())
+        .unwrap_or(track * 2 % ROSTER.len());
     app.insert_resource(Tour {
+        racer,
         track,
         clock: 0.0,
         step: 0,
@@ -37,6 +42,7 @@ pub(super) fn plugin(app: &mut App) {
 
 #[derive(Resource, Clone, Debug)]
 struct Tour {
+    racer: usize,
     track: usize,
     clock: f32,
     step: usize,
@@ -97,7 +103,7 @@ fn tour(
         1 if t > 2.5 => next.set(GameState::Options),
         2 if t > 4.0 => shoot(&mut commands, "options"),
         3 if t > 4.5 => {
-            setup.racers[0] = tour.track * 2 % ROSTER.len();
+            setup.racers[0] = tour.racer;
             next.set(GameState::PickRacer);
         }
         4 if t > 6.0 => shoot(&mut commands, &format!("racer-{name}")),

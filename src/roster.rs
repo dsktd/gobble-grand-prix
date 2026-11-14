@@ -3,14 +3,27 @@
 use bevy::prelude::*;
 
 pub(super) mod prelude {
+    pub use super::Body;
     pub use super::Parts;
     pub use super::ROSTER;
     pub use super::Stats;
     pub use super::spawn_model;
 }
 
-pub(super) fn plugin(_app: &mut App) {
-    //
+pub(super) fn plugin(app: &mut App) {
+    app.add_systems(Update, wail);
+}
+
+/// Open and shut the cat's mouth in a long dramatic sob.
+fn wail(
+    time: Res<Time<Real>>,
+    mouths: Query<&mut Transform, With<Mouth>>,
+) {
+    let t = time.elapsed_secs();
+    let open = 0.35 + 0.65 * ((t * 2.2).sin() * 0.5 + 0.5).powf(0.6);
+    for mut transform in mouths {
+        transform.scale.y = open;
+    }
 }
 
 /// Handling numbers for a racer. All are multipliers around 1.0.
@@ -30,6 +43,7 @@ pub enum Body {
     Corn,
     Potato,
     Casserole,
+    Cat,
 }
 
 #[derive(Copy, Clone, Debug)]
@@ -42,7 +56,7 @@ pub struct Racer {
     pub stats: Stats,
 }
 
-pub const ROSTER: [Racer; 6] = [
+pub const ROSTER: [Racer; 7] = [
     Racer {
         name: "Tom Gobbler",
         blurb: "A turkey in a gravy boat. Balanced, and loud about it.",
@@ -121,7 +135,24 @@ pub const ROSTER: [Racer; 6] = [
             weight: 0.95,
         },
     },
+    Racer {
+        name: "Wailing Whiskers",
+        blurb: "Was told there is no turkey for cats. Has not stopped crying since.",
+        kart: Color::srgb(0.88, 0.88, 0.90),
+        accent: Color::srgb(0.48, 0.48, 0.52),
+        body: Body::Cat,
+        stats: Stats {
+            top_speed: 0.93,
+            accel: 1.3,
+            turn: 1.1,
+            weight: 0.7,
+        },
+    },
 ];
+
+/// The cat's jaw, opened and shut by [`wail`].
+#[derive(Component, Copy, Clone, Debug)]
+pub struct Mouth;
 
 /// Shared asset stores for building primitive models.
 pub struct Parts<'a> {
@@ -214,11 +245,7 @@ pub fn spawn_model(
                 at(0.0, 0.75, -1.3).with_rotation(Quat::from_rotation_x(-1.2)),
             ));
             // Turkey
-            pieces.push(parts.part(
-                Sphere::new(0.6),
-                racer.accent,
-                at(0.0, 1.25, 0.15),
-            ));
+            pieces.push(parts.part(Sphere::new(0.6), racer.accent, at(0.0, 1.25, 0.15)));
             pieces.push(parts.part(
                 Capsule3d::new(0.12, 0.5),
                 racer.accent,
@@ -258,21 +285,9 @@ pub fn spawn_model(
             }
         }
         Body::Pie => {
-            pieces.push(parts.part(
-                Cylinder::new(1.05, 0.45),
-                racer.accent,
-                at(0.0, 0.75, 0.0),
-            ));
-            pieces.push(parts.part(
-                Cylinder::new(0.92, 0.47),
-                racer.kart,
-                at(0.0, 0.77, 0.0),
-            ));
-            pieces.push(parts.part(
-                Torus::new(0.9, 1.12),
-                racer.accent,
-                at(0.0, 1.0, 0.0),
-            ));
+            pieces.push(parts.part(Cylinder::new(1.05, 0.45), racer.accent, at(0.0, 0.75, 0.0)));
+            pieces.push(parts.part(Cylinder::new(0.92, 0.47), racer.kart, at(0.0, 0.77, 0.0)));
+            pieces.push(parts.part(Torus::new(0.9, 1.12), racer.accent, at(0.0, 1.0, 0.0)));
             // Whipped cream swirl driver
             pieces.push(parts.part(
                 Sphere::new(0.45),
@@ -314,11 +329,7 @@ pub fn spawn_model(
             }
         }
         Body::Corn => {
-            pieces.push(parts.part(
-                Cuboid::new(1.4, 0.3, 2.1),
-                racer.accent,
-                at(0.0, 0.5, 0.0),
-            ));
+            pieces.push(parts.part(Cuboid::new(1.4, 0.3, 2.1), racer.accent, at(0.0, 0.5, 0.0)));
             pieces.push(parts.part(
                 Capsule3d::new(0.42, 1.0),
                 racer.kart,
@@ -361,16 +372,8 @@ pub fn spawn_model(
                 at(0.0, 1.25, 0.1).with_scale(Vec3::new(1.0, 1.15, 0.9)),
             ));
             // Pilgrim hat with buckle
-            pieces.push(parts.part(
-                Cylinder::new(0.75, 0.06),
-                racer.accent,
-                at(0.0, 1.98, 0.1),
-            ));
-            pieces.push(parts.part(
-                Cylinder::new(0.42, 0.65),
-                racer.accent,
-                at(0.0, 2.3, 0.1),
-            ));
+            pieces.push(parts.part(Cylinder::new(0.75, 0.06), racer.accent, at(0.0, 1.98, 0.1)));
+            pieces.push(parts.part(Cylinder::new(0.42, 0.65), racer.accent, at(0.0, 2.3, 0.1)));
             pieces.push(parts.part(
                 Cylinder::new(0.43, 0.12),
                 Color::srgb(0.95, 0.93, 0.9),
@@ -392,29 +395,17 @@ pub fn spawn_model(
                 Color::srgb(0.92, 0.92, 0.95),
                 at(0.0, 0.7, 0.0),
             ));
-            pieces.push(parts.part(
-                Cuboid::new(1.5, 0.2, 2.2),
-                racer.kart,
-                at(0.0, 0.95, 0.0),
-            ));
+            pieces.push(parts.part(Cuboid::new(1.5, 0.2, 2.2), racer.kart, at(0.0, 0.95, 0.0)));
             let mut seed = 7u32;
             for _ in 0..14 {
                 seed = seed.wrapping_mul(1103515245).wrapping_add(12345);
                 let x = (seed >> 8) as f32 / 16_777_216.0 * 1.2 - 0.6;
                 seed = seed.wrapping_mul(1103515245).wrapping_add(12345);
                 let z = (seed >> 8) as f32 / 16_777_216.0 * 1.8 - 0.9;
-                pieces.push(parts.part(
-                    Cylinder::new(0.15, 0.18),
-                    racer.accent,
-                    at(x, 1.12, z),
-                ));
+                pieces.push(parts.part(Cylinder::new(0.15, 0.18), racer.accent, at(x, 1.12, z)));
             }
             // A toasted marshmallow pilot
-            pieces.push(parts.part(
-                Cylinder::new(0.38, 0.7),
-                racer.accent,
-                at(0.0, 1.5, 0.3),
-            ));
+            pieces.push(parts.part(Cylinder::new(0.38, 0.7), racer.accent, at(0.0, 1.5, 0.3)));
             pieces.push(parts.part(
                 Cylinder::new(0.39, 0.12),
                 Color::srgb(0.75, 0.50, 0.25),
@@ -424,6 +415,88 @@ pub fn spawn_model(
                 pieces.push(parts.part(Sphere::new(0.06), Color::BLACK, at(eye, 1.6, -0.07)));
             }
         }
+        Body::Cat => {
+            let fur = racer.accent;
+            let dark = Color::srgb(0.30, 0.30, 0.34);
+            let white = Color::srgb(0.97, 0.97, 0.97);
+            let pink = Color::srgb(0.95, 0.55, 0.62);
+            // A licked-clean turkey platter
+            pieces.push(parts.part(
+                Cylinder::new(1.1, 0.18),
+                racer.kart,
+                at(0.0, 0.55, 0.0).with_scale(Vec3::new(1.0, 1.0, 1.3)),
+            ));
+            pieces.push(parts.part(
+                Torus::new(1.0, 1.18),
+                Color::srgb(0.80, 0.68, 0.35),
+                at(0.0, 0.66, 0.0).with_scale(Vec3::new(1.0, 1.0, 1.3)),
+            ));
+            // Body and white chest
+            pieces.push(parts.part(
+                Sphere::new(0.55),
+                fur,
+                at(0.0, 1.1, 0.25).with_scale(Vec3::new(1.0, 1.0, 1.2)),
+            ));
+            pieces.push(parts.part(Sphere::new(0.42), white, at(0.0, 1.15, -0.12)));
+            pieces.push(parts.part(
+                Capsule3d::new(0.08, 0.8),
+                fur,
+                at(0.0, 1.4, 0.95).with_rotation(Quat::from_rotation_x(0.6)),
+            ));
+            // Head
+            pieces.push(parts.part(Sphere::new(0.5), dark, at(0.0, 1.85, -0.15)));
+            for side in [-1.0f32, 1.0] {
+                pieces.push(parts.part(
+                    Cone::new(0.2, 0.42),
+                    dark,
+                    at(side * 0.3, 2.3, -0.1).with_rotation(Quat::from_rotation_z(side * -0.35)),
+                ));
+                pieces.push(parts.part(
+                    Cone::new(0.11, 0.25),
+                    pink,
+                    at(side * 0.29, 2.26, -0.17).with_rotation(Quat::from_rotation_z(side * -0.35)),
+                ));
+                // Huge glossy eyes welling up
+                let eye = at(side * 0.2, 1.98, -0.55);
+                pieces.push((
+                    Mesh3d(parts.meshes.add(Sphere::new(0.17))),
+                    MeshMaterial3d(parts.materials.add(StandardMaterial {
+                        base_color: Color::srgb(0.05, 0.04, 0.06),
+                        perceptual_roughness: 0.05,
+                        reflectance: 1.0,
+                        ..default()
+                    })),
+                    eye,
+                ));
+                let sparkle = parts.glow(Color::WHITE, 4.0);
+                for (dx, dy, r) in [(0.05, 0.06, 0.05), (-0.04, -0.05, 0.025)] {
+                    pieces.push((
+                        Mesh3d(parts.meshes.add(Sphere::new(r))),
+                        MeshMaterial3d(sparkle.clone()),
+                        at(side * 0.2 + dx, 1.98 + dy, -0.7),
+                    ));
+                }
+                // Tears pooling on the lower lids
+                pieces.push(parts.part(
+                    Capsule3d::new(0.05, 0.22),
+                    Color::srgba(0.6, 0.85, 1.0, 0.9),
+                    at(side * 0.2, 1.84, -0.66).with_rotation(Quat::from_rotation_z(1.57)),
+                ));
+            }
+            // A tear rolling down one cheek
+            pieces.push(parts.part(
+                Sphere::new(0.07),
+                Color::srgb(0.6, 0.85, 1.0),
+                at(0.36, 1.68, -0.55).with_scale(Vec3::new(1.0, 1.5, 1.0)),
+            ));
+            // White muzzle
+            pieces.push(parts.part(
+                Sphere::new(0.26),
+                white,
+                at(0.0, 1.72, -0.5).with_scale(Vec3::new(1.2, 0.9, 0.8)),
+            ));
+            pieces.push(parts.part(Sphere::new(0.05), pink, at(0.0, 1.8, -0.72)));
+        }
     }
 
     commands.entity(root).with_children(|parent| {
@@ -431,4 +504,43 @@ pub fn spawn_model(
             parent.spawn(piece);
         }
     });
+
+    // The wailing mouth: dark open jaw, tongue and fangs, scaled as one
+    if racer.body == Body::Cat {
+        let jaw = commands
+            .spawn((
+                Mouth,
+                Transform::from_xyz(0.0, 1.6, -0.58),
+                Visibility::default(),
+            ))
+            .id();
+        let mut mouth = vec![
+            parts.part(
+                Sphere::new(0.17),
+                Color::srgb(0.25, 0.02, 0.05),
+                at(0.0, 0.0, 0.0).with_scale(Vec3::new(1.0, 1.3, 0.5)),
+            ),
+            parts.part(
+                Sphere::new(0.1),
+                Color::srgb(0.95, 0.45, 0.55),
+                at(0.0, -0.1, -0.04).with_scale(Vec3::new(1.0, 0.5, 0.6)),
+            ),
+        ];
+        for side in [-1.0, 1.0] {
+            mouth.push(
+                parts.part(
+                    Cone::new(0.03, 0.08),
+                    Color::WHITE,
+                    at(side * 0.08, 0.14, -0.06)
+                        .with_rotation(Quat::from_rotation_x(std::f32::consts::PI)),
+                ),
+            );
+        }
+        commands.entity(jaw).with_children(|parent| {
+            for piece in mouth {
+                parent.spawn(piece);
+            }
+        });
+        commands.entity(root).add_child(jaw);
+    }
 }

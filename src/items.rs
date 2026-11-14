@@ -210,7 +210,9 @@ fn fire(
                     Transform::from_translation(flat(pos, 0.6)),
                     DespawnOnExit(GameState::Race),
                 ));
-                sfx.write(Sfx::Throw);
+                if human {
+                    sfx.write(Sfx::Throw);
+                }
             }
             Item::Gravy => {
                 let pos = kart.pos - fwd * 3.0;
@@ -221,7 +223,9 @@ fn fire(
                     Transform::from_translation(flat(pos, 0.06)),
                     DespawnOnExit(GameState::Race),
                 ));
-                sfx.write(Sfx::Splat);
+                if human {
+                    sfx.write(Sfx::Splat);
+                }
             }
             Item::Stuffing => {
                 kart.boost = kart.boost.max(1.6);

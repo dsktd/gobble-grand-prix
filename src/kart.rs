@@ -5,10 +5,10 @@ use bevy::prelude::*;
 use crate::prelude::*;
 
 pub(super) mod prelude {
+    pub use super::Driver;
     pub use super::Kart;
     pub use super::KartInput;
     pub use super::KartSet;
-    pub use super::Driver;
     pub use super::Sparks;
 }
 
@@ -22,6 +22,12 @@ pub(super) fn plugin(app: &mut App) {
     app.add_systems(
         Update,
         (drive, bump, pose, sparks).chain().in_set(KartSet::Physics),
+    );
+    app.add_systems(
+        Update,
+        tears
+            .after(KartSet::Physics)
+            .run_if(in_state(GameState::Race)),
     );
 }
 
@@ -88,6 +94,8 @@ pub struct Kart {
     pub item: Option<Item>,
     /// Boost the last release earned, read by sound and HUD.
     pub fired: u8,
+    /// Knocked into a spin this frame.
+    pub struck: bool,
 }
 impl Kart {
     pub const TOP_SPEED: f32 = 34.0;
@@ -116,6 +124,7 @@ impl Kart {
             offroad: false,
             item: None,
             fired: 0,
+            struck: false,
         }
     }
 
@@ -133,6 +142,7 @@ impl Kart {
         time: f32,
     ) {
         self.spin = self.spin.max(time);
+        self.struck = true;
         self.drift = None;
         self.boost = 0.0;
     }
@@ -162,6 +172,7 @@ fn drive(
     let dt = time.delta_secs().min(1.0 / 20.0);
     for (mut kart, input) in karts {
         kart.fired = 0;
+        kart.struck = false;
         kart.boost = (kart.boost - dt).max(0.0);
         kart.coma = (kart.coma - dt).max(0.0);
         kart.pied = (kart.pied - dt).max(0.0);
@@ -312,7 +323,11 @@ fn pose(
 
 fn sparks(
     karts: Query<(&Kart, &Sparks)>,
-    mut lights: Query<(&mut Visibility, &mut Transform, &MeshMaterial3d<StandardMaterial>)>,
+    mut lights: Query<(
+        &mut Visibility,
+        &mut Transform,
+        &MeshMaterial3d<StandardMaterial>,
+    )>,
     mut materials: ResMut<Assets<StandardMaterial>>,
     time: Res<Time>,
 ) {
@@ -335,6 +350,81 @@ fn sparks(
         if let Some(mut material) = materials.get_mut(&material.0) {
             material.base_color = color;
             material.emissive = color.to_linear() * 12.0;
+        }
+    }
+}
+
+/// A tear flying off a crying racer.
+#[derive(Component, Copy, Clone, Debug)]
+struct Tear {
+    vel: Vec3,
+    life: f32,
+}
+
+/// Fast criers stream tears backwards.
+fn tears(
+    mut commands: Commands,
+    time: Res<Time>,
+    options: Res<Options>,
+    karts: Query<&Kart>,
+    drops: Query<(Entity, &mut Tear, &mut Transform)>,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+    mut look: Local<Option<(Handle<Mesh>, Handle<StandardMaterial>)>>,
+    mut carry: Local<f32>,
+) {
+    let dt = time.delta_secs();
+    for (id, mut tear, mut transform) in drops {
+        tear.life -= dt;
+        tear.vel.y -= 12.0 * dt;
+        transform.translation += tear.vel * dt;
+        if tear.life <= 0.0 || transform.translation.y < 0.0 {
+            commands.entity(id).despawn();
+        }
+    }
+
+    let (mesh, material) = look
+        .get_or_insert_with(|| {
+            (
+                meshes.add(Sphere::new(0.07)),
+                materials.add(StandardMaterial {
+                    base_color: Color::srgb(0.6, 0.85, 1.0),
+                    emissive: LinearRgba::rgb(0.2, 0.4, 0.6),
+                    perceptual_roughness: 0.1,
+                    ..default()
+                }),
+            )
+        })
+        .clone();
+    let rate = match options.high_quality {
+        true => 40.0,
+        false => 15.0,
+    };
+    *carry += dt * rate;
+    let count = *carry as u32;
+    *carry -= count as f32;
+    for kart in karts {
+        if ROSTER[kart.racer].body != Body::Cat || kart.speed < 20.0 {
+            continue;
+        }
+        let fwd = flat(kart.forward(), 0.0);
+        let side = Vec3::new(fwd.z, 0.0, -fwd.x);
+        for i in 0..count {
+            let s = match i % 2 {
+                0 => 1.0,
+                _ => -1.0,
+            };
+            let head = flat(kart.pos, 1.85) + fwd * 0.6 + side * s * 0.25;
+            commands.spawn((
+                Tear {
+                    vel: -fwd * kart.speed * 0.25 + side * s * 2.0 + Vec3::Y * 2.0,
+                    life: 0.6,
+                },
+                Mesh3d(mesh.clone()),
+                MeshMaterial3d(material.clone()),
+                Transform::from_translation(head),
+                DespawnOnExit(GameState::Race),
+            ));
         }
     }
 }

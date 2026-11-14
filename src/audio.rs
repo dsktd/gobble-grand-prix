@@ -32,6 +32,8 @@ pub enum Sfx {
     Turbo,
     Fanfare,
     Click,
+    /// The cat's MRAOW.
+    Wail,
 }
 
 #[derive(Resource, Clone, Debug)]
@@ -125,15 +127,34 @@ fn clip(sfx: Sfx) -> Vec<f32> {
             })
         }
         Sfx::Pickup => notes(&[660.0, 880.0, 1100.0], 0.07),
-        Sfx::Throw => render(0.25, |t, p| noise(t) * 0.35 * (1.0 - p) + sine(t * (600.0 - 400.0 * p)) * 0.2),
-        Sfx::Splat => render(0.3, |t, p| noise(t * (1.0 - p * 0.8)) * 0.5 * (1.0 - p).powi(2)),
-        Sfx::Hit => render(0.45, |t, p| square(t * (420.0 - 330.0 * p)) * 0.5 * (1.0 - p)),
+        Sfx::Throw => render(0.25, |t, p| {
+            noise(t) * 0.35 * (1.0 - p) + sine(t * (600.0 - 400.0 * p)) * 0.2
+        }),
+        Sfx::Splat => render(0.3, |t, p| {
+            noise(t * (1.0 - p * 0.8)) * 0.5 * (1.0 - p).powi(2)
+        }),
+        Sfx::Hit => render(0.45, |t, p| {
+            square(t * (420.0 - 330.0 * p)) * 0.5 * (1.0 - p)
+        }),
         Sfx::Boost => render(0.6, |t, p| {
             noise(t) * 0.25 * (1.0 - p) + square(t * (180.0 + 500.0 * p)) * 0.25
         }),
-        Sfx::Turbo => render(0.35, |t, p| square(t * (300.0 + 600.0 * p)) * 0.3 * (1.0 - p)),
+        Sfx::Turbo => render(0.35, |t, p| {
+            square(t * (300.0 + 600.0 * p)) * 0.3 * (1.0 - p)
+        }),
         Sfx::Fanfare => notes(&[523.0, 659.0, 784.0, 1047.0, 784.0, 1047.0], 0.13),
         Sfx::Click => render(0.05, |t, _| sine(t * 1200.0) * 0.4),
+        Sfx::Wail => {
+            // MRAOW: pitch swoops up then sags, a nasal buzz with sob vibrato
+            render(0.9, |t, p| {
+                let f = 420.0 + 520.0 * (p * std::f32::consts::PI).sin().powf(0.7) - 160.0 * p
+                    + 25.0 * sine(t * 7.0);
+                let body = (t * f).fract() * 2.0 - 1.0;
+                let formant = sine(t * f * 2.0) * 0.5 + sine(t * f * 3.0) * 0.25;
+                let open = (p * 6.0).min(1.0) * (1.0 - p).powf(0.8);
+                (body * 0.25 + formant * 0.35) * open
+            })
+        }
     }
 }
 
@@ -152,12 +173,18 @@ fn setup(
         Sfx::Turbo,
         Sfx::Fanfare,
         Sfx::Click,
+        Sfx::Wail,
     ];
     let clips = all
         .iter()
         .map(|sfx| {
             let bytes = wav(&clip(*sfx));
-            (*sfx, sources.add(AudioSource { bytes: bytes.into() }))
+            (
+                *sfx,
+                sources.add(AudioSource {
+                    bytes: bytes.into(),
+                }),
+            )
         })
         .collect();
     // 0.5 s of a low buzz with whole cycles so the loop is seamless
@@ -173,12 +200,25 @@ fn setup(
 fn play(
     mut commands: Commands,
     sounds: Res<Sounds>,
+    setup: Res<Setup>,
+    state: Res<State<GameState>>,
     mut messages: MessageReader<Sfx>,
 ) {
+    // A crying cat in P1's seat wails at the start, when hit, and when using items
+    let cat = *state.get() == GameState::Race && ROSTER[setup.racers[0]].body == Body::Cat;
+    let mut wail = false;
     for sfx in messages.read() {
+        wail |= cat
+            && matches!(
+                sfx,
+                Sfx::Go | Sfx::Hit | Sfx::Throw | Sfx::Splat | Sfx::Boost
+            );
         let Some((_, handle)) = sounds.clips.iter().find(|(s, _)| s == sfx) else {
             continue;
         };
+        commands.spawn((AudioPlayer(handle.clone()), PlaybackSettings::DESPAWN));
+    }
+    if wail && let Some((_, handle)) = sounds.clips.iter().find(|(s, _)| *s == Sfx::Wail) {
         commands.spawn((AudioPlayer(handle.clone()), PlaybackSettings::DESPAWN));
     }
 }
