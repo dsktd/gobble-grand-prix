@@ -1,7 +1,14 @@
 #!/usr/bin/env bash
-# Release build for the Steam Deck: glibc 2.35 floor via zig, Zen 2 codegen.
+# Steam Deck build: glibc 2.35 floor via zig, Zen 2 codegen, in its own target dir so these
+# flags never invalidate the desktop cache.
+#   ./deck-build.sh            iterative test build (deck-dev profile)
+#   ./deck-build.sh --release  tagged release build (release profile)
+# Binary: target/deck/x86_64-unknown-linux-gnu/<profile>/gobble
 set -euo pipefail
 cd "$(dirname "$0")"
+profile=deck-dev
+[ "${1:-}" = "--release" ] && profile=release
 export RUSTFLAGS="-C target-cpu=znver2"
+export CARGO_TARGET_DIR="$PWD/target/deck"
 exec nice -n 19 nix develop --command nix shell nixpkgs#cargo-zigbuild nixpkgs#zig -c \
-  cargo zigbuild --release -j8 --target x86_64-unknown-linux-gnu.2.35
+  cargo zigbuild --profile "$profile" -j"${JOBS:-32}" --target x86_64-unknown-linux-gnu.2.35

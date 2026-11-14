@@ -16,9 +16,9 @@ run-radv: build
 shots track="0": build
     VK_ICD_FILENAMES={{mesa}}/share/vulkan/icd.d/radeon_icd.x86_64.json nix develop -c ./target/release/gobble shots {{track}}
 
-# Steam Deck binary (glibc 2.35, Zen 2) in target/x86_64-unknown-linux-gnu/release/
-deck-build:
-    ./deck-build.sh
+# Steam Deck test binary (glibc 2.35, Zen 2) in target/deck/x86_64-unknown-linux-gnu/deck-dev/; add --release for tags
+deck-build *args:
+    ./deck-build.sh {{args}}
 
 # Exactly what CI's lint job runs 
 lint:

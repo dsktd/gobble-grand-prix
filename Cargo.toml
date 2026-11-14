@@ -78,3 +78,10 @@ while_float = "allow"
 trivially_copy_pass_by_ref = "allow"
 # Newer clippy wants Option::map_or_default, which older stable toolchains (and the Nix shell) lack.
 map_unwrap_or = "allow"
+
+# Fast iterative Deck builds; release stays for CI and tags
+[profile.deck-dev]
+inherits = "release"
+lto = "thin"
+codegen-units = 16
+incremental = true
