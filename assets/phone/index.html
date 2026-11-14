@@ -3,87 +3,231 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
-<meta name="theme-color" content="#8c3818">
+<meta name="theme-color" content="#2A170E">
 <title>Gobble Grand Prix pad</title>
 <style>
-  * { box-sizing: border-box; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
-  html, body { margin: 0; height: 100%; overflow: hidden; touch-action: none;
-    background: #8c3818; color: #faeed2; font: 600 16px system-ui, sans-serif; }
-  /* Keep clear of the notch, Dynamic Island and home indicator, in either landscape */
-  #app { position: fixed; inset: 0; display: grid;
-    padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left); grid-template-columns: 1fr 1fr; grid-template-rows: auto 1fr; }
-  #bar { grid-column: 1 / 3; display: flex; gap: 8px; align-items: center; padding: 6px 10px;
-    background: rgba(64, 26, 10, .85); flex-wrap: wrap; }
+  /* Layout numbers from the "Phone controller" design (pad-ui-spec.md) */
+  @font-face { font-family: Fredoka; font-weight: 500; src: url("fonts/Fredoka-500.ttf"); }
+  @font-face { font-family: Fredoka; font-weight: 600; src: url("fonts/Fredoka-600.ttf"); }
+  @font-face { font-family: Fredoka; font-weight: 700; src: url("fonts/Fredoka-700.ttf"); }
+  :root {
+    --bg: #2A170E; --panel: #3E2316; --idle: #5B3421; --pumpkin: #F28C28; --cran: #B3203C;
+    --cream: #FFF4E0; --cream2: #D9C3A0; --green: #6CC24A;
+    /* Safe areas: the notch, Dynamic Island, home indicator and gesture bar */
+    --sa-t: env(safe-area-inset-top, 0px); --sa-r: env(safe-area-inset-right, 0px);
+    --sa-b: env(safe-area-inset-bottom, 0px); --sa-l: env(safe-area-inset-left, 0px);
+    --hit: 56px; --gap: 12px;
+  }
+  * { box-sizing: border-box; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none;
+    -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; height: 100%; overflow: hidden; touch-action: none; background: var(--bg);
+    color: var(--cream); font: 500 24px Fredoka, system-ui, sans-serif; }
+  [hidden] { display: none !important; }
+  h1, h2 { margin: 0; font-weight: 700; }
+  h1 { font-size: 40px; } h2 { font-size: 32px; }
+  .label { font-size: 20px; font-weight: 600; }
+  .dim { color: var(--cream2); }
+  .safe { position: fixed; inset: 0; padding: calc(var(--sa-t) + 16px) calc(var(--sa-r) + 16px)
+    calc(var(--sa-b) + 16px) calc(var(--sa-l) + 16px); }
+  button, .btn { font: inherit; font-weight: 600; color: var(--cream); background: var(--idle); border: 0;
+    border-radius: 16px; min-height: var(--hit); min-width: var(--hit); padding: 0 16px; text-decoration: none;
+    display: flex; align-items: center; justify-content: center; gap: 8px; }
+  button.primary, .btn.primary { background: var(--pumpkin); color: var(--bg); }
+  button.ghost { background: var(--panel); box-shadow: inset 0 0 0 2px var(--cream2); }
+  button.on, button:active:not(:disabled) { background: var(--pumpkin); color: var(--bg); box-shadow: inset 0 0 0 4px var(--cream); }
+  button:disabled { background: var(--panel); color: var(--cream2); }
+  button img, .chip img { width: 40px; height: 40px; pointer-events: none; }
+  .chip { display: inline-flex; align-items: center; gap: 8px; height: 40px; padding: 0 16px; border-radius: 999px;
+    background: var(--panel); font-size: 20px; font-weight: 600; white-space: nowrap; }
+  .chip .dot { width: 16px; height: 16px; border-radius: 50%; background: var(--pumpkin); flex: none; }
+  .chip.lan .dot, .chip.online .dot { background: var(--green); }
+  .chip.offline .dot { background: var(--cran); }
+
+  /* Join cover */
+  #cover { display: flex; flex-direction: column; align-items: center; justify-content: safe center; gap: var(--gap);
+    text-align: center; z-index: 2; background: var(--bg); overflow-y: auto; }
+  #cover > * { width: 100%; max-width: 420px; flex: none; }
+  #cover .logo { color: var(--pumpkin); line-height: 1; }
+  #cover .chip { width: auto; }
+  #cover input { font: inherit; height: var(--hit); padding: 0 16px; border-radius: 16px; border: 0;
+    box-shadow: inset 0 0 0 2px var(--pumpkin); background: var(--bg); color: var(--cream); text-align: center;
+    -webkit-user-select: text; user-select: text; }
+  #go { min-height: 72px; }
+  /* Short landscape screens: the LAN offer needs the logo's room */
+  @media (max-height: 440px) { #cover.lan .logo { display: none; } }
+  #lan { display: none; flex-direction: column; gap: 8px; }
+  #lanlink { min-height: 72px; }
+  #full { z-index: 3; display: none; align-items: center; justify-content: center; background: rgba(42, 23, 14, .75); }
+  .panel { background: var(--panel); border-radius: 20px; box-shadow: inset 0 0 0 2px var(--cream2); padding: 16px; }
+  #full .panel { width: 100%; max-width: 440px; display: flex; flex-direction: column; gap: 16px; text-align: center; }
+  #full h1 { color: var(--pumpkin); }
+
+  /* The pad */
+  #app { display: flex; flex-direction: column; gap: var(--gap); }
+  #bar { flex: none; height: 64px; display: flex; align-items: center; gap: var(--gap); padding: 0 8px;
+    background: rgba(62, 35, 22, .85); border-radius: 16px; min-width: 0; }
+  #seat { height: 48px; border-radius: 999px; display: flex; align-items: center; gap: 12px; padding: 0 20px 0 16px;
+    color: var(--bg); min-width: 0; flex: 0 1 auto; }
+  #seat b { font-size: 32px; font-weight: 700; }
+  #seat span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #seat.none { background: var(--panel); color: var(--cream2); font-size: 20px; font-weight: 600;
+    border: 2px dashed var(--cream2); white-space: nowrap; }
   #bar .grow { flex: 1; }
-  button { font: inherit; color: #faeed2; background: #5a2410; border: 2px solid #ffd25a;
-    border-radius: 12px; padding: 6px 12px; }
-  button.on, button:active { background: #ffd25a; color: #401a0a; }
-  #steer { position: relative; margin: 10px; border-radius: 20px; background: rgba(64, 26, 10, .5); }
-  #steer .knob { position: absolute; top: 50%; left: 50%; width: 70px; height: 70px; margin: -35px;
-    border-radius: 50%; background: #ffd25a; }
-  #steer .hint { position: absolute; bottom: 8px; width: 100%; text-align: center; opacity: .7; }
-  #right { display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; gap: 10px; margin: 10px; }
-  #right button { font-size: 22px; border-radius: 20px; }
-  #gas { grid-row: 1 / 3; grid-column: 2; }
-  #menu { display: flex; gap: 4px; }
-  #menu button { padding: 6px 10px; }
-  #cover { position: fixed; inset: 0;
-    padding: max(20px, env(safe-area-inset-top)) max(20px, env(safe-area-inset-right)) max(20px, env(safe-area-inset-bottom)) max(20px, env(safe-area-inset-left)); display: flex; flex-direction: column; gap: 14px; align-items: center;
-    justify-content: center; background: #8c3818; text-align: center; padding: 20px; z-index: 2; }
-  #cover h1 { color: #ffd25a; margin: 0; }
-  input[type=range] { width: 110px; }
-  #pick { grid-row: 2; grid-column: 1 / 3; display: none; flex-direction: column; gap: 8px;
-    margin: 10px; overflow-y: auto; z-index: 1; }
-  #pick .row { display: flex; flex-wrap: wrap; gap: 8px; }
-  #pick .row button { flex: 1 1 40%; font-size: 20px; padding: 12px; }
-  #pick #lock { font-size: 22px; padding: 14px; }
-  label { display: flex; gap: 4px; align-items: center; }
+  #menubtn { width: 88px; flex: none; }
+  #body { flex: 1; min-height: 0; position: relative; }
+  #body > section { position: absolute; inset: 0; display: none; }
+  #app[data-view=lobby] #lobby, #app[data-view=pick] #pick, #app[data-view=race] #race { display: flex; }
+  #app:not([data-view=race]) #menubtn { display: none; }
+
+  /* Menu keys: d-pad cross, B and A round keys, Pause under them */
+  .keys { --s: 64px; --k: 88px; display: flex; flex-wrap: wrap; gap: var(--gap); align-items: center; justify-content: center; }
+  .dpad { display: grid; grid-template: repeat(3, var(--s)) / repeat(3, var(--s)); place-items: center; }
+  .dpad button { width: calc(var(--s) - 4px); height: calc(var(--s) - 4px); padding: 0; font-size: 32px; font-weight: 700; }
+  .dpad img { width: 40px; height: 40px; }
+  .ab { display: grid; grid-template-columns: var(--k) var(--k); gap: var(--gap); }
+  .ab button.round { width: var(--k); height: var(--k); border-radius: 50%; flex-direction: column; gap: 0; padding: 0; font-size: 20px; }
+  .ab .pause { grid-column: 1 / 3; }
+  #lobby { flex-direction: column; align-items: center; gap: var(--gap); overflow-y: auto; }
+  #lobbymsg { color: var(--pumpkin); text-align: center; }
+  #lobbymsg.seated { color: var(--cream2); font-size: 20px; font-weight: 600; }
+
+  /* Racer pick */
+  #pick { flex-direction: column; gap: var(--gap); }
+  #pickmsg.locked { color: var(--cream2); font-size: 24px; font-weight: 500; }
+  #picks { flex: 1; min-height: 0; overflow-y: auto; display: grid; grid-template-columns: repeat(3, 1fr);
+    grid-auto-rows: minmax(var(--hit), 80px); gap: var(--gap); align-content: start; }
+  #picks button { font-weight: 500; }
+  #picks button.on { box-shadow: inset 0 0 0 4px var(--cream); }
+  #picks button.on:disabled { background: var(--cran); color: var(--cream); box-shadow: none; }
+  #lock { flex: none; min-height: 64px; font-size: 32px; font-weight: 700; }
+
+  /* Race: steer zone left, drive cluster right (Gas in the outer bottom corner) */
+  #race { gap: var(--gap); }
+  #steer { flex: 0 0 46%; position: relative; border-radius: 20px; background: rgba(62, 35, 22, .6); overflow: hidden; }
+  #steer .track { position: absolute; left: 10%; right: 10%; top: 50%; height: 6px; margin-top: -3px;
+    border-radius: 3px; background: var(--idle); }
+  #knob { position: absolute; top: 50%; left: 50%; width: 72px; height: 72px; margin: -36px; border-radius: 50%;
+    background: var(--pumpkin); }
+  #steer.tilt #knob { box-shadow: 0 0 0 3px var(--cream); }
+  #hint { position: absolute; bottom: 16px; width: 100%; text-align: center; color: var(--cream2); font-size: 20px; font-weight: 600; }
+  #tilttag { display: none; position: absolute; top: 12px; left: 12px; height: 32px; background: var(--pumpkin);
+    color: var(--bg); }
+  #recenter { display: none; position: absolute; left: 12px; bottom: 12px; width: 140px; }
+  #steer.tilt #tilttag, #steer.tilt #recenter { display: flex; }
+  #steer.tilt #hint { bottom: 28px; text-align: right; padding-right: 16px; }
+  #drive { flex: 1; display: grid; gap: var(--gap); grid-template: 4fr 1fr 5fr / 1fr 1fr; }
+  #drive button { flex-direction: column; gap: 4px; font-size: 32px; font-weight: 700; border-radius: 16px; min-height: 0; }
+  #item { grid-area: 1 / 1 / 3 / 2; }
+  #brake { grid-area: 3 / 1 / 4 / 2; }
+  #drift { grid-area: 1 / 2 / 2 / 3; background: var(--cran); }
+  #gas { grid-area: 2 / 2 / 4 / 3; background: var(--pumpkin); color: var(--bg); }
+  /* Short buttons: glyph beside the label */
+  @media (max-height: 440px) { #drive #drift { flex-direction: row; gap: 12px; } }
+
+  /* Menu sheet */
+  #sheet { z-index: 2; display: none; background: rgba(42, 23, 14, .75); }
+  #sheet.open { display: block; }
+  #sheet .panel { height: 100%; display: grid; grid-template: auto 1fr / 1fr 1fr; gap: var(--gap); overflow-y: auto; }
+  #sheet header { grid-column: 1 / 3; display: flex; align-items: center; justify-content: space-between; }
+  #sheet .settings { display: flex; flex-direction: column; gap: var(--gap); }
+  #sheet .keys { --s: 56px; --k: 64px; }
+  #sheet .row { display: grid; grid-template-columns: 1fr 1fr; gap: var(--gap); }
+  #sens { justify-content: space-between; padding: 0 12px 0 16px; }
+  #pips { display: flex; gap: 3px; }
+  #pips i { width: 10px; height: 24px; border-radius: 4px; background: var(--bg); }
+  #pips i.on { background: var(--pumpkin); }
+
+  @media (orientation: portrait) {
+    #race { flex-direction: column; }
+    #steer { flex-basis: 38%; }
+    #picks { grid-template-columns: repeat(2, 1fr); }
+    .keys { --s: 58px; --k: 80px; }
+    #sheet .panel { grid-template: auto auto 1fr / 1fr; height: auto; max-height: 100%; }
+    #sheet header { grid-column: 1; }
+    #ping .word { display: none; }
+    #bar { gap: 8px; }
+    #bar .chip { padding: 0 12px; }
+    #seat { padding: 0 14px 0 12px; gap: 8px; }
+  }
 </style>
 </head>
 <body>
-<div id="cover">
-  <h1>Gobble Grand Prix</h1>
-  <div id="status">Tap to connect. Turn your phone sideways.</div>
-  <label style="flex-direction:column;gap:6px">Your name
-    <input id="name" maxlength="12" autocomplete="nickname"
-      style="font:inherit;font-size:22px;padding:8px 12px;border-radius:12px;border:2px solid #ffd25a;background:#2A170E;color:#faeed2;text-align:center;width:12em">
-  </label>
-  <button id="go" style="font-size:24px;padding:14px 30px">Tap to start</button>
-  <div id="lan" style="display:none;flex-direction:column;align-items:center;gap:6px">
-    <a id="lanlink" style="font-size:26px;padding:16px 30px;background:#ffd25a;color:#2A170E;border-radius:14px;text-decoration:none;font-weight:bold">On the same Wi-Fi? Tap here</a>
-    <small>Your phone warns about the game's certificate once: choose Advanced / Show details, then continue.</small>
+<div id="cover" class="safe">
+  <div class="logo"><h1>GOBBLE</h1><div class="label" style="color:var(--cream)">GRAND PRIX PAD</div></div>
+  <span id="coverchip" class="chip" hidden><span class="dot"></span><span></span></span>
+  <div id="status" class="label">Turn your phone sideways.</div>
+  <label id="namebox" class="label dim" style="display:flex;flex-direction:column;gap:8px">Your name
+    <input id="name" maxlength="12" autocomplete="nickname"></label>
+  <button id="go" class="primary">Tap to start</button>
+  <div id="lan">
+    <a id="lanlink" class="btn primary">On the same Wi-Fi? Tap here</a>
+    <div class="label dim">Your phone warns about the game's certificate once: choose Advanced / Show details, then continue.</div>
+  </div>
+  <button id="cancel" class="ghost" hidden>Cancel</button>
+</div>
+<div id="full" class="safe">
+  <div class="panel">
+    <h1>Lobby full</h1>
+    <div class="label">All four seats are taken. Wait for the next race.</div>
+    <button class="primary" id="fullok">OK</button>
   </div>
 </div>
-<div id="full" style="display:none;position:fixed;inset:0;z-index:3;background:#2A170E;align-items:center;justify-content:center;flex-direction:column;gap:12px;text-align:center">
-  <h2 style="color:#F28C28;margin:0">Lobby full</h2>
-  <div>All four seats are taken. Sorry! Wait for the next race.</div>
-  <button onclick="document.getElementById('full').style.display='none'">OK</button>
-</div>
-<div id="app">
+<div id="app" class="safe" data-view="lobby">
   <div id="bar">
-    <button id="pause">Pause</button>
-    <div id="menu">
-      <button data-k="left">&#9664;</button><button data-k="up">&#9650;</button>
-      <button data-k="down">&#9660;</button><button data-k="right">&#9654;</button>
-      <button data-k="ok">A</button><button data-k="back">B</button>
-    </div>
+    <div id="seat" class="none">No seat yet</div>
     <span class="grow"></span>
-    <button id="gyro">Tilt: off</button>
-    <button id="cal">Calibrate</button>
-    <label>Sens <input id="sens" type="range" min="10" max="60" value="30"></label>
-    <label><input id="inv" type="checkbox">Invert</label>
-    <span id="seat">no seat: press A to join</span>
-    <span id="ping">--</span>
+    <span id="ping" class="chip"><span class="dot"></span><span class="word"></span><span class="ms"></span></span>
+    <button id="menubtn" class="ghost label">Menu</button>
   </div>
-  <div id="pick"><div class="row" id="picks"></div><button id="lock">Lock in</button></div>
-  <div id="steer"><div class="knob" id="knob"></div><div class="hint" id="hint">Drag to steer</div></div>
-  <div id="right">
-    <button id="drift">Drift</button>
-    <button id="gas">Gas</button>
-    <button id="item">Item</button>
-    <button id="brake">Brake</button>
+  <div id="body">
+    <section id="lobby">
+      <h2 id="lobbymsg">Press A to take a seat</h2>
+      <div class="keys"></div>
+    </section>
+    <section id="pick">
+      <h2 id="pickmsg">Pick your racer</h2>
+      <div id="picks"></div>
+      <button id="lock" class="primary">Lock in</button>
+    </section>
+    <section id="race">
+      <div id="steer">
+        <div class="track"></div><div id="knob"></div>
+        <span id="tilttag" class="chip">TILT ON</span>
+        <div id="hint">Drag anywhere here to steer</div>
+        <button id="recenter" class="label">Recenter</button>
+      </div>
+      <div id="drive">
+        <button id="item"><img src="glyphs/steamdeck_button_b.png" alt="">Item</button>
+        <button id="brake"><img src="glyphs/steamdeck_button_l2.png" alt="">Brake</button>
+        <button id="drift"><img src="glyphs/steamdeck_button_r1.png" alt="">Drift</button>
+        <button id="gas"><img src="glyphs/steamdeck_button_r2.png" alt="">Gas</button>
+      </div>
+    </section>
   </div>
 </div>
+<div id="sheet" class="safe">
+  <div class="panel">
+    <header><h2>Menu</h2><button id="close" class="ghost label">Close</button></header>
+    <div class="settings">
+      <button id="gyro" class="label">Tilt steering: off</button>
+      <div class="row"><button id="cal" class="label">Recenter</button><button id="inv" class="label">Invert: off</button></div>
+      <button id="sens" class="label">Sensitivity<span id="pips"></span></button>
+    </div>
+    <div class="keys"></div>
+  </div>
+</div>
+<template id="keys">
+  <div class="dpad">
+    <span></span><button data-k="up">&#8963;</button><span></span>
+    <button data-k="left">&lsaquo;</button><img src="glyphs/steamdeck_dpad.png" alt=""><button data-k="right">&rsaquo;</button>
+    <span></span><button data-k="down">&#8964;</button><span></span>
+  </div>
+  <div class="ab">
+    <button data-k="back" class="round"><img src="glyphs/steamdeck_button_b.png" alt="">Back</button>
+    <button data-k="ok" class="round primary"><img src="glyphs/steamdeck_button_a.png" alt="">OK</button>
+    <button data-k="pause" class="ghost pause label"><img src="glyphs/steamdeck_button_options.png" alt="">Pause</button>
+  </div>
+</template>
 <script>
 "use strict";
 const $ = (id) => document.getElementById(id);
@@ -95,78 +239,146 @@ const pin = hash.get("pin") || new URLSearchParams(location.search).get("pin") |
 // The game's own page on the local network (ip:port), the way in when iroh cannot connect
 const lan = /^[0-9A-Fa-f.:\[\]]+$/.test(hash.get("lan") || "") ? hash.get("lan") : null;
 if (lan) $("lanlink").href = `https://${lan}/?pin=${encodeURIComponent(pin)}`;
+const store = (key, value) => { try { if (value === undefined) return localStorage.getItem(key); localStorage.setItem(key, value); } catch (e) {} return null; };
 // The player's name, asked once and remembered
-$("name").value = localStorage.getItem("gobble-name") || "";
+$("name").value = store("gobble-name") || "";
 const playerName = () => {
   const name = $("name").value.trim().slice(0, 12);
-  localStorage.setItem("gobble-name", name);
+  store("gobble-name", name);
   return name;
 };
 // A stable id for this phone, so a reload gets the same seat back
-let token = localStorage.getItem("gobble-token");
+let token = store("gobble-token");
 if (!token) {
   token = Array.from(crypto.getRandomValues(new Uint8Array(12)), (b) => b.toString(16).padStart(2, "0")).join("");
-  localStorage.setItem("gobble-token", token);
+  store("gobble-token", token);
 }
 const state = { steer: 0, gas: false, brake: false, drift: false, item: false };
-let ws = null, seq = 0, gyro = false, tilt = 0, center = 0;
+let ws = null, seq = 0, gyro = false, tilt = 0, center = 0, invert = false, attempt = 0;
+
+// Connection chip: connecting, lan or online (with the ping), offline
+const NET = { connecting: "Connecting", lan: "LAN", online: "Online", offline: "Offline" };
+let net;
+function setNet(kind, ms) {
+  net = kind;
+  for (const chip of [$("ping"), $("coverchip")]) {
+    chip.className = `chip ${kind}`;
+    chip.lastElementChild.textContent = ms === undefined ? NET[kind] : `${ms} ms`;
+    if (chip.children.length > 2) chip.children[1].textContent = ms === undefined ? "" : `${NET[kind]} `;
+  }
+}
+setNet("connecting");
+
+// The cover: join, connecting, game not found, disconnected
+function cover(kind, text) {
+  $("cover").style.display = kind ? "flex" : "none";
+  if (!kind) return;
+  const busy = kind === "connecting";
+  $("status").textContent = text;
+  $("status").style.color = kind === "error" ? "var(--cran)" : "";
+  $("coverchip").hidden = kind === "join";
+  setNet(busy ? "connecting" : "offline");
+  $("go").hidden = busy;
+  $("namebox").style.display = kind === "join" || kind === "error" ? "flex" : "none";
+  $("go").textContent = kind === "join" ? "Tap to start" : kind === "notfound" ? "Try again" : "Tap to retry";
+  $("go").style.minHeight = kind === "notfound" ? "var(--hit)" : "";
+  $("cancel").hidden = !busy;
+  $("lan").style.display = "none";
+  $("cover").classList.remove("lan");
+}
+const showLan = () => {
+  if (!lan) return;
+  $("lan").style.display = "flex";
+  $("cover").classList.add("lan");
+};
 
 function closed() {
   ws = null;
-  $("cover").style.display = "flex";
-  $("status").textContent = "Disconnected. Wrong PIN, or the game closed. Tap to retry.";
+  cover("error", "Disconnected. Wrong PIN, or the game closed. Tap to retry.");
 }
 
 // Both transports look the same to the rest of the page: send(text), readyState 1 when open
 async function connect() {
+  const mine = ++attempt;
   if (game) {
-    $("status").textContent = "Connecting through the internet...";
+    cover("connecting", "Connecting through the internet...");
     // A stale game id (game restarted, old QR) never answers: give up after 10 s
     let gaveUp = false;
     const timer = setTimeout(() => {
       gaveUp = true;
-      $("status").textContent = "Game not found, scan the QR code again.";
+      if (mine === attempt) { cover("notfound", "Game not found, scan the QR code again."); showLan(); }
     }, 10000);
     // Same Wi-Fi as the game: offer its LAN page if iroh is slow
-    const lanTimer = lan && setTimeout(() => { $("lan").style.display = "flex"; }, 5000);
+    const lanTimer = lan && setTimeout(() => {
+      if (mine === attempt) { $("status").textContent = "Still connecting through the internet."; showLan(); }
+    }, 5000);
     try {
       const pad = await import("./pkg/gobble_pad.js");
       await pad.default();
       const link = await pad.connect(game, (line) => receive(line), closed);
       clearTimeout(timer);
       clearTimeout(lanTimer);
-      if (gaveUp) return;
+      if (gaveUp || mine !== attempt) return;
       link.send(JSON.stringify({ t: "join", pin, token, name: playerName() }));
       ws = { readyState: 1, send: (text) => link.send(text) };
-      $("cover").style.display = "none";
+      setNet("online");
+      cover(null);
     } catch (e) {
       clearTimeout(timer);
-      if (lan) $("lan").style.display = "flex";
-      $("status").textContent = gaveUp ? "Game not found, scan the QR code again." : `Could not reach the game: ${e}`;
+      clearTimeout(lanTimer);
+      if (mine !== attempt) return;
+      cover("notfound", gaveUp ? "Game not found, scan the QR code again." : `Could not reach the game: ${e}`);
+      showLan();
     }
     return;
   }
+  cover("connecting", "Connecting...");
   ws = new WebSocket(`wss://${location.host}/ws?pin=${encodeURIComponent(pin)}&token=${token}&name=${encodeURIComponent(playerName())}`);
-  ws.onopen = () => { $("cover").style.display = "none"; };
+  ws.onopen = () => { setNet("lan"); cover(null); };
   ws.onclose = closed;
   ws.onmessage = (event) => receive(event.data);
 }
+$("cancel").onclick = () => {
+  attempt++;
+  if (ws && ws.close) { ws.onclose = null; ws.close(); }
+  ws = null;
+  cover("join", "Turn your phone sideways.");
+};
+
+// Which screen the pad shows: menu keys in the lobby, the racer list, or the drive controls
+let race = false, seated = false, picking = false;
+function view() {
+  const name = picking && seated ? "pick" : race && seated ? "race" : "lobby";
+  $("app").dataset.view = name;
+  if (name !== "race") $("sheet").classList.remove("open");
+}
 
 function receive(text) {
-  {
-    const msg = JSON.parse(text);
-    if (msg.t === "denied") { $("status").textContent = "Wrong PIN."; return; }
-    if (msg.t === "buzz" && navigator.vibrate) navigator.vibrate(msg.ms);
-    if (msg.t === "ack") $("ping").textContent = `${Math.round(performance.now() - msg.ms)} ms`;
-    if (msg.t === "seat") {
-      $("seat").textContent = msg.p ? `P${msg.p} ${msg.name || ""}` : "no seat: press A to join";
-      $("seat").style.cssText = msg.p ? `background:${msg.color};color:#2A170E;padding:4px 12px;border-radius:12px;font-size:20px` : "";
-      $("full").style.display = "none";
-    }
-    if (msg.t === "racers") showPicks(msg);
-    if (msg.t === "full") $("full").style.display = "flex";
+  const msg = JSON.parse(text);
+  if (msg.t === "denied") { cover("error", "Wrong PIN."); return; }
+  if (msg.t === "buzz" && navigator.vibrate) navigator.vibrate(msg.ms);
+  if (msg.t === "ack") setNet(game ? "online" : "lan", Math.round(performance.now() - msg.ms));
+  if (msg.t === "seat") {
+    seated = Boolean(msg.p);
+    const seat = $("seat");
+    seat.className = seated ? "" : "none";
+    seat.style.background = seated ? msg.color : "";
+    if (seated) {
+      const b = document.createElement("b"), span = document.createElement("span");
+      b.textContent = `P${msg.p}`;
+      span.textContent = msg.name || "";
+      seat.replaceChildren(b, span);
+    } else seat.textContent = "No seat yet";
+    $("lobbymsg").textContent = seated ? "Use these keys in the game's menus" : "Press A to take a seat";
+    $("lobbymsg").className = seated ? "seated" : "";
+    $("full").style.display = "none";
+    view();
   }
+  if (msg.t === "screen") { race = msg.race; view(); }
+  if (msg.t === "racers") showPicks(msg);
+  if (msg.t === "full") $("full").style.display = "flex";
 }
+$("fullok").onclick = () => { $("full").style.display = "none"; };
 
 $("go").onclick = async () => {
   // iOS asks for motion access from a tap
@@ -193,16 +405,41 @@ window.addEventListener("devicemotion", (event) => {
 $("gyro").onclick = () => {
   gyro = !gyro;
   center = tilt;
-  $("gyro").textContent = `Tilt: ${gyro ? "on" : "off"}`;
+  $("gyro").textContent = `Tilt steering: ${gyro ? "on" : "off"}`;
   $("gyro").classList.toggle("on", gyro);
-  $("hint").textContent = gyro ? "Tilt to steer" : "Drag to steer";
+  $("steer").classList.toggle("tilt", gyro);
+  $("hint").textContent = gyro ? "Tilt to steer" : "Drag anywhere here to steer";
 };
-$("cal").onclick = () => { center = tilt; };
+$("cal").onclick = $("recenter").onclick = () => { center = tilt; };
+$("inv").onclick = () => {
+  invert = !invert;
+  $("inv").textContent = `Invert: ${invert ? "on" : "off"}`;
+};
+// Sensitivity: 10 pips, more pips steer harder (degrees of tilt for full lock, 60..10)
+let pips = Number(store("gobble-sens")) || 6;
+const sens = () => 60 - ((pips - 1) * 50) / 9;
+function showPips() {
+  $("pips").replaceChildren(...Array.from({ length: 10 }, (_, i) => {
+    const pip = document.createElement("i");
+    pip.className = i < pips ? "on" : "";
+    return pip;
+  }));
+}
+$("sens").onclick = (e) => {
+  const r = $("pips").getBoundingClientRect();
+  pips = e.clientX >= r.left - 8 ? Math.max(1, Math.min(10, Math.ceil(((e.clientX - r.left) / r.width) * 10))) : (pips % 10) + 1;
+  store("gobble-sens", pips);
+  showPips();
+};
+showPips();
+$("menubtn").onclick = () => $("sheet").classList.add("open");
+$("close").onclick = () => $("sheet").classList.remove("open");
 
 // Touch steering, the fallback
 const pad = $("steer"), knob = $("knob");
 let steerTouch = null;
 function touchSteer(event) {
+  if (event.target.closest("button")) return;
   for (const t of event.changedTouches) {
     if (event.type === "touchstart" && steerTouch === null) steerTouch = t.identifier;
     if (t.identifier !== steerTouch) continue;
@@ -231,13 +468,14 @@ $("item").addEventListener("mousedown", () => { state.item = true; });
 // The racer list while picking: tap one to choose it, then lock in
 let locked = false;
 function showPicks(msg) {
-  const on = Array.isArray(msg.list);
-  $("pick").style.display = on ? "flex" : "none";
-  for (const id of ["steer", "right"]) $(id).style.display = on ? "none" : "";
-  if (!on) return;
+  picking = Array.isArray(msg.list);
+  if (!picking) race = true;
+  view();
+  if (!picking) return;
   locked = msg.locked;
-  const rows = $("picks");
-  rows.replaceChildren(...msg.list.map((name, i) => {
+  $("pickmsg").textContent = locked ? "Locked in. Waiting for the others." : "Pick your racer";
+  $("pickmsg").className = locked ? "locked" : "";
+  $("picks").replaceChildren(...msg.list.map((name, i) => {
     const b = document.createElement("button");
     b.textContent = name;
     b.classList.toggle("on", i === msg.pick);
@@ -246,23 +484,23 @@ function showPicks(msg) {
     return b;
   }));
   $("lock").textContent = locked ? "Locked: tap to change" : "Lock in";
+  $("lock").className = locked ? "ghost" : "primary";
 }
 $("lock").onclick = () => send({ t: "menu", k: locked ? "back" : "ok" });
 
 function send(obj) { if (ws && ws.readyState === 1) ws.send(JSON.stringify(obj)); }
-for (const b of document.querySelectorAll("#menu button")) {
+for (const keys of document.querySelectorAll(".keys")) keys.append($("keys").content.cloneNode(true));
+for (const b of document.querySelectorAll(".keys button")) {
   b.addEventListener("click", () => send({ t: "menu", k: b.dataset.k }));
 }
-$("pause").onclick = () => send({ t: "menu", k: "pause" });
 
 // 60 Hz input
 setInterval(() => {
   if (gyro) {
-    const sens = Number($("sens").value);
     let d = tilt - center;
     d = Math.abs(d) < 3 ? 0 : d - Math.sign(d) * 3;
-    let s = Math.max(-1, Math.min(1, d / sens));
-    if ($("inv").checked) s = -s;
+    let s = Math.max(-1, Math.min(1, d / sens()));
+    if (invert) s = -s;
     if (steerTouch === null) state.steer = s;
   }
   knob.style.left = `${50 - state.steer * 40}%`;

@@ -1,14 +1,12 @@
 #!/usr/bin/env bash
 # Publish the phone pad page to GitHub Pages (gh-pages branch, /pad/): the same page the game
-# serves on the LAN, plus the iroh wasm module so it can reach the game from any network.
+# serves on the LAN, its font and glyphs, plus the iroh wasm module so it can reach the game from any network.
 # Run pad/build.sh first.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 site=$(mktemp -d)
 trap 'rm -rf "$site"' EXIT
-mkdir -p "$site/pad/pkg"
-cp assets/phone/index.html "$site/pad/index.html"
-cp pad/pkg/gobble_pad.js pad/pkg/gobble_pad_bg.wasm "$site/pad/pkg/"
+pad/site.sh "$site"
 printf '<meta http-equiv="refresh" content="0; url=pad/">\n' > "$site/index.html"
 touch "$site/.nojekyll"
 commit=$(git rev-parse --short HEAD)

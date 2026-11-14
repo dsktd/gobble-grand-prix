@@ -38,6 +38,16 @@ pub(super) mod prelude {
     pub use super::Phones;
 }
 
+macro_rules! glyph {
+    ($file:literal) => {
+        (
+            concat!("/glyphs/", $file),
+            "image/png",
+            include_bytes!(concat!("../assets/prompts/steamdeck/", $file)),
+        )
+    };
+}
+
 pub const PORT: u16 = 7777;
 /// How long a silent phone keeps its kart before the CPU takes over.
 const TAKEOVER: Duration = Duration::from_secs(3);
@@ -48,6 +58,31 @@ const ALPN: &[u8] = b"gobble/controller/1";
 /// The phone page on GitHub Pages; the game id and PIN ride in the fragment so no server logs them.
 const PAGES: &str = "https://dsktd.github.io/gobble-grand-prix/pad/";
 const PAGE: &str = include_str!("../assets/phone/index.html");
+/// Files the page loads next to itself: its font and the Kenney button glyphs.
+const FILES: &[(&str, &str, &[u8])] = &[
+    (
+        "/fonts/Fredoka-500.ttf",
+        "font/ttf",
+        include_bytes!("../assets/fonts/Fredoka-500.ttf"),
+    ),
+    (
+        "/fonts/Fredoka-600.ttf",
+        "font/ttf",
+        include_bytes!("../assets/fonts/Fredoka-600.ttf"),
+    ),
+    (
+        "/fonts/Fredoka-700.ttf",
+        "font/ttf",
+        include_bytes!("../assets/fonts/Fredoka-700.ttf"),
+    ),
+    glyph!("steamdeck_button_a.png"),
+    glyph!("steamdeck_button_b.png"),
+    glyph!("steamdeck_button_l2.png"),
+    glyph!("steamdeck_button_r1.png"),
+    glyph!("steamdeck_button_r2.png"),
+    glyph!("steamdeck_button_options.png"),
+    glyph!("steamdeck_dpad.png"),
+];
 
 pub(super) fn plugin(app: &mut App) {
     app.init_resource::<Phones>();
@@ -125,6 +160,8 @@ pub struct Pad {
     told: bool,
     told_seat: Option<usize>,
     told_name: Option<String>,
+    /// Whether the phone page knows the race is on (drive controls) or not (menu keys).
+    told_race: Option<bool>,
 }
 
 /// Connected phones and the channel back to them.
@@ -380,10 +417,14 @@ fn start(
                     return;
                 }
             };
-            let app = Router::new()
-                .route("/", get(page))
-                .route("/ws", get(socket))
-                .with_state(shared);
+            let mut app = Router::new().route("/", get(page));
+            for &(path, kind, bytes) in FILES {
+                app = app.route(
+                    path,
+                    get(move || async move { ([(axum::http::header::CONTENT_TYPE, kind)], bytes) }),
+                );
+            }
+            let app = app.route("/ws", get(socket)).with_state(shared);
             info!("Phone controller on https://{addr}");
             if let Err(err) = axum_server::bind_rustls(addr, config)
                 .serve(app.into_make_service())
@@ -667,6 +708,7 @@ fn receive(
                     Some((_, pad)) => {
                         pad.gone = None;
                         pad.told = false;
+                        pad.told_race = None;
                         if name.is_some() {
                             pad.name = name;
                         }
@@ -751,14 +793,20 @@ fn receive(
     }
 }
 
-/// Tell each phone which seat it holds, so its page can show "P2".
+/// Tell each phone which seat it holds, so its page can show "P2", and whether the race is on.
 fn tell_seats(
     mut phones: ResMut<Phones>,
     seats: Res<Seats>,
     names: Res<SeatNames>,
+    state: Res<State<GameState>>,
 ) {
+    let race = *state.get() == GameState::Race;
     let mut messages = Vec::new();
     for (id, pad) in &mut phones.pads {
+        if pad.told_race != Some(race) {
+            pad.told_race = Some(race);
+            messages.push(format!(r#"{{"t":"screen","id":{id},"race":{race}}}"#));
+        }
         let slot = seats.0.iter().position(|d| *d == Device::Phone(*id));
         // Only on change, or to a phone that just (re)connected
         let name = slot.map(|s| names.get(s));
