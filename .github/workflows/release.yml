@@ -13,7 +13,7 @@ on:
         description: Which builds to make
         type: choice
         default: all
-        options: [all, deck, linux, windows]
+        options: [all, deck, windows]
 
 permissions:
   contents: write
@@ -27,7 +27,6 @@ env:
   CARGO_INCREMENTAL: 0
   ALL: >-
     [{"os":"ubuntu-latest","asset":"gobble-grand-prix-steamdeck-linux-x86_64.tar.gz","only":"deck","cpu":"znver2"},
-     {"os":"ubuntu-latest","asset":"gobble-grand-prix-linux-x86_64-v2.tar.gz","only":"linux","cpu":"x86-64-v2"},
      {"os":"windows-latest","asset":"gobble-grand-prix-windows-x86_64.zip","only":"windows","cpu":""}]
 
 jobs:
@@ -106,7 +105,7 @@ jobs:
             gh release create "$GITHUB_REF_NAME" dist/* --title "$GITHUB_REF_NAME" --generate-notes
             exit 0
           fi
-          notes="Built from ${GITHUB_SHA}. Steam Deck: the steamdeck tarball (Zen 2, glibc 2.35+). Other Linux: the x86-64-v2 tarball. Unsigned: on Windows click 'More info, Run anyway'."
+          notes="Built from ${GITHUB_SHA}. Steam Deck: the steamdeck tarball (Zen 2, glibc 2.35+). Unsigned: on Windows click 'More info, Run anyway'."
           if [ "$WANT" != all ] && gh release view latest >/dev/null 2>&1; then
             gh release upload latest dist/* --clobber
             gh release edit latest --notes "$notes ($WANT build only.)"

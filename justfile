@@ -19,3 +19,8 @@ shots track="0": build
 # Steam Deck binary (glibc 2.35, Zen 2) in target/x86_64-unknown-linux-gnu/release/
 deck-build:
     ./deck-build.sh
+
+# Exactly what CI's lint job runs 
+lint:
+    nix develop -c cargo fmt --all --check
+    nix develop -c cargo clippy --all-targets --all-features --locked -- -D warnings

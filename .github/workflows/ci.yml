@@ -1,9 +1,10 @@
 name: CI
 
+# Quick lint only: fmt and clippy. Lint levels live in Cargo.toml [lints]; `just lint` runs the same commands.
 on:
   push:
     branches: [main]
-    paths: ["src/**", "assets/**", "Cargo.*", "rustfmt.toml", ".github/workflows/ci.yml"]
+    paths: ["src/**", "Cargo.*", "rustfmt.toml", ".github/workflows/ci.yml"]
   pull_request:
   workflow_dispatch:
 
@@ -15,32 +16,20 @@ concurrency:
 env:
   CARGO_TERM_COLOR: always
   CARGO_INCREMENTAL: 0
-  RUSTFLAGS: -D warnings
   CARGO_PROFILE_DEV_DEBUG: 0
-  CARGO_PROFILE_TEST_DEBUG: 0
 
 jobs:
-  check:
+  lint:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@stable
         with:
-          components: clippy
+          components: rustfmt, clippy
+      - run: cargo fmt --all --check
       - name: Linux deps
         run: ci/linux-deps.sh
       - uses: Swatinem/rust-cache@v2
         with:
           save-if: ${{ github.ref == 'refs/heads/main' }}
-      - run: cargo clippy --all-targets --locked
-      - run: cargo test --locked
-
-  # rustfmt.toml uses nightly-only options, so fmt runs on nightly.
-  fmt:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v5
-      - uses: dtolnay/rust-toolchain@nightly
-        with:
-          components: rustfmt
-      - run: cargo fmt --all --check
+      - run: cargo clippy --all-targets --all-features --locked -- -D warnings
