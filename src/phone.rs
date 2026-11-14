@@ -358,6 +358,7 @@ fn start(
         runtime.block_on(async move {
             // Anywhere: iroh through n0's relays, found by endpoint id
             match iroh::Endpoint::builder(iroh::endpoint::presets::N0)
+                .relay_mode(relays())
                 .alpns(vec![ALPN.to_vec()])
                 .bind()
                 .await
@@ -503,6 +504,26 @@ fn claim(
         *ids.entry(token.chars().take(64).collect())
             .or_insert_with(fresh)
     }
+}
+
+/// n0's relays without the trailing dot iroh writes in their hostnames: `WebKit` (every iOS
+/// browser) rejects the TLS certificate of `use1-1.relay.n0.iroh.link.`, and phones dial the
+/// home relay this endpoint publishes. Same map as the pad's (`pad/src/lib.rs`).
+fn relays() -> iroh::RelayMode {
+    use iroh::defaults::prod;
+    let urls = [
+        prod::NA_EAST_RELAY_HOSTNAME,
+        prod::NA_WEST_RELAY_HOSTNAME,
+        prod::EU_RELAY_HOSTNAME,
+        prod::AP_RELAY_HOSTNAME,
+    ]
+    .map(|host| {
+        let url: iroh::RelayUrl = format!("https://{}", host.trim_end_matches('.'))
+            .parse()
+            .expect("relay url");
+        iroh::RelayConfig::from(url)
+    });
+    iroh::RelayMode::Custom(iroh::RelayMap::from_iter(urls))
 }
 
 /// First line on an iroh stream.
