@@ -12,6 +12,10 @@ crate-type = ["cdylib", "rlib"]
 name = "pad-probe"
 path = "src/probe.rs"
 
+[[bin]]
+name = "pad-host"
+path = "src/host.rs"
+
 [dependencies]
 async-channel = "2"
 iroh = "1.3"
