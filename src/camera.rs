@@ -6,10 +6,12 @@ use crate::prelude::*;
 
 pub(super) mod prelude {
     pub use super::ChaseCam;
-    pub use super::seat_rect;
+    pub use super::hud_rect;
 }
 
 pub(super) fn plugin(app: &mut App) {
+    bevy::asset::embedded_asset!(app, "diagonal.wesl");
+    app.add_plugins(UiMaterialPlugin::<DiagonalMask>::default());
     app.add_systems(OnEnter(GameState::Race), spawn.after(spawn_track));
     app.add_systems(
         Update,
@@ -93,9 +95,39 @@ fn spawn(
     setup: Res<Setup>,
     track: Res<Track>,
     options: Res<Options>,
+    windows: Query<&Window, With<bevy::window::PrimaryWindow>>,
+    mut images: ResMut<Assets<Image>>,
+    mut masks: ResMut<Assets<DiagonalMask>>,
 ) {
     let theme = track.def().theme;
     let seats = setup.racers.len();
+    let diagonal = diagonal(seats, options.split);
+    // Diagonal: P2 renders to its own window-sized texture, masked onto its triangle
+    let p2_target = diagonal.then(|| {
+        let size = windows
+            .single()
+            .map_or(UVec2::new(1280, 800), |w| w.physical_size().max(UVec2::ONE));
+        let image = images.add(Image::new_target_texture(
+            size.x,
+            size.y,
+            bevy::render::render_resource::TextureFormat::Rgba8UnormSrgb,
+            None,
+        ));
+        commands.spawn((
+            Node {
+                position_type: PositionType::Absolute,
+                width: percent(100),
+                height: percent(100),
+                ..default()
+            },
+            MaterialNode(masks.add(DiagonalMask {
+                texture: image.clone(),
+            })),
+            GlobalZIndex(-10),
+            DespawnOnExit(GameState::Race),
+        ));
+        image
+    });
     // One full-window camera draws every seat's HUD on top of the viewports
     commands.spawn((
         Camera2d,
@@ -115,9 +147,9 @@ fn spawn(
             Camera3d::default(),
             Camera {
                 order: slot as isize,
-                // Only the first view clears; later ones would wipe the views drawn before
-                clear_color: match slot {
-                    0 => ClearColorConfig::Default,
+                // Only the first window view clears; later ones would wipe the views drawn before
+                clear_color: match (slot, diagonal) {
+                    (0, _) | (_, true) => ClearColorConfig::Default,
                     _ => ClearColorConfig::None,
                 },
                 ..default()
@@ -135,6 +167,12 @@ fn spawn(
                 .looking_at(flat(start, 1.0), Vec3::Y),
             DespawnOnExit(GameState::Race),
         ));
+        if let (1, Some(image)) = (slot, &p2_target) {
+            camera.insert((
+                bevy::camera::RenderTarget::Image(image.clone().into()),
+                P2Target(image.clone()),
+            ));
+        }
         if !options.high_quality {
             camera.insert(bevy::render::view::Msaa::Off);
         }
@@ -234,16 +272,25 @@ fn chase(
     }
 }
 
-/// Where a seat's view sits in the window, as fractions from the top left.
-pub fn seat_rect(
+/// The diagonal split only exists for two seats; more fall back to the grid.
+fn diagonal(
+    seats: usize,
+    split: Split,
+) -> bool {
+    seats == 2 && split == Split::Diagonal
+}
+
+/// Where a seat's view sits in the window, as fractions from the top left. A diagonal seat
+/// renders the whole window and is masked to its triangle.
+fn seat_rect(
     slot: usize,
     seats: usize,
-    side_by_side: bool,
+    split: Split,
 ) -> Rect {
-    match (seats, side_by_side) {
-        (0 | 1, _) => Rect::new(0.0, 0.0, 1.0, 1.0),
-        (2, true) => Rect::new(slot as f32 * 0.5, 0.0, slot as f32 * 0.5 + 0.5, 1.0),
-        (2, false) => Rect::new(0.0, slot as f32 * 0.5, 1.0, slot as f32 * 0.5 + 0.5),
+    match (seats, split) {
+        (0 | 1, _) | (2, Split::Diagonal) => Rect::new(0.0, 0.0, 1.0, 1.0),
+        (2, Split::SideBySide) => Rect::new(slot as f32 * 0.5, 0.0, slot as f32 * 0.5 + 0.5, 1.0),
+        (2, Split::TopBottom) => Rect::new(0.0, slot as f32 * 0.5, 1.0, slot as f32 * 0.5 + 0.5),
         _ => {
             let x = (slot % 2) as f32 * 0.5;
             let y = (slot / 2) as f32 * 0.5;
@@ -252,26 +299,85 @@ pub fn seat_rect(
     }
 }
 
+/// Where a seat's HUD sits: its view, or for a diagonal seat the largest rectangle inside its
+/// triangle (the quadrant at its right-angle corner: top right for P1, bottom left for P2).
+pub fn hud_rect(
+    slot: usize,
+    seats: usize,
+    split: Split,
+) -> Rect {
+    match (diagonal(seats, split), slot) {
+        (true, 0) => Rect::new(0.5, 0.0, 1.0, 0.5),
+        (true, _) => Rect::new(0.0, 0.5, 0.5, 1.0),
+        _ => seat_rect(slot, seats, split),
+    }
+}
+
+/// The texture P2 renders to in the diagonal split.
+#[derive(Component, Clone, Debug)]
+struct P2Target(Handle<Image>);
+
+/// Shows P2's texture below the top-left to bottom-right diagonal and draws the divider.
+#[derive(Asset, TypePath, bevy::render::render_resource::AsBindGroup, Clone, Debug)]
+struct DiagonalMask {
+    #[texture(0)]
+    #[sampler(1)]
+    texture: Handle<Image>,
+}
+impl UiMaterial for DiagonalMask {
+    fn fragment_shader() -> bevy::shader::ShaderRef {
+        "embedded://gobble/diagonal.wesl".into()
+    }
+}
+
 /// Keep each seat's viewport matched to the window size.
 fn viewports(
     windows: Query<&Window, With<bevy::window::PrimaryWindow>>,
     options: Res<Options>,
     setup: Res<Setup>,
-    cameras: Query<(&ChaseCam, &mut Camera)>,
+    mut images: ResMut<Assets<Image>>,
+    cameras: Query<(&ChaseCam, &mut Camera, Option<&P2Target>)>,
 ) {
     let Ok(window) = windows.single() else {
         return;
     };
-    let size = window.physical_size().as_vec2();
+    let size = window.physical_size().max(UVec2::ONE);
     let seats = setup.racers.len();
-    for (cam, mut camera) in cameras {
+    let diagonal = diagonal(seats, options.split);
+    for (cam, mut camera, target) in cameras {
+        if let Some(P2Target(handle)) = target
+            && images.get(handle).is_some_and(|i| i.size() != size)
+            && let Some(mut image) = images.get_mut(handle)
+        {
+            image.resize(bevy::render::render_resource::Extent3d {
+                width: size.x,
+                height: size.y,
+                depth_or_array_layers: 1,
+            });
+        }
+        if diagonal {
+            // Centre the view on its triangle's centroid, (2/3, 1/3) or (1/3, 2/3), off axis
+            let third = size.as_vec2() / 6.0;
+            let offset = match cam.0 {
+                0 => Vec2::new(-third.x, third.y),
+                _ => Vec2::new(third.x, -third.y),
+            };
+            camera.viewport = None;
+            camera.sub_camera_view = Some(bevy::camera::SubCameraView {
+                full_size: size,
+                offset,
+                size,
+            });
+            continue;
+        }
+        camera.sub_camera_view = None;
         if seats <= 1 {
             camera.viewport = None;
             continue;
         }
-        let rect = seat_rect(cam.0, seats, options.side_by_side);
-        let position = (rect.min * size).as_uvec2();
-        let extent = (rect.size() * size).as_uvec2().max(UVec2::ONE);
+        let rect = seat_rect(cam.0, seats, options.split);
+        let position = (rect.min * size.as_vec2()).as_uvec2();
+        let extent = (rect.size() * size.as_vec2()).as_uvec2().max(UVec2::ONE);
         camera.viewport = Some(bevy::camera::Viewport {
             physical_position: position,
             physical_size: extent,

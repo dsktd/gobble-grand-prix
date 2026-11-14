@@ -30,7 +30,7 @@ Hold drift while steering into a turn: sparks go white, then blue, then orange. 
 - Items from harvest crates: Cranberry (homing), Gravy Slick (dropped behind), Stuffing Boost.
 - 3 laps, 5 CPU racers with rubber banding, countdown, results board, options (volume, quality, controls).
 
-`gobble shots <track>` runs a scripted tour and saves screenshots to `screenshots/`.
+`gobble shots <track> [high|low] [racer] [seats] [top|side|diagonal]` runs a scripted tour and saves screenshots to `screenshots/`.
 
 ## Changelog
 

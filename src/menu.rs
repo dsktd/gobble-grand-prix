@@ -248,10 +248,10 @@ impl Opt {
         match self {
             Self::Quality => if options.high_quality { "High" } else { "Low" }.into(),
             Self::Shake => if options.shake { "On" } else { "Off" }.into(),
-            Self::Sides => if options.side_by_side {
-                "Side by side"
-            } else {
-                "Top / bottom"
+            Self::Sides => match options.split {
+                Split::TopBottom => "Top / bottom",
+                Split::SideBySide => "Side by side",
+                Split::Diagonal => "Diagonal",
             }
             .into(),
             _ => self.level(options).unwrap_or(0).to_string(),
@@ -1423,7 +1423,7 @@ fn navigate(
                     options.smoothing = (i32::from(options.smoothing) + step).clamp(0, 10) as u8;
                 }
                 4 if step != 0 => options.shake = !options.shake,
-                5 if step != 0 => options.side_by_side = !options.side_by_side,
+                5 if step != 0 => options.split = options.split.cycle(step),
                 _ => {}
             }
             if input.back || (input.confirm && cursor.0 == 6) {
