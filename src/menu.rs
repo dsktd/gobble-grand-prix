@@ -1,8 +1,11 @@
 //! Title menu, options, and racer and track pickers. Pad and keyboard alike.
 
+use bevy::camera::RenderTarget;
 use bevy::prelude::*;
+use bevy::render::render_resource::TextureFormat;
 
 use crate::prelude::*;
+use crate::style::{bar_label, bar_track};
 
 pub(super) mod prelude {
     pub use super::InMenus;
@@ -120,6 +123,7 @@ pub(super) fn plugin(app: &mut App) {
         }),
     );
     app.init_resource::<Ready>();
+    app.init_resource::<SeatViews>();
     app.add_systems(OnEnter(GameState::Lobby), |mut seats: ResMut<Seats>| {
         seats.0.clear();
     });
@@ -165,7 +169,40 @@ struct Cursor(usize);
 
 /// The racer model on the menu platter.
 #[derive(Component, Copy, Clone, Debug)]
-struct Preview(usize);
+struct Preview {
+    seat: usize,
+    racer: usize,
+}
+
+/// Films one seat's platter into its own small texture, for that seat's card.
+#[derive(Component, Copy, Clone, Debug)]
+struct SeatCam(usize);
+
+/// The per-seat preview textures (small, rendered only while shown).
+#[derive(Resource, Clone, Debug)]
+struct SeatViews([Handle<Image>; 4]);
+
+impl FromWorld for SeatViews {
+    fn from_world(world: &mut World) -> Self {
+        let mut images = world.resource_mut::<Assets<Image>>();
+        Self(std::array::from_fn(|_| {
+            images.add(Image::new_target_texture(
+                VIEW_PX,
+                VIEW_PX,
+                TextureFormat::Rgba8UnormSrgb,
+                None,
+            ))
+        }))
+    }
+}
+
+const VIEW_PX: u32 = 320;
+/// Seat platters stand this far apart along x, out of each other's view.
+const PLATTER_GAP: f32 = 20.0;
+
+fn platter_at(seat: usize) -> Vec3 {
+    PODIUM + Vec3::X * PLATTER_GAP * seat as f32
+}
 
 #[derive(Component, Copy, Clone, Debug)]
 struct Platter;
@@ -187,9 +224,10 @@ enum Bind {
     /// A lobby seat row's text and its colour.
     Seat(usize),
     LobbyHelp,
-    RacerName,
-    RacerBlurb,
-    RacerStat(usize),
+    RacerName(usize),
+    RacerBlurb(usize),
+    /// Stat `1` of seat `0`'s racer: the fill's width in px at full scale.
+    RacerStat(usize, usize),
     RacerRow(usize),
     /// Seat `1`'s tag beside racer row `0`, shown while that seat's cursor is on it.
     RacerTag(usize, usize),
@@ -590,6 +628,7 @@ fn screen(
     mut commands: Commands,
     state: Res<State<GameState>>,
     setup: Res<Setup>,
+    views: Res<SeatViews>,
     mut cursor: ResMut<Cursor>,
 ) {
     let state = *state.get();
@@ -598,7 +637,7 @@ fn screen(
         GameState::Menu => title(&mut commands),
         GameState::Options => options(&mut commands),
         GameState::Lobby => lobby_screen(&mut commands),
-        GameState::PickRacer => racers(&mut commands, setup.racers.len()),
+        GameState::PickRacer => racers(&mut commands, setup.racers.len(), &views),
         GameState::PickTrack => tracks(&mut commands),
         GameState::Race => {}
     }
@@ -951,50 +990,103 @@ fn lobby_screen(commands: &mut Commands) {
     });
 }
 
-/// The racer panel: name, blurb and stat bars of one seat's pick. Built per seat so split
-/// screen can hang one per player; `left` is its x on the stage.
+/// The racer panel: name, blurb (wide panels only) and stat bars of one seat's pick. Built per
+/// seat so split screen can hang one per player; `left`/`top` place it in its parent.
 fn racer_panel(
     stage: &mut ChildSpawnerCommands,
-    left: f32,
+    seat: usize,
+    (left, top): (f32, f32),
+    width: f32,
+    blurb: bool,
 ) {
+    let (size, name_h) = if blurb {
+        (Size::H1, 48.0)
+    } else {
+        (Size::BODY, 32.0)
+    };
     caption(
         stage,
-        (left, 120.0),
-        (336.0, 48.0),
+        (left, top),
+        (width, name_h),
         (
-            Bind::RacerName,
-            fit_text("", Size::H1, Weight::Bold, Tone::PUMPKIN, 336.0, 1),
+            Bind::RacerName(seat),
+            fit_text("", size, Weight::Bold, seat_color(seat), width, 1),
         ),
         false,
     );
-    stage.spawn((
-        boxed(left, 176.0, 336.0, 150.0),
-        children![(
-            Bind::RacerBlurb,
-            fit_text("", Size::BODY, Weight::Medium, Tone::CREAM_100, 336.0, 5)
-        )],
-    ));
+    let mut y = top + name_h + 8.0;
+    if blurb {
+        stage.spawn((
+            boxed(left, y, width, 150.0),
+            children![(
+                Bind::RacerBlurb(seat),
+                fit_text("", Size::BODY, Weight::Medium, Tone::CREAM_100, width, 5)
+            )],
+        ));
+        y += 160.0;
+    }
+    let pitch = if blurb { 48.0 } else { 32.0 };
     for (i, name) in ["Speed", "Accel", "Turn"].into_iter().enumerate() {
+        let track = bar_track(width);
         bar(
             stage,
             left,
-            336.0 + i as f32 * 48.0,
+            y + i as f32 * pitch,
+            width,
             name,
             (
-                Bind::RacerStat(i),
+                Bind::RacerStat(seat, i),
+                StatScale(track),
                 Node {
                     border_radius: pill(8.0),
-                    ..boxed(112.0, 8.0, 20.0, 16.0)
+                    ..boxed(bar_label(width) + 4.0, 8.0, 20.0, 16.0)
                 },
-                BackgroundColor(Tone::PUMPKIN),
+                BackgroundColor(seat_color(seat)),
             ),
         );
     }
 }
 
+/// Full width in px of a stat fill.
+#[derive(Component, Copy, Clone, Debug)]
+struct StatScale(f32);
+
+/// One seat's card on a split racer select: its platter's texture and its racer panel, in its
+/// seat colour.
+fn seat_card(
+    stage: &mut ChildSpawnerCommands,
+    seat: usize,
+    left: f32,
+    width: f32,
+    view: Handle<Image>,
+) {
+    let inner = width - 16.0;
+    stage
+        .spawn((
+            BackgroundColor(Tone::BROWN_800),
+            BorderColor::all(seat_color(seat)),
+            Node {
+                border: UiRect::all(px(3)),
+                border_radius: pill(Space::RADIUS_M),
+                ..boxed(left, 120.0, width, inner + 160.0)
+            },
+        ))
+        .with_children(|card| {
+            card.spawn((
+                ImageNode::new(view),
+                Node {
+                    border_radius: pill(Space::RADIUS_M),
+                    ..boxed(5.0, 5.0, inner, inner)
+                },
+            ));
+            racer_panel(card, seat, (5.0, inner + 10.0), inner, false);
+        });
+}
+
 fn racers(
     commands: &mut Commands,
     seats: usize,
+    views: &SeatViews,
 ) {
     page(commands, GameState::PickRacer, |stage| {
         heading(stage, "Pick your racer", 640.0);
@@ -1043,12 +1135,30 @@ fn racers(
                 );
             }
         }
-        // The 3D turntable shows through here
-        stage.spawn(boxed(432.0, 120.0, 440.0, 568.0));
-        racer_panel(stage, 896.0);
         let strip = if seats > 1 { 4 } else { 1 };
+        let strip_box = if seats > 1 {
+            // One card per seat side by side, the strip under them
+            let width = ((800.0 - 16.0 * (seats - 1) as f32) / seats as f32)
+                .min(256.0)
+                .floor();
+            for (seat, view) in views.0.iter().enumerate().take(seats) {
+                seat_card(
+                    stage,
+                    seat,
+                    432.0 + seat as f32 * (width + 16.0),
+                    width,
+                    view.clone(),
+                );
+            }
+            boxed(432.0, 536.0, 800.0, 152.0)
+        } else {
+            // The 3D turntable shows through here
+            stage.spawn(boxed(432.0, 120.0, 440.0, 568.0));
+            racer_panel(stage, 0, (896.0, 120.0), 336.0, true);
+            boxed(896.0, 536.0, 336.0, 152.0)
+        };
         stage.spawn((
-            boxed(896.0, 536.0, 336.0, 152.0),
+            strip_box,
             children![(
                 Bind::SeatStrip,
                 fit_text(
@@ -1206,22 +1316,27 @@ fn bind(
     names: Res<SeatNames>,
     ready: Res<Ready>,
     mut texts: Query<(&Bind, &mut Fitted)>,
-    mut nodes: Query<(&Bind, &mut Node, Option<&mut Fill>), Without<Fitted>>,
+    mut nodes: Query<(&Bind, &mut Node, Option<&mut Fill>, Option<&StatScale>), Without<Fitted>>,
 ) {
-    let racer = &ROSTER[setup
-        .racers
-        .first()
-        .copied()
-        .unwrap_or(0)
-        .min(ROSTER.len() - 1)];
+    let racer = |seat: usize| {
+        &ROSTER[setup
+            .racers
+            .get(seat)
+            .or_else(|| setup.racers.first())
+            .copied()
+            .unwrap_or(0)
+            .min(ROSTER.len() - 1)]
+    };
     let locked = |slot: usize| ready.0.get(slot).copied().unwrap_or(false);
-    let stat = |i: usize| {
+    // Fill fraction of a stat bar, 0.1..=1
+    let stat = |seat: usize, i: usize| {
+        let racer = racer(seat);
         let v = match i {
             0 => racer.stats.top_speed,
             1 => racer.stats.accel,
             _ => racer.stats.turn,
         };
-        ((v - 0.7) / 0.6 * 200.0).round().clamp(20.0, 200.0)
+        ((v - 0.7) / 0.6).clamp(0.1, 1.0)
     };
     for (bind, mut fitted) in &mut texts {
         match *bind {
@@ -1235,8 +1350,8 @@ fn bind(
             } else {
                 "Joined players press A or Enter again to start. B or Esc leaves your seat."
             }),
-            Bind::RacerName => fitted.set(racer.name),
-            Bind::RacerBlurb => fitted.set(racer.blurb),
+            Bind::RacerName(seat) => fitted.set(racer(seat).name),
+            Bind::RacerBlurb(seat) => fitted.set(racer(seat).blurb),
             Bind::SeatPlayer => fitted.set(if setup.racers.len() > 1 {
                 format!("Players: {}", setup.racers.len())
             } else {
@@ -1269,10 +1384,10 @@ fn bind(
             _ => {}
         }
     }
-    for (bind, mut node, fill) in &mut nodes {
+    for (bind, mut node, fill, scale) in &mut nodes {
         let Some(mut fill) = fill else {
-            if let Bind::RacerStat(i) = *bind {
-                node.width = px(stat(i));
+            if let (Bind::RacerStat(seat, i), Some(scale)) = (*bind, scale) {
+                node.width = px((scale.0 * stat(seat, i)).round());
             }
             continue;
         };
@@ -1318,18 +1433,30 @@ fn bind(
     }
 }
 
-/// The platter only shows on racer select; the attract race fills every other screen.
+/// The platters only film on racer select; the attract race fills every other screen. One
+/// seat films to the window, several to a card each.
 fn frame(
     state: Res<State<GameState>>,
-    mut cameras: Query<&mut Camera, With<PlatterCam>>,
+    setup: Res<Setup>,
+    mut cameras: Query<(&mut Camera, Option<&SeatCam>), Or<(With<PlatterCam>, With<SeatCam>)>>,
 ) {
-    for mut camera in &mut cameras {
-        camera.is_active = *state.get() == GameState::PickRacer;
+    let picking = *state.get() == GameState::PickRacer;
+    let seats = setup.racers.len();
+    for (mut camera, seat) in &mut cameras {
+        let on = picking
+            && match seat {
+                Some(SeatCam(seat)) => seats > 1 && *seat < seats,
+                None => seats <= 1,
+            };
+        if camera.is_active != on {
+            camera.is_active = on;
+        }
     }
 }
 
 fn backdrop(
     mut commands: Commands,
+    views: Res<SeatViews>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
@@ -1347,29 +1474,50 @@ fn backdrop(
             .looking_at(PODIUM + Vec3::Y, Vec3::Y),
         scope.clone(),
     ));
-    // A dinner plate to stand on
-    commands.spawn((
-        Platter,
-        Mesh3d(meshes.add(Cylinder::new(2.6, 0.15))),
-        MeshMaterial3d(materials.add(StandardMaterial {
-            base_color: Tone::CREAM,
-            perceptual_roughness: 0.3,
-            ..default()
-        })),
-        Transform::from_translation(PODIUM),
-        scope.clone(),
-    ));
-    commands.spawn((
-        Mesh3d(meshes.add(Torus::new(2.4, 2.75))),
-        MeshMaterial3d(materials.add(StandardMaterial {
-            base_color: Tone::GOLD,
-            metallic: 0.6,
-            perceptual_roughness: 0.3,
-            ..default()
-        })),
-        Transform::from_translation(PODIUM + Vec3::Y * 0.08),
-        scope,
-    ));
+    // A dinner plate to stand on, one per seat
+    let platter = meshes.add(Cylinder::new(2.6, 0.15));
+    let plate = materials.add(StandardMaterial {
+        base_color: Tone::CREAM,
+        perceptual_roughness: 0.3,
+        ..default()
+    });
+    let rim_mesh = meshes.add(Torus::new(2.4, 2.75));
+    let rim = materials.add(StandardMaterial {
+        base_color: Tone::GOLD,
+        metallic: 0.6,
+        perceptual_roughness: 0.3,
+        ..default()
+    });
+    for (seat, view) in views.0.iter().enumerate() {
+        let at = platter_at(seat);
+        commands.spawn((
+            Platter,
+            Mesh3d(platter.clone()),
+            MeshMaterial3d(plate.clone()),
+            Transform::from_translation(at),
+            scope.clone(),
+        ));
+        commands.spawn((
+            Mesh3d(rim_mesh.clone()),
+            MeshMaterial3d(rim.clone()),
+            Transform::from_translation(at + Vec3::Y * 0.08),
+            scope.clone(),
+        ));
+        commands.spawn((
+            SeatCam(seat),
+            Camera3d::default(),
+            Camera {
+                order: 2 + seat as isize,
+                clear_color: ClearColorConfig::Custom(Tone::BROWN_900),
+                is_active: false,
+                ..default()
+            },
+            RenderTarget::Image(view.clone().into()),
+            Transform::from_translation(at + Vec3::new(0.0, 3.0, -7.5))
+                .looking_at(at + Vec3::Y, Vec3::Y),
+            scope.clone(),
+        ));
+    }
 }
 
 fn navigate(
@@ -1447,6 +1595,7 @@ fn navigate(
     }
 }
 
+/// Keep one racer model on each seat's platter (seat 0 only, with one seat).
 fn preview(
     mut commands: Commands,
     setup: Res<Setup>,
@@ -1454,26 +1603,33 @@ fn preview(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
-    let racer = setup.racers[0];
-    if current.iter().any(|(_, p)| p.0 == racer) {
-        return;
+    let seats = setup.racers.len().clamp(1, 4);
+    for (id, p) in &current {
+        if p.seat >= seats || setup.racers.get(p.seat) != Some(&p.racer) {
+            commands.entity(id).despawn();
+        }
     }
-    for (id, _) in &current {
-        commands.entity(id).despawn();
+    for (seat, racer) in setup.racers.iter().copied().enumerate().take(4) {
+        if current
+            .iter()
+            .any(|(_, p)| p.seat == seat && p.racer == racer)
+        {
+            continue;
+        }
+        let root = commands
+            .spawn((
+                Preview { seat, racer },
+                Transform::from_translation(platter_at(seat) + Vec3::Y * 0.1),
+                Visibility::default(),
+                DespawnOnExit(InMenus),
+            ))
+            .id();
+        let mut parts = Parts {
+            meshes: &mut meshes,
+            materials: &mut materials,
+        };
+        spawn_model(&mut commands, &mut parts, root, &ROSTER[racer]);
     }
-    let root = commands
-        .spawn((
-            Preview(racer),
-            Transform::from_translation(PODIUM + Vec3::Y * 0.1),
-            Visibility::default(),
-            DespawnOnExit(InMenus),
-        ))
-        .id();
-    let mut parts = Parts {
-        meshes: &mut meshes,
-        materials: &mut materials,
-    };
-    spawn_model(&mut commands, &mut parts, root, &ROSTER[racer]);
 }
 
 fn spin(
