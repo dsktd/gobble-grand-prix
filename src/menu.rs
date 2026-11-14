@@ -97,6 +97,14 @@ fn rows(
                     false => "Low",
                 }
             ),
+            format!("Camera smoothing  <  {}  >", options.smoothing),
+            format!(
+                "Camera shake  <  {}  >",
+                match options.shake {
+                    true => "On",
+                    false => "Off",
+                }
+            ),
             "Back".into(),
         ],
         GameState::PickRacer => {
@@ -125,7 +133,7 @@ fn rows(
 fn selectable(state: GameState) -> usize {
     match state {
         GameState::Menu => 3,
-        GameState::Options => 3,
+        GameState::Options => 5,
         _ => 1,
     }
 }
@@ -361,9 +369,13 @@ fn navigate(
                     options.volume = (options.volume as i32 + step).clamp(0, 10) as u8;
                 }
                 1 if step != 0 => options.high_quality = !options.high_quality,
+                2 if step != 0 => {
+                    options.smoothing = (options.smoothing as i32 + step).clamp(0, 10) as u8;
+                }
+                3 if step != 0 => options.shake = !options.shake,
                 _ => {}
             }
-            if input.back || (input.confirm && cursor.0 == 2) {
+            if input.back || (input.confirm && cursor.0 == 4) {
                 next.set(GameState::Menu);
             }
         }

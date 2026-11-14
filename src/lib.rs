@@ -71,12 +71,18 @@ pub struct Options {
     /// 0 to 10.
     pub volume: u8,
     pub high_quality: bool,
+    /// Camera smoothing, 0 (snappy) to 10 (floaty).
+    pub smoothing: u8,
+    /// Small camera shake on hits. Off by default for motion comfort.
+    pub shake: bool,
 }
 impl Default for Options {
     fn default() -> Self {
         Self {
             volume: 7,
             high_quality: true,
+            smoothing: 5,
+            shake: false,
         }
     }
 }
