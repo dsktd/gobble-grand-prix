@@ -53,6 +53,7 @@ fn app(
         ..default()
     });
     app.init_resource::<Phones>();
+    app.init_resource::<SeatNames>();
     app.insert_resource(RaceClock {
         phase: Phase::Countdown,
         countdown: 5.0,
