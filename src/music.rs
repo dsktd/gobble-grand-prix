@@ -103,9 +103,10 @@ fn setup(
     if menu.is_empty() {
         menu.push(synth(Song::MENU));
     }
-    let final_lap = match race.is_empty() {
-        true => vec![synth(Song::FINAL_LAP)],
-        false => race.clone(),
+    let final_lap = if race.is_empty() {
+        vec![synth(Song::FINAL_LAP)]
+    } else {
+        race.clone()
     };
     if race.is_empty() {
         race.push(synth(Song::RACE));
@@ -129,14 +130,11 @@ fn wanted(
         .iter()
         .find(|(_, human)| human.0 == 0)
         .is_some_and(|(progress, _)| progress.lap == LAPS);
-    match last {
-        true => Cue::FinalLap,
-        false => Cue::Race,
-    }
+    if last { Cue::FinalLap } else { Cue::Race }
 }
 
 fn volume(options: &Options) -> Volume {
-    Volume::Linear(options.music as f32 / 10.0 * options.volume as f32 / 10.0 * 0.6)
+    Volume::Linear(f32::from(options.music) / 10.0 * f32::from(options.volume) / 10.0 * 0.6)
 }
 
 /// Swap the playing piece when the cue changes.
@@ -166,9 +164,10 @@ fn choose(
         Cue::FinalLap => &library.final_lap,
     };
     let looped = list.len() == 1;
-    let settings = match looped {
-        true => PlaybackSettings::LOOP,
-        false => PlaybackSettings::REMOVE,
+    let settings = if looped {
+        PlaybackSettings::LOOP
+    } else {
+        PlaybackSettings::REMOVE
     };
     commands.spawn((
         Track { cue, index: 0 },
@@ -231,7 +230,7 @@ struct Song {
 const REST: i32 = 99;
 
 impl Song {
-    const MENU: Song = Song {
+    const MENU: Self = Self {
         bpm: 104.0,
         key: 0,
         chords: &[0, 3, 4, 0, 5, 3, 4, 4],
@@ -247,7 +246,7 @@ impl Song {
         ],
         banjo: false,
     };
-    const RACE: Song = Song {
+    const RACE: Self = Self {
         bpm: 138.0,
         key: 0,
         chords: &[0, 0, 3, 3, 4, 4, 0, 4],
@@ -264,10 +263,10 @@ impl Song {
         banjo: true,
     };
     /// The race tune, 10% faster and lifted a whole step.
-    const FINAL_LAP: Song = Song {
+    const FINAL_LAP: Self = Self {
         bpm: 138.0 * 1.1,
         key: 2,
-        ..Song::RACE
+        ..Self::RACE
     };
 
     fn render(&self) -> Vec<f32> {
@@ -317,20 +316,26 @@ impl Song {
                     _ => add(tq, 0.16, &|t, p| noise(t) * 0.16 * (1.0 - p).powi(2)),
                 }
                 // Shuffled ghost snare on the swung off-beat
-                add(tq + beat * 0.66, 0.06, &|t, p| noise(t * 3.1) * 0.05 * (1.0 - p));
+                add(tq + beat * 0.66, 0.06, &|t, p| {
+                    noise(t * 3.1) * 0.05 * (1.0 - p)
+                });
             }
             // Banjo rolls: plucked chord tones in sixteenths
             if self.banjo {
                 let tones = [*root, *root + 2, *root + 4, *root + 7];
                 for s in 0..16 {
                     let f = freq(tones[(s * 3 + bar) % 4], 1);
-                    add(t0 + s as f32 * beat / 4.0, beat * 0.5, &|t, p| pluck(t, f) * 0.07 * (1.0 - p).powi(3));
+                    add(t0 + s as f32 * beat / 4.0, beat * 0.5, &|t, p| {
+                        pluck(t, f) * 0.07 * (1.0 - p).powi(3)
+                    });
                 }
             } else {
                 // Gentle strum on the menu
                 for (k, d) in [*root, *root + 2, *root + 4].iter().enumerate() {
                     let f = freq(*d, 0);
-                    add(t0 + k as f32 * 0.03, beat * 3.5, &|t, p| pluck(t, f) * 0.06 * (1.0 - p).powi(2));
+                    add(t0 + k as f32 * 0.03, beat * 3.5, &|t, p| {
+                        pluck(t, f) * 0.06 * (1.0 - p).powi(2)
+                    });
                 }
             }
         }
@@ -342,7 +347,8 @@ impl Song {
             let f = freq(*degree, 1);
             let start = i as f32 * beat / 2.0;
             add(start, beat * 0.48, &|t, p| {
-                let vib = 1.0 + 0.006 * (t * 5.5 * std::f32::consts::TAU).sin() * (t * 4.0).min(1.0);
+                let vib =
+                    1.0 + 0.006 * (t * 5.5 * std::f32::consts::TAU).sin() * (t * 4.0).min(1.0);
                 let phase = (t * f * vib).fract();
                 let saw = phase * 2.0 - 1.0;
                 let body = saw * 0.6 + (phase * std::f32::consts::TAU * 2.0).sin() * 0.3;
@@ -361,7 +367,8 @@ fn pluck(
     f: f32,
 ) -> f32 {
     let tau = std::f32::consts::TAU;
-    ((t * f * tau).sin() + (t * f * 2.0 * tau).sin() * 0.5 * (-t * 18.0).exp()
+    ((t * f * tau).sin()
+        + (t * f * 2.0 * tau).sin() * 0.5 * (-t * 18.0).exp()
         + (t * f * 3.0 * tau).sin() * 0.3 * (-t * 30.0).exp())
         * (-t * 6.0).exp()
 }

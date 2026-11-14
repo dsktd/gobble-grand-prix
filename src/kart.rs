@@ -114,7 +114,7 @@ impl Kart {
     /// angle about 15% too small; mini-turbo charge times do not depend on it.
     pub const DRIFT_ANGLE: f32 = 1.15;
 
-    pub fn new(
+    pub const fn new(
         racer: usize,
         pos: Vec2,
         yaw: f32,
@@ -145,12 +145,12 @@ impl Kart {
         Vec2::new(-self.yaw.sin(), -self.yaw.cos())
     }
 
-    pub fn stats(&self) -> Stats {
+    pub const fn stats(&self) -> Stats {
         ROSTER[self.racer].stats
     }
 
     /// Knock the kart into a spin unless it is boosting through.
-    pub fn hit(
+    pub const fn hit(
         &mut self,
         time: f32,
     ) {
@@ -219,9 +219,10 @@ fn drive(
             if kart.boost > 0.0 {
                 kart.speed = approach(kart.speed, top, accel * 3.0 * dt);
             } else if input.throttle > 0.1 {
-                let rate = match kart.speed > top {
-                    true => 25.0,
-                    false => accel * input.throttle * (1.2 - kart.speed / top).max(0.25),
+                let rate = if kart.speed > top {
+                    25.0
+                } else {
+                    accel * input.throttle * (1.2 - kart.speed / top).max(0.25)
                 };
                 kart.speed = approach(kart.speed, top, rate * dt);
             } else if input.throttle < -0.1 {
@@ -327,13 +328,15 @@ fn pose(
         }
         yaw += kart.spin * 14.0;
         let hop = (kart.hop / 0.25 * std::f32::consts::PI).sin().max(0.0) * 0.6;
-        let doze = match kart.coma > 0.0 {
-            true => (t * 3.0).sin() * 0.12,
-            false => 0.0,
+        let doze = if kart.coma > 0.0 {
+            (t * 3.0).sin() * 0.12
+        } else {
+            0.0
         };
-        let rumble = match kart.offroad && kart.speed.abs() > 4.0 {
-            true => (t * 40.0).sin() * 0.04,
-            false => 0.0,
+        let rumble = if kart.offroad && kart.speed.abs() > 4.0 {
+            (t * 40.0).sin() * 0.04
+        } else {
+            0.0
         };
         transform.translation = flat(kart.pos, hop + rumble);
         transform.rotation = Quat::from_rotation_y(yaw) * Quat::from_rotation_z(doze);
@@ -365,7 +368,7 @@ fn sparks(
         };
         *visibility = Visibility::Inherited;
         let flicker = 0.8 + (time.elapsed_secs() * 50.0).sin() * 0.3;
-        transform.scale = Vec3::splat(flicker * (1.0 + drift.tier() as f32 * 0.4));
+        transform.scale = Vec3::splat(flicker * (1.0 + f32::from(drift.tier()) * 0.4));
         if let Some(mut material) = materials.get_mut(&material.0) {
             material.base_color = color;
             material.emissive = color.to_linear() * 12.0;
@@ -415,10 +418,7 @@ fn tears(
             )
         })
         .clone();
-    let rate = match options.high_quality {
-        true => 40.0,
-        false => 15.0,
-    };
+    let rate = if options.high_quality { 40.0 } else { 15.0 };
     *carry += dt * rate;
     let count = *carry as u32;
     *carry -= count as f32;

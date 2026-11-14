@@ -58,10 +58,7 @@ fn drive(
         let sharp = diff.abs() > 0.6 && kart.speed > 20.0;
 
         input.steer = (diff * 2.5).clamp(-1.0, 1.0);
-        input.throttle = match sharp {
-            true => 0.3,
-            false => 1.0,
-        };
+        input.throttle = if sharp { 0.3 } else { 1.0 };
         input.drift = false;
 
         // Rubber band: catch up when behind the best human, ease off when ahead
@@ -79,7 +76,7 @@ fn drive(
         input.item = false;
         if kart.item.is_some() {
             cpu.item_wait += dt;
-            if cpu.item_wait > 1.5 && rng.random_bool((dt * 0.8).min(1.0) as f64) {
+            if cpu.item_wait > 1.5 && rng.random_bool(f64::from((dt * 0.8).min(1.0))) {
                 input.item = true;
                 cpu.item_wait = 0.0;
             }

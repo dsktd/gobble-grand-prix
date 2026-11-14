@@ -258,7 +258,7 @@ impl Track {
         }
     }
 
-    pub fn def(&self) -> &'static TrackDef {
+    pub const fn def(&self) -> &'static TrackDef {
         &TRACKS[self.index]
     }
 
@@ -332,7 +332,7 @@ impl Track {
 }
 
 /// Lift a track-plane point into the world.
-pub fn flat(
+pub const fn flat(
     p: Vec2,
     y: f32,
 ) -> Vec3 {
@@ -476,7 +476,7 @@ pub fn spawn_track(
     }
     commands.spawn((
         Mesh3d(meshes.add(quads(&checks, &colors))),
-        MeshMaterial3d(painted.clone()),
+        MeshMaterial3d(painted),
         scope.clone(),
     ));
 

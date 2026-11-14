@@ -195,7 +195,7 @@ impl Parts<'_> {
     }
 }
 
-fn at(
+const fn at(
     x: f32,
     y: f32,
     z: f32,
@@ -398,9 +398,9 @@ pub fn spawn_model(
             pieces.push(parts.part(Cuboid::new(1.5, 0.2, 2.2), racer.kart, at(0.0, 0.95, 0.0)));
             let mut seed = 7u32;
             for _ in 0..14 {
-                seed = seed.wrapping_mul(1103515245).wrapping_add(12345);
+                seed = seed.wrapping_mul(1_103_515_245).wrapping_add(12345);
                 let x = (seed >> 8) as f32 / 16_777_216.0 * 1.2 - 0.6;
-                seed = seed.wrapping_mul(1103515245).wrapping_add(12345);
+                seed = seed.wrapping_mul(1_103_515_245).wrapping_add(12345);
                 let z = (seed >> 8) as f32 / 16_777_216.0 * 1.8 - 0.9;
                 pieces.push(parts.part(Cylinder::new(0.15, 0.18), racer.accent, at(x, 1.12, z)));
             }

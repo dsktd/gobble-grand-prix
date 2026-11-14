@@ -39,19 +39,19 @@ pub enum Action {
     Alt,
 }
 impl Action {
-    const ALL: [Action; 12] = [
-        Action::Alt,
-        Action::GasButton,
-        Action::BrakeButton,
-        Action::Confirm,
-        Action::Back,
-        Action::Navigate,
-        Action::Gas,
-        Action::Brake,
-        Action::Steer,
-        Action::Drift,
-        Action::Item,
-        Action::Quit,
+    const ALL: [Self; 12] = [
+        Self::Alt,
+        Self::GasButton,
+        Self::BrakeButton,
+        Self::Confirm,
+        Self::Back,
+        Self::Navigate,
+        Self::Gas,
+        Self::Brake,
+        Self::Steer,
+        Self::Drift,
+        Self::Item,
+        Self::Quit,
     ];
 }
 
@@ -63,20 +63,21 @@ enum Family {
     Deck,
 }
 impl Family {
-    const ALL: [Family; 3] = [Family::Keyboard, Family::Xbox, Family::Deck];
+    const ALL: [Self; 3] = [Self::Keyboard, Self::Xbox, Self::Deck];
 
     fn pad() -> Self {
-        match std::env::var_os("SteamDeck").is_some() {
-            true => Family::Deck,
-            false => Family::Xbox,
+        if std::env::var_os("SteamDeck").is_some() {
+            Self::Deck
+        } else {
+            Self::Xbox
         }
     }
 
     /// Pads first on the Deck, keyboard first elsewhere.
     fn start() -> Self {
         match Self::pad() {
-            Family::Deck => Family::Deck,
-            _ => Family::Keyboard,
+            Self::Deck => Self::Deck,
+            _ => Self::Keyboard,
         }
     }
 }
@@ -88,7 +89,7 @@ pub struct Glyph(pub Action, pub Option<usize>);
 #[derive(Resource, Clone, Debug)]
 struct Glyphs(Vec<((Family, Action), Handle<Image>)>);
 
-fn bytes(
+const fn bytes(
     family: Family,
     action: Action,
 ) -> &'static [u8] {
@@ -111,7 +112,9 @@ fn bytes(
         (Family::Keyboard, Action::BrakeButton) => {
             include_bytes!("../assets/prompts/keyboard/keyboard_s.png").as_slice()
         }
-        (Family::Keyboard, Action::Alt) => include_bytes!("../assets/prompts/keyboard/keyboard_t.png").as_slice(),
+        (Family::Keyboard, Action::Alt) => {
+            include_bytes!("../assets/prompts/keyboard/keyboard_t.png").as_slice()
+        }
         (Family::Keyboard, Action::Brake) => {
             include_bytes!("../assets/prompts/keyboard/keyboard_arrow_down.png").as_slice()
         }
@@ -145,7 +148,9 @@ fn bytes(
         (Family::Xbox, Action::BrakeButton) => {
             include_bytes!("../assets/prompts/xbox/xbox_button_color_x.png").as_slice()
         }
-        (Family::Xbox, Action::Alt) => include_bytes!("../assets/prompts/xbox/xbox_button_color_y.png").as_slice(),
+        (Family::Xbox, Action::Alt) => {
+            include_bytes!("../assets/prompts/xbox/xbox_button_color_y.png").as_slice()
+        }
         (Family::Xbox, Action::Brake) => {
             include_bytes!("../assets/prompts/xbox/xbox_lt.png").as_slice()
         }
@@ -179,7 +184,9 @@ fn bytes(
         (Family::Deck, Action::BrakeButton) => {
             include_bytes!("../assets/prompts/steamdeck/steamdeck_button_x.png").as_slice()
         }
-        (Family::Deck, Action::Alt) => include_bytes!("../assets/prompts/steamdeck/steamdeck_button_y.png").as_slice(),
+        (Family::Deck, Action::Alt) => {
+            include_bytes!("../assets/prompts/steamdeck/steamdeck_button_y.png").as_slice()
+        }
         (Family::Deck, Action::Brake) => {
             include_bytes!("../assets/prompts/steamdeck/steamdeck_button_l2.png").as_slice()
         }

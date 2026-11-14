@@ -96,9 +96,10 @@ fn spawn(
     };
     for grid in 0..KARTS {
         let human = (KARTS - grid - 1) < humans;
-        let racer = match human {
-            true => setup.racers[KARTS - grid - 1],
-            false => cpus.next().unwrap_or(grid % ROSTER.len()),
+        let racer = if human {
+            setup.racers[KARTS - grid - 1]
+        } else {
+            cpus.next().unwrap_or(grid % ROSTER.len())
         };
         let row = grid / 2;
         let side = match grid % 2 {
@@ -136,17 +137,14 @@ fn spawn(
             DespawnOnExit(GameState::Race),
         ));
         kart.add_child(spark);
-        match human {
-            true => {
-                let slot = KARTS - grid - 1;
-                match seats.0.get(slot) {
-                    Some(Device::Bot) => kart.insert((Driver::Cpu, Cpu::new(0.95), Human(slot))),
-                    _ => kart.insert((Driver::Local(slot), Human(slot))),
-                };
-            }
-            false => {
-                kart.insert((Driver::Cpu, Cpu::new(0.86 + grid as f32 * 0.018)));
-            }
+        if human {
+            let slot = KARTS - grid - 1;
+            match seats.0.get(slot) {
+                Some(Device::Bot) => kart.insert((Driver::Cpu, Cpu::new(0.95), Human(slot))),
+                _ => kart.insert((Driver::Local(slot), Human(slot))),
+            };
+        } else {
+            kart.insert((Driver::Cpu, Cpu::new(0.86 + grid as f32 * 0.018)));
         }
         let root = kart.id();
         spawn_model(&mut commands, &mut parts, root, &ROSTER[racer]);
@@ -277,7 +275,9 @@ fn leave(
             .any(|g| g.just_pressed(GamepadButton::Select));
     let done = clock.phase == Phase::Done;
     let change = keys.just_pressed(KeyCode::KeyT)
-        || gamepads.iter().any(|g| g.just_pressed(GamepadButton::North));
+        || gamepads
+            .iter()
+            .any(|g| g.just_pressed(GamepadButton::North));
     if quit || (done && menu.back) {
         next.set(GameState::Menu);
     } else if done && menu.confirm {
@@ -296,8 +296,9 @@ fn pause(
     if !menu.pause {
         return;
     }
-    match time.is_paused() {
-        true => time.unpause(),
-        false => time.pause(),
+    if time.is_paused() {
+        time.unpause();
+    } else {
+        time.pause();
     }
 }

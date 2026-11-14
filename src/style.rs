@@ -27,6 +27,8 @@ pub(super) fn plugin(app: &mut App) {
 
 /// Colour tokens.
 pub struct Tone;
+// The design tokens are a palette: entries stay even when nothing uses them yet.
+#[allow(dead_code)]
 impl Tone {
     pub const BROWN_900: Color = Color::srgb_u8(0x2A, 0x17, 0x0E);
     pub const BROWN_800: Color = Color::srgb_u8(0x3E, 0x23, 0x16);
@@ -36,18 +38,25 @@ impl Tone {
     pub const CREAM_100: Color = Color::srgb_u8(0xFF, 0xF4, 0xE0);
     pub const CREAM_300: Color = Color::srgb_u8(0xD9, 0xC3, 0xA0);
     /// HUD chip background: brown/800 at 0.85.
-    pub const CHIP: Color = Color::srgba(0x3E as f32 / 255.0, 0x23 as f32 / 255.0, 0x16 as f32 / 255.0, 0.85);
+    pub const CHIP: Color = Color::srgba(
+        0x3E as f32 / 255.0,
+        0x23 as f32 / 255.0,
+        0x16 as f32 / 255.0,
+        0.85,
+    );
 
     // Older names, kept while screens move over to the spec
-    pub const GOLD: Color = Tone::PUMPKIN;
-    pub const CREAM: Color = Tone::CREAM_100;
-    pub const DIM: Color = Tone::CREAM_300;
-    pub const PANEL: Color = Tone::CHIP;
-    pub const MENU_BG: Color = Tone::BROWN_900;
+    pub const GOLD: Color = Self::PUMPKIN;
+    pub const CREAM: Color = Self::CREAM_100;
+    pub const DIM: Color = Self::CREAM_300;
+    pub const PANEL: Color = Self::CHIP;
+    pub const MENU_BG: Color = Self::BROWN_900;
 }
 
 /// Type scale tokens (px).
 pub struct Size;
+// The design tokens are a palette: entries stay even when nothing uses them yet.
+#[allow(dead_code)]
 impl Size {
     pub const DISPLAY: f32 = 88.0;
     pub const DISPLAY_SUB: f32 = 64.0;
@@ -61,17 +70,19 @@ impl Size {
     pub const GLYPH: f32 = 36.0;
 
     // Older names
-    pub const TITLE: f32 = Size::H1;
-    pub const HEADING: f32 = Size::H1;
-    pub const SMALL: f32 = Size::LABEL;
-    pub const HUD: f32 = Size::HUD_NUM;
-    pub const PLACE: f32 = Size::HUD_PLACE;
+    pub const TITLE: f32 = Self::H1;
+    pub const HEADING: f32 = Self::H1;
+    pub const SMALL: f32 = Self::LABEL;
+    pub const HUD: f32 = Self::HUD_NUM;
+    pub const PLACE: f32 = Self::HUD_PLACE;
     pub const PAD: f32 = Space::L;
     pub const GAP: f32 = Space::S;
 }
 
 /// Spacing and radius tokens (px).
 pub struct Space;
+// The design tokens are a palette: entries stay even when nothing uses them yet.
+#[allow(dead_code)]
 impl Space {
     pub const XS: f32 = 4.0;
     pub const S: f32 = 8.0;
@@ -94,32 +105,45 @@ pub enum Weight {
 }
 impl Weight {
     const MEDIUM: Handle<Font> = bevy::asset::uuid_handle!("64c9fc1f-47f1-43a4-b013-838df26f3161");
-    const SEMI_BOLD: Handle<Font> = bevy::asset::uuid_handle!("237d8670-f8dc-4997-b3af-1749191f422e");
+    const SEMI_BOLD: Handle<Font> =
+        bevy::asset::uuid_handle!("237d8670-f8dc-4997-b3af-1749191f422e");
     const BOLD: Handle<Font> = bevy::asset::uuid_handle!("b0eb91dd-b953-4bb7-bbf7-74aa3e0d1d35");
 
-    fn handle(self) -> Handle<Font> {
+    const fn handle(self) -> Handle<Font> {
         match self {
-            Weight::Medium => Self::MEDIUM,
-            Weight::SemiBold => Self::SEMI_BOLD,
-            Weight::Bold => Self::BOLD,
+            Self::Medium => Self::MEDIUM,
+            Self::SemiBold => Self::SEMI_BOLD,
+            Self::Bold => Self::BOLD,
         }
     }
 
     /// The spec's weight for a type size.
     fn of(size: f32) -> Self {
         match size {
-            s if s >= Size::H2 => Weight::Bold,
-            s if s <= Size::LABEL => Weight::SemiBold,
-            _ => Weight::Medium,
+            s if s >= Size::H2 => Self::Bold,
+            s if s <= Size::LABEL => Self::SemiBold,
+            _ => Self::Medium,
         }
     }
 }
 
 fn fonts(mut fonts: ResMut<Assets<Font>>) {
     let faces: [(Weight, &[u8], u16); 3] = [
-        (Weight::Medium, include_bytes!("../assets/fonts/Fredoka-500.ttf"), 500),
-        (Weight::SemiBold, include_bytes!("../assets/fonts/Fredoka-600.ttf"), 600),
-        (Weight::Bold, include_bytes!("../assets/fonts/Fredoka-700.ttf"), 700),
+        (
+            Weight::Medium,
+            include_bytes!("../assets/fonts/Fredoka-500.ttf"),
+            500,
+        ),
+        (
+            Weight::SemiBold,
+            include_bytes!("../assets/fonts/Fredoka-600.ttf"),
+            600,
+        ),
+        (
+            Weight::Bold,
+            include_bytes!("../assets/fonts/Fredoka-700.ttf"),
+            700,
+        ),
     ];
     for (weight, bytes, _) in faces {
         let _ = fonts.insert(weight.handle().id(), Font::from_bytes(bytes.to_vec()));
@@ -134,7 +158,9 @@ fn scale(
     let Ok(window) = windows.single() else {
         return;
     };
-    let fit = (window.width() / 1280.0).min(window.height() / 800.0).max(0.25);
+    let fit = (window.width() / 1280.0)
+        .min(window.height() / 800.0)
+        .max(0.25);
     if (ui.0 - fit).abs() > 0.001 {
         ui.0 = fit;
     }
@@ -219,7 +245,10 @@ pub fn prompt(
 ) -> impl Bundle {
     (
         row(),
-        children![glyph(action, None), text(label_text, Size::LABEL, Weight::SemiBold, Tone::CREAM_100)],
+        children![
+            glyph(action, None),
+            text(label_text, Size::LABEL, Weight::SemiBold, Tone::CREAM_100)
+        ],
     )
 }
 

@@ -99,8 +99,8 @@ pub fn menu(
 
 fn keyboard(keys: &ButtonInput<KeyCode>) -> KartInput {
     let axis = |neg: &[KeyCode], pos: &[KeyCode]| {
-        let n = neg.iter().any(|k| keys.pressed(*k)) as i32 as f32;
-        let p = pos.iter().any(|k| keys.pressed(*k)) as i32 as f32;
+        let n = i32::from(neg.iter().any(|k| keys.pressed(*k))) as f32;
+        let p = i32::from(pos.iter().any(|k| keys.pressed(*k))) as f32;
         p - n
     };
     KartInput {
@@ -122,18 +122,15 @@ fn keyboard(keys: &ButtonInput<KeyCode>) -> KartInput {
 /// A = gas, X or LT = brake, RB or LB = drift, B or Y = item.
 fn pad(gamepad: &Gamepad) -> KartInput {
     let stick = gamepad.left_stick().x;
-    let dpad = gamepad.pressed(GamepadButton::DPadLeft) as i32 as f32
-        - gamepad.pressed(GamepadButton::DPadRight) as i32 as f32;
-    let steer = match stick.abs() > 0.15 {
-        true => -stick,
-        false => dpad,
-    };
+    let dpad = i32::from(gamepad.pressed(GamepadButton::DPadLeft)) as f32
+        - i32::from(gamepad.pressed(GamepadButton::DPadRight)) as f32;
+    let steer = if stick.abs() > 0.15 { -stick } else { dpad };
     let gas = gamepad.pressed(GamepadButton::South)
         || gamepad.get(GamepadButton::RightTrigger2).unwrap_or(0.0) > 0.3;
     let brake = gamepad.pressed(GamepadButton::West)
         || gamepad.get(GamepadButton::LeftTrigger2).unwrap_or(0.0) > 0.3;
     KartInput {
-        throttle: gas as i32 as f32 - brake as i32 as f32,
+        throttle: i32::from(gas) as f32 - i32::from(brake) as f32,
         steer,
         drift: gamepad.pressed(GamepadButton::RightTrigger)
             || gamepad.pressed(GamepadButton::LeftTrigger),
@@ -146,10 +143,7 @@ fn merge(
     a: KartInput,
     b: KartInput,
 ) -> KartInput {
-    let pick = |x: f32, y: f32| match x.abs() >= y.abs() {
-        true => x,
-        false => y,
-    };
+    let pick = |x: f32, y: f32| if x.abs() >= y.abs() { x } else { y };
     KartInput {
         throttle: pick(a.throttle, b.throttle),
         steer: pick(a.steer, b.steer),
@@ -180,12 +174,9 @@ fn drive(
                 Err(_) => KartInput::default(),
             },
             Device::Bot => continue,
-            Device::Any => {
-                let local = gamepads.iter().fold(keyboard(&keys), |acc, (_, gamepad)| {
-                    merge(acc, pad(gamepad))
-                });
-                local
-            }
+            Device::Any => gamepads.iter().fold(keyboard(&keys), |acc, (_, gamepad)| {
+                merge(acc, pad(gamepad))
+            }),
         };
         // Phones drive P1 until they get seats of their own
         if let (0, Some(phone)) = (*slot, &phone) {

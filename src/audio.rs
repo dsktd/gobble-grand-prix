@@ -91,10 +91,7 @@ fn sine(phase: f32) -> f32 {
 }
 
 fn square(phase: f32) -> f32 {
-    match phase.fract() < 0.5 {
-        true => 0.6,
-        false => -0.6,
-    }
+    if phase.fract() < 0.5 { 0.6 } else { -0.6 }
 }
 
 /// Cheap deterministic noise.
@@ -230,7 +227,7 @@ fn volume(
     mut global: ResMut<GlobalVolume>,
 ) {
     if options.is_changed() {
-        global.volume = Volume::Linear(options.volume as f32 / 10.0);
+        global.volume = Volume::Linear(f32::from(options.volume) / 10.0);
     }
 }
 

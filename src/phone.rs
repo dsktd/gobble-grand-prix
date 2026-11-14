@@ -101,7 +101,7 @@ impl Phones {
                 continue;
             }
             let input = KartInput {
-                throttle: pad.gas as i32 as f32 - pad.brake as i32 as f32,
+                throttle: i32::from(pad.gas) as f32 - i32::from(pad.brake) as f32,
                 steer: pad.steer,
                 drift: pad.drift,
                 item: std::mem::take(&mut pad.item),
@@ -171,9 +171,10 @@ fn lan_ip() -> Option<IpAddr> {
     let socket = std::net::UdpSocket::bind("0.0.0.0:0").ok()?;
     socket.connect("192.0.2.1:9").ok()?;
     let ip = socket.local_addr().ok()?.ip();
-    match ip.is_loopback() || ip.is_unspecified() {
-        true => None,
-        false => Some(ip),
+    if ip.is_loopback() || ip.is_unspecified() {
+        None
+    } else {
+        Some(ip)
     }
 }
 
@@ -250,7 +251,7 @@ fn start(
         pin: pin.clone(),
         tx,
         out: out.clone(),
-        next: Default::default(),
+        next: std::sync::Arc::default(),
     };
     let addr = SocketAddr::new(ip, PORT);
     let _handle = std::thread::spawn(move || {

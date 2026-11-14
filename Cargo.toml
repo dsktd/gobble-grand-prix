@@ -3,6 +3,10 @@ name = "gobble"
 version = "0.1.0"
 edition = "2024"
 license = "Unlicense"
+description = "Gobble Grand Prix: a harvest-fair kart racer made with Bevy"
+repository = "https://github.com/dsktd/gobble-grand-prix"
+keywords = ["game", "racing", "bevy"]
+categories = ["games"]
 
 [dependencies]
 # BEVY
@@ -36,3 +40,39 @@ lto = "thin" # lto = true is slower to link for little gain
 codegen-units = 1
 panic = 'abort'
 strip = true
+
+[lints.clippy]
+pedantic = { level = "warn", priority = -1 }
+nursery = { level = "warn", priority = -1 }
+cargo = { level = "warn", priority = -1 }
+# Bevy's dependency tree pulls several versions of the same crate; not ours to fix.
+multiple_crate_versions = "allow"
+# Bevy systems take Res/Query/Commands parameters by value; the signature is the API.
+needless_pass_by_value = "allow"
+# Bevy system functions routinely take many parameters and complex query types.
+too_many_arguments = "allow"
+type_complexity = "allow"
+# Game maths is f32/usize/i32 throughout; values are small and bounded, so these casts are deliberate.
+cast_precision_loss = "allow"
+cast_possible_truncation = "allow"
+cast_possible_wrap = "allow"
+cast_sign_loss = "allow"
+# Fused multiply-add rewrites hurt readability of tuning formulas and change nothing visible.
+suboptimal_flops = "allow"
+# Exact float comparisons are used on sentinel values, not computed results.
+float_cmp = "allow"
+# Setup and menu-building systems are long straight-line spawn code.
+too_many_lines = "allow"
+# Settings and state structs are flag bags; splitting them adds nothing.
+struct_excessive_bools = "allow"
+# Vector and colour maths uses x/y/z/r/g/b style names.
+many_single_char_names = "allow"
+similar_names = "allow"
+# Conflicts with rustc's unreachable_pub style; modules here use pub(crate) on purpose.
+redundant_pub_crate = "allow"
+# Asset and input tables list each (family, action) pair on its own arm so one can change alone.
+match_same_arms = "allow"
+# Walking a float distance along the track in fixed steps is the intent.
+while_float = "allow"
+# Bevy hands out Res<T> and many call sites pass &T through; by-value would add churn for nothing.
+trivially_copy_pass_by_ref = "allow"

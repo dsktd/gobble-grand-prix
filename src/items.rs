@@ -31,19 +31,19 @@ pub enum Item {
     Stuffing,
 }
 impl Item {
-    pub fn name(&self) -> &'static str {
+    pub const fn name(&self) -> &'static str {
         match self {
-            Item::Cranberry => "Cranberry",
-            Item::Gravy => "Gravy Slick",
-            Item::Stuffing => "Stuffing Boost",
+            Self::Cranberry => "Cranberry",
+            Self::Gravy => "Gravy Slick",
+            Self::Stuffing => "Stuffing Boost",
         }
     }
 
-    pub fn color(&self) -> Color {
+    pub const fn color(&self) -> Color {
         match self {
-            Item::Cranberry => Color::srgb(0.75, 0.05, 0.15),
-            Item::Gravy => Color::srgb(0.50, 0.30, 0.12),
-            Item::Stuffing => Color::srgb(0.85, 0.65, 0.30),
+            Self::Cranberry => Color::srgb(0.75, 0.05, 0.15),
+            Self::Gravy => Color::srgb(0.50, 0.30, 0.12),
+            Self::Stuffing => Color::srgb(0.85, 0.65, 0.30),
         }
     }
 
@@ -53,11 +53,11 @@ impl Item {
         let back = (place as f32 - 1.0) / 5.0;
         let r: f32 = rng.random();
         if r < 0.15 + back * 0.45 {
-            Item::Stuffing
+            Self::Stuffing
         } else if r < 0.6 + back * 0.2 {
-            Item::Cranberry
+            Self::Cranberry
         } else {
-            Item::Gravy
+            Self::Gravy
         }
     }
 }
@@ -151,9 +151,10 @@ fn crates(
     let t = time.elapsed_secs();
     for (mut item_crate, mut transform, mut visibility) in crates {
         item_crate.hidden = (item_crate.hidden - time.delta_secs()).max(0.0);
-        *visibility = match item_crate.hidden > 0.0 {
-            true => Visibility::Hidden,
-            false => Visibility::Inherited,
+        *visibility = if item_crate.hidden > 0.0 {
+            Visibility::Hidden
+        } else {
+            Visibility::Inherited
         };
         transform.translation.y = 1.3 + (t * 2.0 + item_crate.pos.x).sin() * 0.2;
         transform.rotation = Quat::from_rotation_y(t * 1.5) * Quat::from_rotation_x(0.4);

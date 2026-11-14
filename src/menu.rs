@@ -29,8 +29,12 @@ pub(super) fn plugin(app: &mut App) {
     );
     app.add_systems(Update, invite.run_if(in_state(GameState::Menu)));
     app.init_resource::<Ready>();
-    app.add_systems(OnEnter(GameState::Lobby), |mut seats: ResMut<Seats>| seats.0.clear());
-    app.add_systems(OnEnter(GameState::PickRacer), |mut ready: ResMut<Ready>| ready.0.clear());
+    app.add_systems(OnEnter(GameState::Lobby), |mut seats: ResMut<Seats>| {
+        seats.0.clear();
+    });
+    app.add_systems(OnEnter(GameState::PickRacer), |mut ready: ResMut<Ready>| {
+        ready.0.clear();
+    });
     app.add_systems(
         Update,
         (
@@ -50,7 +54,7 @@ impl ComputedStates for InMenus {
     fn compute(state: GameState) -> Option<Self> {
         match state {
             GameState::Race => None,
-            _ => Some(InMenus),
+            _ => Some(Self),
         }
     }
 }
@@ -83,7 +87,7 @@ const CONTROLS: [(Action, Option<Action>, &str); 6] = [
     (Action::Quit, None, "Quit race"),
 ];
 
-fn header(state: GameState) -> &'static str {
+const fn header(state: GameState) -> &'static str {
     match state {
         GameState::Menu => "GOBBLE GRAND PRIX",
         GameState::Options => "Options",
@@ -94,7 +98,7 @@ fn header(state: GameState) -> &'static str {
     }
 }
 
-fn device_name(device: Device) -> &'static str {
+const fn device_name(device: Device) -> &'static str {
     match device {
         Device::Any => "Any controller",
         Device::Keyboard => "Keyboard",
@@ -113,14 +117,17 @@ fn rows(
     match state {
         GameState::Lobby => {
             let mut rows: Vec<String> = (0..4)
-                .map(|slot| match seats.0.get(slot) {
-                    Some(device) => format!("P{}  {}", slot + 1, device_name(*device)),
-                    None => format!("P{}  press A or Enter to join", slot + 1),
+                .map(|slot| {
+                    seats.0.get(slot).map_or_else(
+                        || format!("P{}  press A or Enter to join", slot + 1),
+                        |device| format!("P{}  {}", slot + 1, device_name(*device)),
+                    )
                 })
                 .collect();
-            rows.push(match seats.0.is_empty() {
-                true => "B / Esc: back to menu".into(),
-                false => "Joined players press A / Enter again to start".into(),
+            rows.push(if seats.0.is_empty() {
+                "B / Esc: back to menu".into()
+            } else {
+                "Joined players press A / Enter again to start".into()
             });
             rows
         }
@@ -129,9 +136,10 @@ fn rows(
             .iter()
             .enumerate()
             .map(|(slot, racer)| {
-                let done = match ready.0.get(slot).copied().unwrap_or(false) {
-                    true => "  READY",
-                    false => "",
+                let done = if ready.0.get(slot).copied().unwrap_or(false) {
+                    "  READY"
+                } else {
+                    ""
                 };
                 format!("P{}  <  {}  >{done}", slot + 1, ROSTER[*racer].name)
             })
@@ -142,24 +150,19 @@ fn rows(
             format!("Music   <  {}  >", options.music),
             format!(
                 "Quality  <  {}  >",
-                match options.high_quality {
-                    true => "High",
-                    false => "Low",
-                }
+                if options.high_quality { "High" } else { "Low" }
             ),
             format!("Camera smoothing  <  {}  >", options.smoothing),
             format!(
                 "Camera shake  <  {}  >",
-                match options.shake {
-                    true => "On",
-                    false => "Off",
-                }
+                if options.shake { "On" } else { "Off" }
             ),
             format!(
                 "2 players  <  {}  >",
-                match options.side_by_side {
-                    true => "Side by side",
-                    false => "Top / bottom",
+                if options.side_by_side {
+                    "Side by side"
+                } else {
+                    "Top / bottom"
                 }
             ),
             "Back".into(),
@@ -187,7 +190,7 @@ fn rows(
 }
 
 /// Rows the cursor can stop on.
-fn selectable(state: GameState) -> usize {
+const fn selectable(state: GameState) -> usize {
     match state {
         GameState::Menu => 3,
         GameState::Options => 7,
@@ -411,7 +414,7 @@ fn navigate(
     if input.down {
         cursor.0 = (cursor.0 + 1) % n;
     }
-    let step = input.right as i32 - input.left as i32;
+    let step = i32::from(input.right) - i32::from(input.left);
     match state {
         GameState::Menu => {
             if input.confirm {
@@ -430,14 +433,14 @@ fn navigate(
         GameState::Options => {
             match cursor.0 {
                 0 if step != 0 => {
-                    options.volume = (options.volume as i32 + step).clamp(0, 10) as u8;
+                    options.volume = (i32::from(options.volume) + step).clamp(0, 10) as u8;
                 }
                 1 if step != 0 => {
-                    options.music = (options.music as i32 + step).clamp(0, 10) as u8;
+                    options.music = (i32::from(options.music) + step).clamp(0, 10) as u8;
                 }
                 2 if step != 0 => options.high_quality = !options.high_quality,
                 3 if step != 0 => {
-                    options.smoothing = (options.smoothing as i32 + step).clamp(0, 10) as u8;
+                    options.smoothing = (i32::from(options.smoothing) + step).clamp(0, 10) as u8;
                 }
                 4 if step != 0 => options.shake = !options.shake,
                 5 if step != 0 => options.side_by_side = !options.side_by_side,
@@ -487,10 +490,7 @@ fn lines(
         if text.0 != shown {
             text.0 = shown;
         }
-        color.0 = match on {
-            true => Tone::GOLD,
-            false => Tone::CREAM,
-        };
+        color.0 = if on { Tone::GOLD } else { Tone::CREAM };
     }
 }
 
@@ -607,7 +607,7 @@ fn pick(
             continue;
         }
         let input = device_menu(device, &keys, &gamepads, &all);
-        let step = input.right as i32 - input.left as i32;
+        let step = i32::from(input.right) - i32::from(input.left);
         if step != 0 && !ready.0[slot] {
             let count = ROSTER.len() as i32;
             setup.racers[slot] = (setup.racers[slot] as i32 + step).rem_euclid(count) as usize;
@@ -618,12 +618,11 @@ fn pick(
             sfx.write(Sfx::Pickup);
         }
         if input.back {
-            match ready.0[slot] {
-                true => ready.0[slot] = false,
-                false => {
-                    next.set(GameState::Lobby);
-                    return;
-                }
+            if ready.0[slot] {
+                ready.0[slot] = false;
+            } else {
+                next.set(GameState::Lobby);
+                return;
             }
         }
     }

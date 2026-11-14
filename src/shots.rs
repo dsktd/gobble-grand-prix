@@ -23,7 +23,11 @@ pub(super) fn plugin(app: &mut App) {
             ..default()
         });
     }
-    let seats: usize = args.get(5).and_then(|a| a.parse().ok()).unwrap_or(1).clamp(1, 4);
+    let seats: usize = args
+        .get(5)
+        .and_then(|a| a.parse().ok())
+        .unwrap_or(1)
+        .clamp(1, 4);
     if seats > 1 {
         app.insert_resource(Seats(vec![Device::Bot; seats]));
         app.insert_resource(Setup {
@@ -77,8 +81,7 @@ fn key(
         *count += 1;
         let stamp = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
-            .map(|d| d.as_secs())
-            .unwrap_or(0);
+            .map_or(0, |d| d.as_secs());
         shoot(&mut commands, &format!("shot-{stamp}-{}", *count));
     }
 }

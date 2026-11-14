@@ -162,15 +162,16 @@ fn chase(
     if dt <= 0.0 {
         return;
     }
-    let yaw_lag = Tune::YAW_LAG + Tune::YAW_LAG_STEP * options.smoothing as f32;
+    let yaw_lag = Tune::YAW_LAG + Tune::YAW_LAG_STEP * f32::from(options.smoothing);
     for (cam, mut rig, mut transform, mut projection) in cameras {
         let Some((kart, _)) = karts.iter().find(|(_, human)| human.0 == cam.0) else {
             continue;
         };
         // Follow where the kart travels, not where it points, so drifts and spins stay calm
-        let heading = match kart.vel.length() > 3.0 {
-            true => (-kart.vel.x).atan2(-kart.vel.y),
-            false => kart.yaw,
+        let heading = if kart.vel.length() > 3.0 {
+            (-kart.vel.x).atan2(-kart.vel.y)
+        } else {
+            kart.yaw
         };
         if !rig.ready {
             *rig = Rig {
@@ -203,7 +204,10 @@ fn chase(
 
         let dir = Vec2::new(-rig.yaw.sin(), -rig.yaw.cos());
         let mut eye = flat(rig.focus - dir * Tune::DISTANCE, rig.height + Tune::HEIGHT);
-        let look = flat(rig.focus + dir * Tune::LOOK_AHEAD, rig.height + Tune::LOOK_HEIGHT);
+        let look = flat(
+            rig.focus + dir * Tune::LOOK_AHEAD,
+            rig.height + Tune::LOOK_HEIGHT,
+        );
 
         rig.shake = (rig.shake - dt).max(0.0);
         if options.shake && kart.struck {
@@ -216,9 +220,10 @@ fn chase(
         // Looking at a point at a fixed height keeps pitch steady and the horizon level
         *transform = Transform::from_translation(eye).looking_at(look, Vec3::Y);
 
-        let want = match kart.boost > 0.0 {
-            true => Tune::FOV + Tune::BOOST_FOV,
-            false => Tune::FOV,
+        let want = if kart.boost > 0.0 {
+            Tune::FOV + Tune::BOOST_FOV
+        } else {
+            Tune::FOV
         };
         let mut fv = rig.fov_vel;
         rig.fov = smooth_damp(rig.fov, want, &mut fv, Tune::FOV_LAG, 30.0, dt);

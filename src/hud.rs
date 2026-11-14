@@ -3,6 +3,8 @@
 //!
 //! Layout and sizes follow the UI spec's HUD chips, scaled to each seat's viewport.
 
+use std::fmt::Write as _;
+
 use bevy::prelude::*;
 
 use crate::prelude::*;
@@ -66,7 +68,7 @@ fn burst_image() -> Image {
         for x in 0..w {
             let dx = (x as f32 - w as f32 / 2.0) / (w as f32 / 2.0);
             let dy = (y as f32 - h as f32 / 2.0) / (h as f32 / 2.0);
-            let r = (dx * dx + dy * dy).sqrt();
+            let r = dx.hypot(dy);
             let a = dy.atan2(dx);
             // Uneven spikes: several sine bands multiplied
             let spikes = ((a * 37.0).sin() * (a * 23.0 + 1.3).sin() * (a * 11.0 + 0.7).sin()).abs();
@@ -90,8 +92,7 @@ fn burst_image() -> Image {
     )
 }
 
-
-fn ordinal_suffix(n: usize) -> &'static str {
+const fn ordinal_suffix(n: usize) -> &'static str {
     match (n % 10, n % 100) {
         (_, 11..=13) => "th",
         (1, _) => "st",
@@ -196,109 +197,154 @@ fn spawn(
                     },
                     Visibility::Hidden,
                 ));
-                chip(root, slot, k, place(k, Some(32.0), Some(32.0), None, None, 168.0, 72.0), "LAP", Part::Lap);
-                chip(root, slot, k, place(k, Some(32.0), Some(120.0), None, None, 184.0, 72.0), "TIME", Part::Time);
+                chip(
+                    root,
+                    slot,
+                    k,
+                    place(k, Some(32.0), Some(32.0), None, None, 168.0, 72.0),
+                    "LAP",
+                    Part::Lap,
+                );
+                chip(
+                    root,
+                    slot,
+                    k,
+                    place(k, Some(32.0), Some(120.0), None, None, 184.0, 72.0),
+                    "TIME",
+                    Part::Time,
+                );
 
                 // Item slot, centred at the top
                 let mut item = place(k, None, Some(32.0), None, None, 104.0, 104.0);
                 item.left = percent(50);
                 item.margin.left = px(-52.0 * k);
                 item.border = UiRect::all(px(Space::FOCUS * k));
-                root.spawn((Seat(slot), Part::ItemChip, item, BackgroundColor(Tone::CHIP), BorderColor::all(Tone::CREAM_300)))
-                    .with_children(|chip| {
-                        let mut art = place(k, Some(20.0), Some(8.0), None, None, 56.0, 56.0);
-                        art.border_radius = BorderRadius::all(percent(50));
-                        chip.spawn((Seat(slot), Part::ItemArt, art, BackgroundColor(Color::NONE)));
-                        let mut name = place(k, Some(0.0), Some(66.0), None, None, 96.0, 24.0);
-                        name.justify_content = JustifyContent::Center;
-                        chip.spawn(name).with_child((
-                            Seat(slot),
-                            Part::ItemName,
-                            text("", Size::LABEL * k * 0.8, Weight::SemiBold, Tone::CREAM_100),
-                        ));
-                        // Which button uses it
-                        let mut hint = place(k, None, None, Some(-14.0), Some(-14.0), Size::GLYPH, Size::GLYPH);
-                        hint.border_radius = BorderRadius::ZERO;
-                        chip.spawn((hint, Glyph(Action::Item, Some(slot)), ImageNode::default()));
-                    });
+                root.spawn((
+                    Seat(slot),
+                    Part::ItemChip,
+                    item,
+                    BackgroundColor(Tone::CHIP),
+                    BorderColor::all(Tone::CREAM_300),
+                ))
+                .with_children(|chip| {
+                    let mut art = place(k, Some(20.0), Some(8.0), None, None, 56.0, 56.0);
+                    art.border_radius = BorderRadius::all(percent(50));
+                    chip.spawn((Seat(slot), Part::ItemArt, art, BackgroundColor(Color::NONE)));
+                    let mut name = place(k, Some(0.0), Some(66.0), None, None, 96.0, 24.0);
+                    name.justify_content = JustifyContent::Center;
+                    chip.spawn(name).with_child((
+                        Seat(slot),
+                        Part::ItemName,
+                        text("", Size::LABEL * k * 0.8, Weight::SemiBold, Tone::CREAM_100),
+                    ));
+                    // Which button uses it
+                    let mut hint = place(
+                        k,
+                        None,
+                        None,
+                        Some(-14.0),
+                        Some(-14.0),
+                        Size::GLYPH,
+                        Size::GLYPH,
+                    );
+                    hint.border_radius = BorderRadius::ZERO;
+                    chip.spawn((hint, Glyph(Action::Item, Some(slot)), ImageNode::default()));
+                });
 
                 // Position, top right
-                root.spawn((place(k, None, Some(32.0), Some(32.0), None, 176.0, 104.0), BackgroundColor(Tone::CHIP)))
-                    .with_children(|chip| {
-                        chip.spawn((
-                            Seat(slot),
-                            Part::Place,
-                            text("", Size::HUD_PLACE * k, Weight::Bold, Tone::PUMPKIN),
-                            place(k, Some(20.0), Some(10.0), None, None, 60.0, 80.0),
-                        ));
-                        chip.spawn((
-                            Seat(slot),
-                            Part::Suffix,
-                            text("", Size::H2 * k, Weight::Bold, Tone::PUMPKIN),
-                            place(k, Some(72.0), Some(18.0), None, None, 60.0, 36.0),
-                        ));
-                        chip.spawn((
-                            text("/6", Size::LABEL * k, Weight::SemiBold, Tone::CREAM_300),
-                            place(k, Some(72.0), Some(58.0), None, None, 60.0, 24.0),
-                        ));
-                    });
+                root.spawn((
+                    place(k, None, Some(32.0), Some(32.0), None, 176.0, 104.0),
+                    BackgroundColor(Tone::CHIP),
+                ))
+                .with_children(|chip| {
+                    chip.spawn((
+                        Seat(slot),
+                        Part::Place,
+                        text("", Size::HUD_PLACE * k, Weight::Bold, Tone::PUMPKIN),
+                        place(k, Some(20.0), Some(10.0), None, None, 60.0, 80.0),
+                    ));
+                    chip.spawn((
+                        Seat(slot),
+                        Part::Suffix,
+                        text("", Size::H2 * k, Weight::Bold, Tone::PUMPKIN),
+                        place(k, Some(72.0), Some(18.0), None, None, 60.0, 36.0),
+                    ));
+                    chip.spawn((
+                        text("/6", Size::LABEL * k, Weight::SemiBold, Tone::CREAM_300),
+                        place(k, Some(72.0), Some(58.0), None, None, 60.0, 24.0),
+                    ));
+                });
 
                 // Drift meter, bottom left
-                root.spawn((Seat(slot), Part::DriftMeter, place(k, Some(32.0), None, None, Some(32.0), 320.0, 56.0), Visibility::Hidden))
-                    .with_children(|meter| {
-                        let mut caption = place(k, Some(0.0), Some(-6.0), None, None, 200.0, 30.0);
-                        caption.column_gap = px(Space::S * k);
-                        caption.align_items = AlignItems::Center;
-                        meter.spawn(caption).with_children(|c| {
-                            c.spawn((
-                                Glyph(Action::Drift, Some(slot)),
-                                ImageNode::default(),
+                root.spawn((
+                    Seat(slot),
+                    Part::DriftMeter,
+                    place(k, Some(32.0), None, None, Some(32.0), 320.0, 56.0),
+                    Visibility::Hidden,
+                ))
+                .with_children(|meter| {
+                    let mut caption = place(k, Some(0.0), Some(-6.0), None, None, 200.0, 30.0);
+                    caption.column_gap = px(Space::S * k);
+                    caption.align_items = AlignItems::Center;
+                    meter.spawn(caption).with_children(|c| {
+                        c.spawn((
+                            Glyph(Action::Drift, Some(slot)),
+                            ImageNode::default(),
+                            Node {
+                                width: px(28.0 * k),
+                                height: px(28.0 * k),
+                                ..default()
+                            },
+                        ));
+                        c.spawn(text(
+                            "DRIFT",
+                            Size::LABEL * k,
+                            Weight::SemiBold,
+                            Tone::CREAM_100,
+                        ));
+                    });
+                    meter.spawn((
+                        Seat(slot),
+                        Part::DriftStage,
+                        text("", Size::LABEL * k, Weight::SemiBold, Tone::CREAM_100),
+                        place(k, Some(236.0), Some(0.0), None, None, 90.0, 24.0),
+                    ));
+                    let mut track = place(k, Some(0.0), Some(28.0), None, None, 320.0, 24.0);
+                    track.border_radius = BorderRadius::all(px(12.0 * k));
+                    track.border = UiRect::all(px(2.0 * k));
+                    track.overflow = Overflow::clip();
+                    meter
+                        .spawn((
+                            track,
+                            BackgroundColor(Tone::CHIP),
+                            BorderColor::all(Tone::CREAM_300),
+                        ))
+                        .with_children(|track| {
+                            track.spawn((
+                                Seat(slot),
+                                Part::DriftFill,
                                 Node {
-                                    width: px(28.0 * k),
-                                    height: px(28.0 * k),
+                                    width: percent(0),
+                                    height: percent(100),
+                                    border_radius: BorderRadius::all(px(12.0 * k)),
                                     ..default()
                                 },
+                                BackgroundColor(Tone::CREAM_100),
                             ));
-                            c.spawn(text("DRIFT", Size::LABEL * k, Weight::SemiBold, Tone::CREAM_100));
-                        });
-                        meter.spawn((
-                            Seat(slot),
-                            Part::DriftStage,
-                            text("", Size::LABEL * k, Weight::SemiBold, Tone::CREAM_100),
-                            place(k, Some(236.0), Some(0.0), None, None, 90.0, 24.0),
-                        ));
-                        let mut track = place(k, Some(0.0), Some(28.0), None, None, 320.0, 24.0);
-                        track.border_radius = BorderRadius::all(px(12.0 * k));
-                        track.border = UiRect::all(px(2.0 * k));
-                        track.overflow = Overflow::clip();
-                        meter
-                            .spawn((track, BackgroundColor(Tone::CHIP), BorderColor::all(Tone::CREAM_300)))
-                            .with_children(|track| {
+                            for tick in [1.0 / 3.0, 2.0 / 3.0] {
                                 track.spawn((
-                                    Seat(slot),
-                                    Part::DriftFill,
                                     Node {
-                                        width: percent(0),
+                                        position_type: PositionType::Absolute,
+                                        left: percent(tick * 100.0),
+                                        width: px(2.0 * k),
                                         height: percent(100),
-                                        border_radius: BorderRadius::all(px(12.0 * k)),
                                         ..default()
                                     },
-                                    BackgroundColor(Tone::CREAM_100),
+                                    BackgroundColor(Tone::BROWN_900),
                                 ));
-                                for tick in [1.0 / 3.0, 2.0 / 3.0] {
-                                    track.spawn((
-                                        Node {
-                                            position_type: PositionType::Absolute,
-                                            left: percent(tick * 100.0),
-                                            width: px(2.0 * k),
-                                            height: percent(100),
-                                            ..default()
-                                        },
-                                        BackgroundColor(Tone::BROWN_900),
-                                    ));
-                                }
-                            });
-                    });
+                            }
+                        });
+                });
             });
     }
 
@@ -322,7 +368,10 @@ fn spawn(
             ))
             .with_children(|panel| {
                 panel.spawn(text("Standings", Size::H2, Weight::Bold, Tone::PUMPKIN));
-                panel.spawn((Standings, text("", Size::BODY, Weight::Medium, Tone::CREAM_100)));
+                panel.spawn((
+                    Standings,
+                    text("", Size::BODY, Weight::Medium, Tone::CREAM_100),
+                ));
             });
     }
 
@@ -363,7 +412,13 @@ fn spawn(
 fn chips(
     clock: Res<RaceClock>,
     karts: Query<(&Kart, &Progress, &Human, Option<&Finished>)>,
-    parts: Query<(&Seat, &Part, Option<&mut Text>, Option<&mut BackgroundColor>, Option<&mut BorderColor>)>,
+    parts: Query<(
+        &Seat,
+        &Part,
+        Option<&mut Text>,
+        Option<&mut BackgroundColor>,
+        Option<&mut BorderColor>,
+    )>,
 ) {
     for (seat, part, text, background, border) in parts {
         let Some((kart, progress, _, finished)) = karts.iter().find(|k| k.2.0 == seat.0) else {
@@ -406,7 +461,15 @@ fn chips(
 /// The boost meter fills while drifting, through three stages.
 fn drift(
     karts: Query<(&Kart, &Human)>,
-    parts: Query<(&Seat, &Part, &mut Visibility, Option<&mut Node>, Option<&mut BackgroundColor>, Option<&mut Text>, Option<&mut TextColor>)>,
+    parts: Query<(
+        &Seat,
+        &Part,
+        &mut Visibility,
+        Option<&mut Node>,
+        Option<&mut BackgroundColor>,
+        Option<&mut Text>,
+        Option<&mut TextColor>,
+    )>,
 ) {
     for (seat, part, mut visibility, node, background, text, color) in parts {
         let Some((kart, _)) = karts.iter().find(|(_, h)| h.0 == seat.0) else {
@@ -422,9 +485,10 @@ fn drift(
         };
         match part {
             Part::DriftMeter => {
-                *visibility = match charge.is_some() {
-                    true => Visibility::Inherited,
-                    false => Visibility::Hidden,
+                *visibility = if charge.is_some() {
+                    Visibility::Inherited
+                } else {
+                    Visibility::Hidden
                 };
             }
             Part::DriftFill => {
@@ -468,7 +532,7 @@ fn banner(
     };
     for mut text in banners {
         if text.0 != shown {
-            text.0 = shown.clone();
+            text.0.clone_from(&shown);
         }
     }
 }
@@ -479,16 +543,19 @@ fn standings(
 ) {
     let mut rows: Vec<_> = karts.iter().collect();
     rows.sort_by_key(|(_, progress, _)| progress.place);
-    let shown: String = rows
-        .iter()
-        .map(|(kart, progress, human)| {
-            let who = human.map_or(String::new(), |h| format!("  P{}", h.0 + 1));
-            format!("{}  {}{who}\n", ordinal(progress.place), ROSTER[kart.racer].name)
-        })
-        .collect();
+    let mut shown = String::new();
+    for (kart, progress, human) in &rows {
+        let who = human.map_or(String::new(), |h| format!("  P{}", h.0 + 1));
+        let _ = writeln!(
+            shown,
+            "{}  {}{who}",
+            ordinal(progress.place),
+            ROSTER[kart.racer].name
+        );
+    }
     for mut text in texts {
         if text.0 != shown {
-            text.0 = shown.clone();
+            text.0.clone_from(&shown);
         }
     }
 }
@@ -518,67 +585,81 @@ fn results(
     let mut rows: Vec<_> = karts.iter().collect();
     rows.sort_by_key(|(_, progress, _, _)| progress.place);
     let solo = seats.0.len() <= 1;
-    commands.entity(board_id).despawn_children().with_children(|board| {
-        board.spawn(text("Results", Size::H1, Weight::Bold, Tone::CREAM_100));
-        board.spawn(text(track.def().name, Size::BODY, Weight::Medium, Tone::CREAM_300));
-        for (kart, progress, finished, human) in rows {
-            let time = finished.map_or("--:--.--".to_string(), |f| clock_text(f.time));
-            let mine = human.is_some();
-            let (fill, ink) = match mine {
-                true => (Tone::PUMPKIN, Tone::BROWN_900),
-                false => (Tone::BROWN_800, Tone::CREAM_100),
-            };
-            let place_ink = match (progress.place, mine) {
-                (1, false) => Tone::PUMPKIN,
-                _ => ink,
-            };
-            let name = match (human, solo) {
-                (Some(_), true) => format!("{} (you)", ROSTER[kart.racer].name),
-                (Some(h), false) => format!("{} (P{})", ROSTER[kart.racer].name, h.0 + 1),
-                (None, _) => ROSTER[kart.racer].name.to_string(),
-            };
+    commands
+        .entity(board_id)
+        .despawn_children()
+        .with_children(|board| {
+            board.spawn(text("Results", Size::H1, Weight::Bold, Tone::CREAM_100));
+            board.spawn(text(
+                track.def().name,
+                Size::BODY,
+                Weight::Medium,
+                Tone::CREAM_300,
+            ));
+            for (kart, progress, finished, human) in rows {
+                let time = finished.map_or_else(|| "--:--.--".to_string(), |f| clock_text(f.time));
+                let mine = human.is_some();
+                let (fill, ink) = if mine {
+                    (Tone::PUMPKIN, Tone::BROWN_900)
+                } else {
+                    (Tone::BROWN_800, Tone::CREAM_100)
+                };
+                let place_ink = match (progress.place, mine) {
+                    (1, false) => Tone::PUMPKIN,
+                    _ => ink,
+                };
+                let name = match (human, solo) {
+                    (Some(_), true) => format!("{} (you)", ROSTER[kart.racer].name),
+                    (Some(h), false) => format!("{} (P{})", ROSTER[kart.racer].name, h.0 + 1),
+                    (None, _) => ROSTER[kart.racer].name.to_string(),
+                };
+                board
+                    .spawn((
+                        Node {
+                            width: px(800),
+                            height: px(64),
+                            align_items: AlignItems::Center,
+                            padding: UiRect::horizontal(px(Space::L)),
+                            border_radius: BorderRadius::all(px(Space::RADIUS_S)),
+                            ..default()
+                        },
+                        BackgroundColor(fill),
+                    ))
+                    .with_children(|row| {
+                        row.spawn((
+                            Node {
+                                width: px(112),
+                                ..default()
+                            },
+                            children![text(
+                                ordinal(progress.place),
+                                Size::H2,
+                                Weight::Bold,
+                                place_ink
+                            )],
+                        ));
+                        row.spawn((
+                            Node {
+                                flex_grow: 1.0,
+                                ..default()
+                            },
+                            children![text(name, Size::H2, Weight::SemiBold, ink)],
+                        ));
+                        row.spawn(text(time, Size::H2, Weight::SemiBold, ink));
+                    });
+            }
             board
-                .spawn((
-                    Node {
-                        width: px(800),
-                        height: px(64),
-                        align_items: AlignItems::Center,
-                        padding: UiRect::horizontal(px(Space::L)),
-                        border_radius: BorderRadius::all(px(Space::RADIUS_S)),
-                        ..default()
-                    },
-                    BackgroundColor(fill),
-                ))
-                .with_children(|row| {
-                    row.spawn((
-                        Node {
-                            width: px(112),
-                            ..default()
-                        },
-                        children![text(ordinal(progress.place), Size::H2, Weight::Bold, place_ink)],
-                    ));
-                    row.spawn((
-                        Node {
-                            flex_grow: 1.0,
-                            ..default()
-                        },
-                        children![text(name, Size::H2, Weight::SemiBold, ink)],
-                    ));
-                    row.spawn(text(time, Size::H2, Weight::SemiBold, ink));
+                .spawn(Node {
+                    column_gap: px(Space::XL),
+                    margin: UiRect::top(px(Space::M)),
+                    ..default()
+                })
+                .with_children(|hints| {
+                    hints.spawn(prompt(Action::Confirm, "Race again"));
+                    hints.spawn(prompt(Action::Alt, "Change track"));
+                    hints.spawn(prompt(Action::Back, "Menu"));
                 });
-        }
-        board
-            .spawn(Node {
-                column_gap: px(Space::XL),
-                margin: UiRect::top(px(Space::M)),
-                ..default()
-            })
-            .with_children(|hints| {
-                hints.spawn(prompt(Action::Confirm, "Race again"));
-                hints.spawn(prompt(Action::Alt, "Change track"));
-                hints.spawn(prompt(Action::Back, "Menu"));
-            });
-    });
+        });
 }
 
 /// Flash the speed lines when a crying racer gets a turbo or a hit.
@@ -595,9 +676,10 @@ fn burst(
             burst.left = Burst::TIME;
         }
         burst.left = (burst.left - time.delta_secs()).max(0.0);
-        *visibility = match burst.left > 0.0 {
-            true => Visibility::Inherited,
-            false => Visibility::Hidden,
+        *visibility = if burst.left > 0.0 {
+            Visibility::Inherited
+        } else {
+            Visibility::Hidden
         };
         image.color = Color::WHITE.with_alpha(burst.left / Burst::TIME);
     }

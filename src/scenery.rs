@@ -142,10 +142,7 @@ fn spawn(
                 along += 4.0;
             }
             // Orchard
-            let trees = match options.high_quality {
-                true => 140,
-                false => 60,
-            };
+            let trees = if options.high_quality { 140 } else { 60 };
             for i in 0..trees {
                 let along = rng.random_range(0.0..lap);
                 let side = match i % 2 {
@@ -180,19 +177,20 @@ fn spawn(
                 if !clear(p, &track) {
                     continue;
                 }
-                match rng.random_bool(0.5) {
-                    true => put(
+                if rng.random_bool(0.5) {
+                    put(
                         &mut commands,
                         &hay,
                         Transform::from_translation(flat(p, 1.2))
                             .with_rotation(Quat::from_rotation_z(std::f32::consts::FRAC_PI_2)),
-                    ),
-                    false => put(
+                    );
+                } else {
+                    put(
                         &mut commands,
                         &pumpkin,
                         Transform::from_translation(flat(p, 0.7))
                             .with_scale(Vec3::new(1.2, 0.8, 1.2)),
-                    ),
+                    );
                 }
             }
             put(&mut commands, &barn, Transform::from_xyz(20.0, 5.0, 60.0));
@@ -330,10 +328,7 @@ fn spawn(
             let hat = kit(m, mt, Cone::new(1.1, 1.0), Color::srgb(0.55, 0.40, 0.20));
 
             // Dense rows of corn hem the road in
-            let rows = match options.high_quality {
-                true => 4,
-                false => 2,
-            };
+            let rows = if options.high_quality { 4 } else { 2 };
             let mut along = 0.0;
             while along < lap {
                 for side in [-1.0, 1.0] {
@@ -413,10 +408,7 @@ fn spawn(
             })
         })
         .collect();
-    let count = match options.high_quality {
-        true => 260,
-        false => 90,
-    };
+    let count = if options.high_quality { 260 } else { 90 };
     for i in 0..count {
         commands.spawn((
             Leaf {
