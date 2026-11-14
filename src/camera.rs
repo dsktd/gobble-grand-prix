@@ -6,15 +6,14 @@ use crate::prelude::*;
 
 pub(super) mod prelude {
     pub use super::ChaseCam;
+    pub use super::seat_rect;
 }
 
 pub(super) fn plugin(app: &mut App) {
     app.add_systems(OnEnter(GameState::Race), spawn.after(spawn_track));
     app.add_systems(
         Update,
-        chase
-            .after(KartSet::Physics)
-            .run_if(in_state(GameState::Race)),
+        (chase.after(KartSet::Physics), viewports).run_if(in_state(GameState::Race)),
     );
 }
 
@@ -96,6 +95,18 @@ fn spawn(
     options: Res<Options>,
 ) {
     let theme = track.def().theme;
+    let seats = setup.racers.len();
+    // One full-window camera draws every seat's HUD on top of the viewports
+    commands.spawn((
+        Camera2d,
+        Camera {
+            order: 10,
+            clear_color: ClearColorConfig::None,
+            ..default()
+        },
+        IsDefaultUiCamera,
+        DespawnOnExit(GameState::Race),
+    ));
     let (start, dir) = track.sample(track.length - 20.0);
     for slot in 0..setup.racers.len() {
         let mut camera = commands.spawn((
@@ -104,10 +115,20 @@ fn spawn(
             Camera3d::default(),
             Camera {
                 order: slot as isize,
+                // Only the first view clears; later ones would wipe the views drawn before
+                clear_color: match slot {
+                    0 => ClearColorConfig::Default,
+                    _ => ClearColorConfig::None,
+                },
                 ..default()
             },
             Projection::Perspective(PerspectiveProjection {
                 fov: 70f32.to_radians(),
+                // Low quality with several views draws less far
+                far: match (options.high_quality, seats) {
+                    (false, 2..) => 160.0,
+                    _ => 1000.0,
+                },
                 ..default()
             }),
             Transform::from_translation(flat(start - dir * 10.0, 4.0))
@@ -205,5 +226,51 @@ fn chase(
         if let Projection::Perspective(perspective) = projection.as_mut() {
             perspective.fov = rig.fov.to_radians();
         }
+    }
+}
+
+/// Where a seat's view sits in the window, as fractions from the top left.
+pub fn seat_rect(
+    slot: usize,
+    seats: usize,
+    side_by_side: bool,
+) -> Rect {
+    match (seats, side_by_side) {
+        (0 | 1, _) => Rect::new(0.0, 0.0, 1.0, 1.0),
+        (2, true) => Rect::new(slot as f32 * 0.5, 0.0, slot as f32 * 0.5 + 0.5, 1.0),
+        (2, false) => Rect::new(0.0, slot as f32 * 0.5, 1.0, slot as f32 * 0.5 + 0.5),
+        _ => {
+            let x = (slot % 2) as f32 * 0.5;
+            let y = (slot / 2) as f32 * 0.5;
+            Rect::new(x, y, x + 0.5, y + 0.5)
+        }
+    }
+}
+
+/// Keep each seat's viewport matched to the window size.
+fn viewports(
+    windows: Query<&Window, With<bevy::window::PrimaryWindow>>,
+    options: Res<Options>,
+    setup: Res<Setup>,
+    cameras: Query<(&ChaseCam, &mut Camera)>,
+) {
+    let Ok(window) = windows.single() else {
+        return;
+    };
+    let size = window.physical_size().as_vec2();
+    let seats = setup.racers.len();
+    for (cam, mut camera) in cameras {
+        if seats <= 1 {
+            camera.viewport = None;
+            continue;
+        }
+        let rect = seat_rect(cam.0, seats, options.side_by_side);
+        let position = (rect.min * size).as_uvec2();
+        let extent = (rect.size() * size).as_uvec2().max(UVec2::ONE);
+        camera.viewport = Some(bevy::camera::Viewport {
+            physical_position: position,
+            physical_size: extent,
+            ..default()
+        });
     }
 }

@@ -5,6 +5,7 @@ use bevy::prelude::*;
 use crate::prelude::*;
 
 pub(super) mod prelude {
+    pub use super::Drift;
     pub use super::Driver;
     pub use super::Kart;
     pub use super::KartInput;

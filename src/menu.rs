@@ -15,6 +15,7 @@ pub(super) fn plugin(app: &mut App) {
     for state in [
         GameState::Menu,
         GameState::Options,
+        GameState::Lobby,
         GameState::PickRacer,
         GameState::PickTrack,
     ] {
@@ -27,6 +28,17 @@ pub(super) fn plugin(app: &mut App) {
             .run_if(in_state(InMenus)),
     );
     app.add_systems(Update, invite.run_if(in_state(GameState::Menu)));
+    app.init_resource::<Ready>();
+    app.add_systems(OnEnter(GameState::Lobby), |mut seats: ResMut<Seats>| seats.0.clear());
+    app.add_systems(OnEnter(GameState::PickRacer), |mut ready: ResMut<Ready>| ready.0.clear());
+    app.add_systems(
+        Update,
+        (
+            lobby.run_if(in_state(GameState::Lobby)),
+            pick.run_if(in_state(GameState::PickRacer)),
+        )
+            .before(navigate),
+    );
 }
 
 /// Every screen but the race itself.
@@ -75,9 +87,19 @@ fn header(state: GameState) -> &'static str {
     match state {
         GameState::Menu => "GOBBLE GRAND PRIX",
         GameState::Options => "Options",
+        GameState::Lobby => "Join in",
         GameState::PickRacer => "Pick your racer",
         GameState::PickTrack => "Pick a track",
         GameState::Race => "",
+    }
+}
+
+fn device_name(device: Device) -> &'static str {
+    match device {
+        Device::Any => "Any controller",
+        Device::Keyboard => "Keyboard",
+        Device::Gamepad(_) => "Controller",
+        Device::Bot => "CPU (test seat)",
     }
 }
 
@@ -85,8 +107,35 @@ fn rows(
     state: GameState,
     setup: &Setup,
     options: &Options,
+    seats: &Seats,
+    ready: &Ready,
 ) -> Vec<String> {
     match state {
+        GameState::Lobby => {
+            let mut rows: Vec<String> = (0..4)
+                .map(|slot| match seats.0.get(slot) {
+                    Some(device) => format!("P{}  {}", slot + 1, device_name(*device)),
+                    None => format!("P{}  press A or Enter to join", slot + 1),
+                })
+                .collect();
+            rows.push(match seats.0.is_empty() {
+                true => "B / Esc: back to menu".into(),
+                false => "Joined players press A / Enter again to start".into(),
+            });
+            rows
+        }
+        GameState::PickRacer if setup.racers.len() > 1 => setup
+            .racers
+            .iter()
+            .enumerate()
+            .map(|(slot, racer)| {
+                let done = match ready.0.get(slot).copied().unwrap_or(false) {
+                    true => "  READY",
+                    false => "",
+                };
+                format!("P{}  <  {}  >{done}", slot + 1, ROSTER[*racer].name)
+            })
+            .collect(),
         GameState::Menu => vec!["Start Race".into(), "Options".into(), "Exit".into()],
         GameState::Options => vec![
             format!("Volume   <  {}  >", options.volume),
@@ -104,6 +153,13 @@ fn rows(
                 match options.shake {
                     true => "On",
                     false => "Off",
+                }
+            ),
+            format!(
+                "2 players  <  {}  >",
+                match options.side_by_side {
+                    true => "Side by side",
+                    false => "Top / bottom",
                 }
             ),
             "Back".into(),
@@ -134,7 +190,7 @@ fn rows(
 fn selectable(state: GameState) -> usize {
     match state {
         GameState::Menu => 3,
-        GameState::Options => 6,
+        GameState::Options => 7,
         _ => 1,
     }
 }
@@ -196,11 +252,18 @@ fn screen(
     state: Res<State<GameState>>,
     setup: Res<Setup>,
     options: Res<Options>,
+    seats: Res<Seats>,
+    ready: Res<Ready>,
     mut cursor: ResMut<Cursor>,
 ) {
     let state = *state.get();
     cursor.0 = 0;
-    let count = rows(state, &setup, &options).len();
+    let count = match state {
+        // Seats can join after the screen is built
+        GameState::Lobby => 5,
+        GameState::PickRacer => 4.max(rows(state, &setup, &options, &seats, &ready).len()),
+        _ => rows(state, &setup, &options, &seats, &ready).len(),
+    };
     let big = matches!(state, GameState::Menu | GameState::Options);
     commands
         .spawn((
@@ -353,7 +416,7 @@ fn navigate(
         GameState::Menu => {
             if input.confirm {
                 match cursor.0 {
-                    0 => next.set(GameState::PickRacer),
+                    0 => next.set(GameState::Lobby),
                     1 => next.set(GameState::Options),
                     _ => {
                         exit.write(AppExit::Success);
@@ -377,24 +440,14 @@ fn navigate(
                     options.smoothing = (options.smoothing as i32 + step).clamp(0, 10) as u8;
                 }
                 4 if step != 0 => options.shake = !options.shake,
+                5 if step != 0 => options.side_by_side = !options.side_by_side,
                 _ => {}
             }
-            if input.back || (input.confirm && cursor.0 == 5) {
+            if input.back || (input.confirm && cursor.0 == 6) {
                 next.set(GameState::Menu);
             }
         }
-        GameState::PickRacer => {
-            if step != 0 {
-                let n = ROSTER.len() as i32;
-                setup.racers[0] = (setup.racers[0] as i32 + step).rem_euclid(n) as usize;
-            }
-            if input.confirm {
-                next.set(GameState::PickTrack);
-            }
-            if input.back {
-                next.set(GameState::Menu);
-            }
-        }
+        GameState::Lobby | GameState::PickRacer => {}
         GameState::PickTrack => {
             if step != 0 {
                 let n = TRACKS.len() as i32;
@@ -415,16 +468,17 @@ fn lines(
     state: Res<State<GameState>>,
     setup: Res<Setup>,
     options: Res<Options>,
+    seats: Res<Seats>,
+    ready: Res<Ready>,
     cursor: Res<Cursor>,
     texts: Query<(&Line, &mut Text, &mut TextColor)>,
 ) {
     let state = *state.get();
-    let rows = rows(state, &setup, &options);
+    let rows = rows(state, &setup, &options, &seats, &ready);
     let pickable = selectable(state) > 1;
     for (line, mut text, mut color) in texts {
-        let Some(row) = rows.get(line.0) else {
-            continue;
-        };
+        let row = rows.get(line.0).cloned().unwrap_or_default();
+        let row = &row;
         let on = line.0 == cursor.0 && (pickable || line.0 == 0);
         let shown = match (on, pickable) {
             (true, true) => format!("> {row}"),
@@ -476,5 +530,104 @@ fn spin(
     for mut transform in previews {
         // Swing to and fro so the racer's face stays in view
         transform.rotation = Quat::from_rotation_y((time.elapsed_secs() * 0.7).sin() * 1.0 - 0.3);
+    }
+}
+
+/// Which seats have locked in their racer.
+#[derive(Resource, Clone, Debug, Default)]
+struct Ready(Vec<bool>);
+
+/// Pads and the keyboard take seats: A or Enter joins, then starts; B or Esc leaves.
+fn lobby(
+    keys: Res<ButtonInput<KeyCode>>,
+    gamepads: Query<(Entity, &Gamepad)>,
+    mut seats: ResMut<Seats>,
+    mut setup: ResMut<Setup>,
+    mut next: ResMut<NextState<GameState>>,
+    mut sfx: MessageWriter<Sfx>,
+) {
+    let mut pressed: Vec<(Device, bool, bool)> = gamepads
+        .iter()
+        .map(|(id, g)| {
+            (
+                Device::Gamepad(id),
+                g.just_pressed(GamepadButton::South) || g.just_pressed(GamepadButton::Start),
+                g.just_pressed(GamepadButton::East),
+            )
+        })
+        .collect();
+    pressed.push((
+        Device::Keyboard,
+        keys.just_pressed(KeyCode::Enter) || keys.just_pressed(KeyCode::Space),
+        keys.just_pressed(KeyCode::Escape) || keys.just_pressed(KeyCode::Backspace),
+    ));
+
+    for (device, join, leave) in pressed {
+        let seated = seats.0.contains(&device);
+        if join && !seated && seats.0.len() < 4 {
+            seats.0.push(device);
+            sfx.write(Sfx::Pickup);
+        } else if join && seated {
+            // Start with everyone who joined; a lone player may use any device
+            if seats.0.len() == 1 {
+                seats.0[0] = Device::Any;
+            }
+            let n = seats.0.len();
+            let first = setup.racers.first().copied().unwrap_or(0);
+            setup.racers = (0..n).map(|slot| (first + slot) % ROSTER.len()).collect();
+            next.set(GameState::PickRacer);
+            return;
+        } else if leave && seated {
+            seats.0.retain(|d| *d != device);
+            sfx.write(Sfx::Click);
+        } else if leave && seats.0.is_empty() {
+            next.set(GameState::Menu);
+            return;
+        }
+    }
+}
+
+/// Every seat picks its own racer and readies up; all ready moves on to the track.
+fn pick(
+    keys: Res<ButtonInput<KeyCode>>,
+    gamepads: Query<(Entity, &Gamepad)>,
+    all: Res<MenuInput>,
+    seats: Res<Seats>,
+    mut ready: ResMut<Ready>,
+    mut setup: ResMut<Setup>,
+    mut next: ResMut<NextState<GameState>>,
+    mut sfx: MessageWriter<Sfx>,
+) {
+    let n = setup.racers.len();
+    ready.0.resize(n, false);
+    for slot in 0..n {
+        let device = seats.0.get(slot).copied().unwrap_or(Device::Any);
+        if device == Device::Bot {
+            ready.0[slot] = true;
+            continue;
+        }
+        let input = device_menu(device, &keys, &gamepads, &all);
+        let step = input.right as i32 - input.left as i32;
+        if step != 0 && !ready.0[slot] {
+            let count = ROSTER.len() as i32;
+            setup.racers[slot] = (setup.racers[slot] as i32 + step).rem_euclid(count) as usize;
+            sfx.write(Sfx::Click);
+        }
+        if input.confirm {
+            ready.0[slot] = true;
+            sfx.write(Sfx::Pickup);
+        }
+        if input.back {
+            match ready.0[slot] {
+                true => ready.0[slot] = false,
+                false => {
+                    next.set(GameState::Lobby);
+                    return;
+                }
+            }
+        }
+    }
+    if ready.0.iter().all(|r| *r) {
+        next.set(GameState::PickTrack);
     }
 }

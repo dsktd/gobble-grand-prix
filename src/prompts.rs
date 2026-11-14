@@ -7,6 +7,8 @@ use bevy::image::ImageType;
 use bevy::input::gamepad::GamepadEvent;
 use bevy::prelude::*;
 
+use crate::prelude::*;
+
 pub(super) mod prelude {
     pub use super::Action;
     pub use super::Glyph;
@@ -33,9 +35,12 @@ pub enum Action {
     Drift,
     Item,
     Quit,
+    /// The spare face button: Y on pads, T on the keyboard.
+    Alt,
 }
 impl Action {
-    const ALL: [Action; 11] = [
+    const ALL: [Action; 12] = [
+        Action::Alt,
         Action::GasButton,
         Action::BrakeButton,
         Action::Confirm,
@@ -76,9 +81,9 @@ impl Family {
     }
 }
 
-/// An image node showing the glyph for an action.
+/// An image node showing the glyph for an action, for one seat's device when given.
 #[derive(Component, Copy, Clone, Debug)]
-pub struct Glyph(pub Action);
+pub struct Glyph(pub Action, pub Option<usize>);
 
 #[derive(Resource, Clone, Debug)]
 struct Glyphs(Vec<((Family, Action), Handle<Image>)>);
@@ -106,6 +111,7 @@ fn bytes(
         (Family::Keyboard, Action::BrakeButton) => {
             include_bytes!("../assets/prompts/keyboard/keyboard_s.png").as_slice()
         }
+        (Family::Keyboard, Action::Alt) => include_bytes!("../assets/prompts/keyboard/keyboard_t.png").as_slice(),
         (Family::Keyboard, Action::Brake) => {
             include_bytes!("../assets/prompts/keyboard/keyboard_arrow_down.png").as_slice()
         }
@@ -139,6 +145,7 @@ fn bytes(
         (Family::Xbox, Action::BrakeButton) => {
             include_bytes!("../assets/prompts/xbox/xbox_button_color_x.png").as_slice()
         }
+        (Family::Xbox, Action::Alt) => include_bytes!("../assets/prompts/xbox/xbox_button_color_y.png").as_slice(),
         (Family::Xbox, Action::Brake) => {
             include_bytes!("../assets/prompts/xbox/xbox_lt.png").as_slice()
         }
@@ -172,6 +179,7 @@ fn bytes(
         (Family::Deck, Action::BrakeButton) => {
             include_bytes!("../assets/prompts/steamdeck/steamdeck_button_x.png").as_slice()
         }
+        (Family::Deck, Action::Alt) => include_bytes!("../assets/prompts/steamdeck/steamdeck_button_y.png").as_slice(),
         (Family::Deck, Action::Brake) => {
             include_bytes!("../assets/prompts/steamdeck/steamdeck_button_l2.png").as_slice()
         }
@@ -235,14 +243,21 @@ fn detect(
 
 fn show(
     family: Res<Family>,
+    seats: Res<Seats>,
     glyphs: Res<Glyphs>,
     nodes: Query<(Ref<Glyph>, &mut ImageNode)>,
 ) {
     for (glyph, mut node) in nodes {
-        if !family.is_changed() && !glyph.is_added() {
+        if !family.is_changed() && !seats.is_changed() && !glyph.is_added() {
             continue;
         }
-        let Some((_, handle)) = glyphs.0.iter().find(|(key, _)| *key == (*family, glyph.0)) else {
+        // A seat's own device decides its glyphs; shared prompts follow the last input
+        let set = match glyph.1.and_then(|slot| seats.0.get(slot)) {
+            Some(Device::Keyboard) => Family::Keyboard,
+            Some(Device::Gamepad(_)) => Family::pad(),
+            _ => *family,
+        };
+        let Some((_, handle)) = glyphs.0.iter().find(|(key, _)| *key == (set, glyph.0)) else {
             continue;
         };
         node.image = handle.clone();

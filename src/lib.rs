@@ -44,6 +44,8 @@ pub enum GameState {
     #[default]
     Menu,
     Options,
+    /// Players join seats with their own pad or the keyboard.
+    Lobby,
     PickRacer,
     PickTrack,
     Race,
@@ -78,6 +80,8 @@ pub struct Options {
     pub shake: bool,
     /// Music volume, 0 to 10, on top of the main volume.
     pub music: u8,
+    /// Two players side by side instead of top and bottom.
+    pub side_by_side: bool,
 }
 impl Default for Options {
     fn default() -> Self {
@@ -87,6 +91,7 @@ impl Default for Options {
             smoothing: 5,
             shake: false,
             music: 6,
+            side_by_side: false,
         }
     }
 }

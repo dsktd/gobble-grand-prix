@@ -23,6 +23,14 @@ pub(super) fn plugin(app: &mut App) {
             ..default()
         });
     }
+    let seats: usize = args.get(5).and_then(|a| a.parse().ok()).unwrap_or(1).clamp(1, 4);
+    if seats > 1 {
+        app.insert_resource(Seats(vec![Device::Bot; seats]));
+        app.insert_resource(Setup {
+            racers: (0..seats).map(|s| s * 2 % ROSTER.len()).collect(),
+            track,
+        });
+    }
     let racer = args
         .get(4)
         .and_then(|a| a.parse().ok())

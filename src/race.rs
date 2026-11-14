@@ -75,6 +75,7 @@ pub struct Finished {
 fn spawn(
     mut commands: Commands,
     setup: Res<Setup>,
+    seats: Res<Seats>,
     track: Res<Track>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
@@ -138,7 +139,10 @@ fn spawn(
         match human {
             true => {
                 let slot = KARTS - grid - 1;
-                kart.insert((Driver::Local(slot), Human(slot)));
+                match seats.0.get(slot) {
+                    Some(Device::Bot) => kart.insert((Driver::Cpu, Cpu::new(0.95), Human(slot))),
+                    _ => kart.insert((Driver::Local(slot), Human(slot))),
+                };
             }
             false => {
                 kart.insert((Driver::Cpu, Cpu::new(0.86 + grid as f32 * 0.018)));
@@ -271,9 +275,16 @@ fn leave(
         || gamepads
             .iter()
             .any(|g| g.just_pressed(GamepadButton::Select));
-    let done = clock.phase == Phase::Done && menu.confirm;
-    if quit || done {
+    let done = clock.phase == Phase::Done;
+    let change = keys.just_pressed(KeyCode::KeyT)
+        || gamepads.iter().any(|g| g.just_pressed(GamepadButton::North));
+    if quit || (done && menu.back) {
         next.set(GameState::Menu);
+    } else if done && menu.confirm {
+        // Same track, same racers, fresh race
+        next.set(GameState::Race);
+    } else if done && change {
+        next.set(GameState::PickTrack);
     }
 }
 

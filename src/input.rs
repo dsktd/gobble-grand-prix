@@ -5,7 +5,10 @@ use bevy::prelude::*;
 use crate::prelude::*;
 
 pub(super) mod prelude {
+    pub use super::Device;
     pub use super::MenuInput;
+    pub use super::Seats;
+    pub use super::device_menu;
     pub use super::menu as menu_input;
 }
 
@@ -16,14 +19,15 @@ pub(super) fn plugin(app: &mut App) {
     app.add_systems(Update, drive.in_set(KartSet::Input));
 }
 
-/// The device behind a local seat. Keyboard and Gamepad seats arrive with split screen.
-#[allow(unused)]
+/// The device behind a local seat.
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub enum Device {
     /// Keyboard plus every connected pad, for single player.
     Any,
     Keyboard,
     Gamepad(Entity),
+    /// A seat the CPU drives, to test split screen without pads.
+    Bot,
 }
 
 /// Local seats in slot order. Split screen pushes more of them.
@@ -175,15 +179,56 @@ fn drive(
                 Ok((_, gamepad)) => pad(gamepad),
                 Err(_) => KartInput::default(),
             },
+            Device::Bot => continue,
             Device::Any => {
                 let local = gamepads.iter().fold(keyboard(&keys), |acc, (_, gamepad)| {
                     merge(acc, pad(gamepad))
                 });
-                match (&phone, phones.driving) {
-                    (Some(phone), _) => merge(local, phone.clone()),
-                    _ => local,
-                }
+                local
             }
         };
+        // Phones drive P1 until they get seats of their own
+        if let (0, Some(phone)) = (*slot, &phone) {
+            *input = merge(input.clone(), phone.clone());
+        }
+    }
+}
+
+/// Menu presses from one device only, for per-seat choices. Sticks are ignored here.
+pub fn device_menu(
+    device: Device,
+    keys: &ButtonInput<KeyCode>,
+    gamepads: &Query<(Entity, &Gamepad)>,
+    all: &MenuInput,
+) -> MenuInput {
+    match device {
+        Device::Any => *all,
+        Device::Bot => MenuInput::default(),
+        Device::Keyboard => {
+            let any = |codes: &[KeyCode]| codes.iter().any(|c| keys.just_pressed(*c));
+            MenuInput {
+                up: any(&[KeyCode::ArrowUp, KeyCode::KeyW]),
+                down: any(&[KeyCode::ArrowDown, KeyCode::KeyS]),
+                left: any(&[KeyCode::ArrowLeft, KeyCode::KeyA]),
+                right: any(&[KeyCode::ArrowRight, KeyCode::KeyD]),
+                confirm: any(&[KeyCode::Enter, KeyCode::Space]),
+                back: any(&[KeyCode::Escape, KeyCode::Backspace]),
+                pause: false,
+            }
+        }
+        Device::Gamepad(id) => {
+            let Ok((_, gamepad)) = gamepads.get(id) else {
+                return MenuInput::default();
+            };
+            MenuInput {
+                up: gamepad.just_pressed(GamepadButton::DPadUp),
+                down: gamepad.just_pressed(GamepadButton::DPadDown),
+                left: gamepad.just_pressed(GamepadButton::DPadLeft),
+                right: gamepad.just_pressed(GamepadButton::DPadRight),
+                confirm: gamepad.just_pressed(GamepadButton::South),
+                back: gamepad.just_pressed(GamepadButton::East),
+                pause: false,
+            }
+        }
     }
 }
