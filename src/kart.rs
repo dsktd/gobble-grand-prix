@@ -101,6 +101,9 @@ impl Kart {
     pub const TOP_SPEED: f32 = 34.0;
     pub const ACCEL: f32 = 20.0;
     pub const TURN: f32 = 2.1;
+    /// Scales the drift's turn rate and visual slide. 0.85 since Cal found drifts
+    /// about 15% too sharp; mini-turbo charge times do not depend on it.
+    pub const DRIFT_ANGLE: f32 = 0.85;
 
     pub fn new(
         racer: usize,
@@ -237,7 +240,7 @@ fn drive(
                 Some(drift) => {
                     let lean = input.steer * drift.dir;
                     drift.charge += dt * (0.7 + 0.6 * lean.max(0.0));
-                    drift.dir * turn * (0.85 + 0.45 * lean)
+                    drift.dir * turn * (0.85 + 0.45 * lean) * Kart::DRIFT_ANGLE
                 }
                 None => input.steer * turn * grip,
             };
@@ -304,7 +307,7 @@ fn pose(
     for (kart, mut transform) in karts {
         let mut yaw = kart.yaw;
         if let Some(drift) = kart.drift {
-            yaw += drift.dir * 0.4;
+            yaw += drift.dir * 0.4 * Kart::DRIFT_ANGLE;
         }
         yaw += kart.spin * 14.0;
         let hop = (kart.hop / 0.25 * std::f32::consts::PI).sin().max(0.0) * 0.6;
