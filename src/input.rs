@@ -26,6 +26,8 @@ pub enum Device {
     Any,
     Keyboard,
     Gamepad(Entity),
+    /// A phone controller, by connection id.
+    Phone(u32),
     /// A seat the CPU drives, to test split screen without pads.
     Bot,
 }
@@ -159,7 +161,6 @@ fn drive(
     mut phones: ResMut<Phones>,
     karts: Query<(&Driver, &mut KartInput)>,
 ) {
-    let phone = phones.take_input();
     for (driver, mut input) in karts {
         let Driver::Local(slot) = driver else {
             continue;
@@ -174,14 +175,14 @@ fn drive(
                 Err(_) => KartInput::default(),
             },
             Device::Bot => continue,
+            Device::Phone(id) => {
+                let id = *id;
+                phones.take_input(|p| p == id).unwrap_or_default()
+            }
             Device::Any => gamepads.iter().fold(keyboard(&keys), |acc, (_, gamepad)| {
                 merge(acc, pad(gamepad))
             }),
         };
-        // Phones drive P1 until they get seats of their own
-        if let (0, Some(phone)) = (*slot, &phone) {
-            *input = merge(input.clone(), phone.clone());
-        }
     }
 }
 
@@ -190,9 +191,11 @@ pub fn device_menu(
     device: Device,
     keys: &ButtonInput<KeyCode>,
     gamepads: &Query<(Entity, &Gamepad)>,
+    phones: &Phones,
     all: &MenuInput,
 ) -> MenuInput {
     match device {
+        Device::Phone(id) => phones.menu(id),
         Device::Any => *all,
         Device::Bot => MenuInput::default(),
         Device::Keyboard => {

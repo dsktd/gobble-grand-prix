@@ -41,6 +41,8 @@ pub(super) mod prelude {
 pub const PORT: u16 = 7777;
 /// How long a silent phone keeps its kart before the CPU takes over.
 const TAKEOVER: Duration = Duration::from_secs(3);
+/// How long a disconnected phone keeps its seat.
+const REJOIN: Duration = Duration::from_secs(30);
 const PAGE: &str = include_str!("../assets/phone/index.html");
 
 pub(super) fn plugin(app: &mut App) {
@@ -48,6 +50,7 @@ pub(super) fn plugin(app: &mut App) {
     app.add_systems(Startup, start);
     app.add_systems(PreUpdate, receive.after(menu_input));
     app.add_systems(Update, (buzz, takeover).run_if(in_state(GameState::Race)));
+    app.add_systems(Update, (tell_seats, drop_seats));
 }
 
 /// What the title screen shows so a phone can join.
@@ -72,6 +75,10 @@ pub struct Pad {
     /// Phone clock of the last input, echoed back for latency.
     pub stamp: f64,
     pub seen: Option<Instant>,
+    /// Menu buttons pressed this frame, for seat joining and per-seat choices.
+    pub menu: MenuInput,
+    /// When the socket closed; the seat is kept for [`REJOIN`].
+    pub gone: Option<Instant>,
 }
 
 /// Connected phones and the channel back to them.
@@ -93,11 +100,25 @@ impl Phones {
         }
     }
 
-    /// Fold every live phone into one kart input, consuming item taps.
-    pub fn take_input(&mut self) -> Option<KartInput> {
+    /// Menu presses from one phone this frame.
+    pub fn menu(
+        &self,
+        id: u32,
+    ) -> MenuInput {
+        self.pads
+            .iter()
+            .find(|(p, _)| *p == id)
+            .map_or_else(MenuInput::default, |(_, pad)| pad.menu)
+    }
+
+    /// Fold the chosen live phones into one kart input, consuming item taps.
+    pub fn take_input(
+        &mut self,
+        pick: impl Fn(u32) -> bool,
+    ) -> Option<KartInput> {
         let mut merged: Option<KartInput> = None;
         for (id, pad) in &mut self.pads {
-            if pad.seen.is_none_or(|seen| seen.elapsed() > TAKEOVER) {
+            if !pick(*id) || pad.seen.is_none_or(|seen| seen.elapsed() > TAKEOVER) {
                 continue;
             }
             let input = KartInput {
@@ -164,6 +185,8 @@ struct Shared {
     tx: mpsc::Sender<Inbound>,
     out: broadcast::Sender<String>,
     next: std::sync::Arc<std::sync::atomic::AtomicU32>,
+    /// Phone token to connection id, so a reload gets its old seat back.
+    ids: std::sync::Arc<std::sync::Mutex<std::collections::HashMap<String, u32>>>,
 }
 
 /// The address phones reach us on: the interface of the default route. Nothing is sent.
@@ -252,6 +275,7 @@ fn start(
         tx,
         out: out.clone(),
         next: std::sync::Arc::default(),
+        ids: std::sync::Arc::default(),
     };
     let addr = SocketAddr::new(ip, PORT);
     let _handle = std::thread::spawn(move || {
@@ -300,6 +324,9 @@ async fn page() -> Html<&'static str> {
 #[derive(Deserialize)]
 struct Join {
     pin: String,
+    /// Random id the page keeps in localStorage.
+    #[serde(default)]
+    token: String,
 }
 
 async fn socket(
@@ -310,17 +337,29 @@ async fn socket(
     if join.pin != shared.pin {
         return (StatusCode::FORBIDDEN, "Wrong PIN").into_response();
     }
-    upgrade.on_upgrade(move |ws| session(ws, shared))
+    let id = {
+        let mut ids = shared.ids.lock().unwrap();
+        let fresh = || {
+            shared
+                .next
+                .fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+                + 1
+        };
+        match join.token.is_empty() {
+            true => fresh(),
+            false => *ids
+                .entry(join.token.chars().take(64).collect())
+                .or_insert_with(fresh),
+        }
+    };
+    upgrade.on_upgrade(move |ws| session(ws, shared, id))
 }
 
 async fn session(
     ws: WebSocket,
     shared: Shared,
+    id: u32,
 ) {
-    let id = shared
-        .next
-        .fetch_add(1, std::sync::atomic::Ordering::Relaxed)
-        + 1;
     let _ = shared.tx.send(Inbound::Joined(id));
     let (mut sink, mut stream) = ws.split();
     let mut out = shared.out.subscribe();
@@ -378,15 +417,33 @@ fn receive(
         return;
     };
     let inbound: Vec<Inbound> = rx.lock().unwrap().try_iter().collect();
+    for (_, pad) in &mut phones.pads {
+        pad.menu = MenuInput::default();
+    }
+    // Forget phones that stayed away too long
+    if phones
+        .pads
+        .iter()
+        .any(|(_, pad)| pad.gone.is_some_and(|t| t.elapsed() > REJOIN))
+    {
+        phones
+            .pads
+            .retain(|(_, pad)| pad.gone.is_none_or(|t| t.elapsed() <= REJOIN));
+    }
     for message in inbound {
         match message {
             Inbound::Joined(id) => {
-                info!("Phone {id} joined");
-                phones.pads.push((id, Pad::default()));
+                info!("Phone {id} connected");
+                match phones.pads.iter_mut().find(|(p, _)| *p == id) {
+                    Some((_, pad)) => pad.gone = None,
+                    None => phones.pads.push((id, Pad::default())),
+                }
             }
             Inbound::Left(id) => {
-                info!("Phone {id} left");
-                phones.pads.retain(|(p, _)| *p != id);
+                info!("Phone {id} disconnected");
+                if let Some((_, pad)) = phones.pads.iter_mut().find(|(p, _)| *p == id) {
+                    pad.gone = Some(Instant::now());
+                }
             }
             Inbound::Wire(
                 id,
@@ -413,17 +470,76 @@ fn receive(
                 pad.stamp = ms;
                 pad.seen = Some(Instant::now());
             }
-            Inbound::Wire(_, Wire::Menu { k }) => match k.as_str() {
-                "up" => menu.up = true,
-                "down" => menu.down = true,
-                "left" => menu.left = true,
-                "right" => menu.right = true,
-                "ok" => menu.confirm = true,
-                "back" => menu.back = true,
-                "pause" => menu.pause = true,
-                _ => {}
-            },
+            Inbound::Wire(id, Wire::Menu { k }) => {
+                let mut press = MenuInput::default();
+                match k.as_str() {
+                    "up" => press.up = true,
+                    "down" => press.down = true,
+                    "left" => press.left = true,
+                    "right" => press.right = true,
+                    "ok" => press.confirm = true,
+                    "back" => press.back = true,
+                    "pause" => press.pause = true,
+                    _ => {}
+                }
+                // Into the shared menu input, and the phone's own for its seat
+                menu.up |= press.up;
+                menu.down |= press.down;
+                menu.left |= press.left;
+                menu.right |= press.right;
+                menu.confirm |= press.confirm;
+                menu.back |= press.back;
+                menu.pause |= press.pause;
+                if let Some((_, pad)) = phones.pads.iter_mut().find(|(p, _)| *p == id) {
+                    pad.menu.up |= press.up;
+                    pad.menu.down |= press.down;
+                    pad.menu.left |= press.left;
+                    pad.menu.right |= press.right;
+                    pad.menu.confirm |= press.confirm;
+                    pad.menu.back |= press.back;
+                    pad.menu.pause |= press.pause;
+                }
+            }
         }
+    }
+}
+
+/// Tell each phone which seat it holds, so its page can show "P2".
+fn tell_seats(
+    phones: Res<Phones>,
+    seats: Res<Seats>,
+) {
+    if !seats.is_changed() && !phones.is_changed() {
+        return;
+    }
+    for (id, _) in &phones.pads {
+        let message = match seats.0.iter().position(|d| *d == Device::Phone(*id)) {
+            Some(slot) => {
+                let [r, g, b, _] = seat_color(slot).to_srgba().to_u8_array();
+                format!(
+                    r##"{{"t":"seat","id":{id},"p":{},"color":"#{r:02x}{g:02x}{b:02x}"}}"##,
+                    slot + 1
+                )
+            }
+            None => format!(r#"{{"t":"seat","id":{id},"p":null}}"#),
+        };
+        phones.send(message);
+    }
+}
+
+/// A phone that disconnects in the lobby gives its seat back.
+fn drop_seats(
+    phones: Res<Phones>,
+    state: Res<State<GameState>>,
+    mut seats: ResMut<Seats>,
+) {
+    if *state.get() == GameState::Race || !phones.is_changed() {
+        return;
+    }
+    let gone =
+        |d: &Device| matches!(d, Device::Phone(id) if !phones.pads.iter().any(|(p, _)| p == id));
+    if seats.0.iter().any(gone) {
+        seats.0.retain(|d| !gone(d));
     }
 }
 
@@ -450,19 +566,26 @@ struct Takeover;
 fn takeover(
     mut commands: Commands,
     phones: Res<Phones>,
+    seats: Res<Seats>,
     karts: Query<(Entity, &Human, Has<Takeover>, Has<Finished>)>,
 ) {
-    let live = phones
-        .pads
-        .iter()
-        .any(|(_, pad)| pad.seen.is_some_and(|seen| seen.elapsed() < TAKEOVER));
-    let lost = phones.driving && !live;
+    let live = |pick: &dyn Fn(u32) -> bool| {
+        phones
+            .pads
+            .iter()
+            .any(|(id, pad)| pick(*id) && pad.seen.is_some_and(|seen| seen.elapsed() < TAKEOVER))
+    };
     for (id, human, taken, finished) in karts {
-        if human.0 != 0 || finished {
+        if finished {
             continue;
         }
+        // A phone seat, or P1 while an unseated phone was driving it
+        let lost = match seats.0.get(human.0) {
+            Some(Device::Phone(phone)) => !live(&|p| p == *phone),
+            _ => false,
+        };
         if lost && !taken {
-            info!("Phone quiet, CPU takes P1");
+            info!("Phone quiet, CPU takes P{}", human.0 + 1);
             commands
                 .entity(id)
                 .insert((Takeover, Driver::Cpu, Cpu::new(0.95)));
@@ -470,7 +593,7 @@ fn takeover(
             commands
                 .entity(id)
                 .remove::<(Takeover, Cpu)>()
-                .insert(Driver::Local(0));
+                .insert(Driver::Local(human.0));
         }
     }
 }

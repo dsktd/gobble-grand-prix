@@ -38,19 +38,25 @@
   <div id="status">Tap to connect. Turn your phone sideways.</div>
   <button id="go" style="font-size:24px;padding:14px 30px">Tap to start</button>
 </div>
+<div id="full" style="display:none;position:fixed;inset:0;z-index:3;background:#2A170E;align-items:center;justify-content:center;flex-direction:column;gap:12px;text-align:center">
+  <h2 style="color:#F28C28;margin:0">Lobby full</h2>
+  <div>All four seats are taken. Sorry! Wait for the next race.</div>
+  <button onclick="document.getElementById('full').style.display='none'">OK</button>
+</div>
 <div id="app">
   <div id="bar">
     <button id="pause">Pause</button>
     <div id="menu">
       <button data-k="left">&#9664;</button><button data-k="up">&#9650;</button>
       <button data-k="down">&#9660;</button><button data-k="right">&#9654;</button>
-      <button data-k="ok">OK</button><button data-k="back">Back</button>
+      <button data-k="ok">A</button><button data-k="back">B</button>
     </div>
     <span class="grow"></span>
     <button id="gyro">Tilt: off</button>
     <button id="cal">Calibrate</button>
     <label>Sens <input id="sens" type="range" min="10" max="60" value="30"></label>
     <label><input id="inv" type="checkbox">Invert</label>
+    <span id="seat">no seat: press A to join</span>
     <span id="ping">--</span>
   </div>
   <div id="steer"><div class="knob" id="knob"></div><div class="hint" id="hint">Drag to steer</div></div>
@@ -65,11 +71,17 @@
 "use strict";
 const $ = (id) => document.getElementById(id);
 const pin = new URLSearchParams(location.search).get("pin") || prompt("Room PIN") || "";
+// A stable id for this phone, so a reload gets the same seat back
+let token = localStorage.getItem("gobble-token");
+if (!token) {
+  token = Array.from(crypto.getRandomValues(new Uint8Array(12)), (b) => b.toString(16).padStart(2, "0")).join("");
+  localStorage.setItem("gobble-token", token);
+}
 const state = { steer: 0, gas: false, brake: false, drift: false, item: false };
 let ws = null, seq = 0, gyro = false, tilt = 0, center = 0;
 
 function connect() {
-  ws = new WebSocket(`wss://${location.host}/ws?pin=${encodeURIComponent(pin)}`);
+  ws = new WebSocket(`wss://${location.host}/ws?pin=${encodeURIComponent(pin)}&token=${token}`);
   ws.onopen = () => { $("cover").style.display = "none"; };
   ws.onclose = () => {
     $("cover").style.display = "flex";
@@ -79,6 +91,12 @@ function connect() {
     const msg = JSON.parse(event.data);
     if (msg.t === "buzz" && navigator.vibrate) navigator.vibrate(msg.ms);
     if (msg.t === "ack") $("ping").textContent = `${Math.round(performance.now() - msg.ms)} ms`;
+    if (msg.t === "seat") {
+      $("seat").textContent = msg.p ? `P${msg.p}` : "no seat: press A to join";
+      $("seat").style.cssText = msg.p ? `background:${msg.color};color:#2A170E;padding:4px 12px;border-radius:12px;font-size:20px` : "";
+      $("full").style.display = "none";
+    }
+    if (msg.t === "full") $("full").style.display = "flex";
   };
 }
 

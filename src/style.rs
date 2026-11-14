@@ -17,6 +17,7 @@ pub(super) mod prelude {
     pub use super::panel;
     pub use super::prompt;
     pub use super::prompt_either;
+    pub use super::seat_color;
     pub use super::text;
 }
 
@@ -266,4 +267,14 @@ pub fn prompt_either(
             text(label_text, Size::LABEL, Weight::SemiBold, Tone::CREAM_100)
         ],
     )
+}
+
+/// Each seat's colour, shared by its HUD badge and its phone page.
+pub const fn seat_color(slot: usize) -> Color {
+    match slot {
+        0 => Tone::PUMPKIN,
+        1 => Color::srgb_u8(0x4F, 0xA3, 0xE0),
+        2 => Color::srgb_u8(0x6C, 0xC2, 0x4A),
+        _ => Tone::CRANBERRY,
+    }
 }

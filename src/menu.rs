@@ -103,6 +103,7 @@ const fn device_name(device: Device) -> &'static str {
         Device::Any => "Any controller",
         Device::Keyboard => "Keyboard",
         Device::Gamepad(_) => "Controller",
+        Device::Phone(_) => "Phone",
         Device::Bot => "CPU (test seat)",
     }
 }
@@ -541,6 +542,7 @@ struct Ready(Vec<bool>);
 fn lobby(
     keys: Res<ButtonInput<KeyCode>>,
     gamepads: Query<(Entity, &Gamepad)>,
+    phones: Res<Phones>,
     mut seats: ResMut<Seats>,
     mut setup: ResMut<Setup>,
     mut next: ResMut<NextState<GameState>>,
@@ -556,6 +558,9 @@ fn lobby(
             )
         })
         .collect();
+    for (id, pad) in &phones.pads {
+        pressed.push((Device::Phone(*id), pad.menu.confirm, pad.menu.back));
+    }
     pressed.push((
         Device::Keyboard,
         keys.just_pressed(KeyCode::Enter) || keys.just_pressed(KeyCode::Space),
@@ -567,9 +572,13 @@ fn lobby(
         if join && !seated && seats.0.len() < 4 {
             seats.0.push(device);
             sfx.write(Sfx::Pickup);
+        } else if join && !seated {
+            if let Device::Phone(id) = device {
+                phones.send(format!(r#"{{"t":"full","id":{id}}}"#));
+            }
         } else if join && seated {
             // Start with everyone who joined; a lone player may use any device
-            if seats.0.len() == 1 {
+            if seats.0.len() == 1 && !matches!(seats.0[0], Device::Phone(_)) {
                 seats.0[0] = Device::Any;
             }
             let n = seats.0.len();
@@ -591,6 +600,7 @@ fn lobby(
 fn pick(
     keys: Res<ButtonInput<KeyCode>>,
     gamepads: Query<(Entity, &Gamepad)>,
+    phones: Res<Phones>,
     all: Res<MenuInput>,
     seats: Res<Seats>,
     mut ready: ResMut<Ready>,
@@ -606,7 +616,7 @@ fn pick(
             ready.0[slot] = true;
             continue;
         }
-        let input = device_menu(device, &keys, &gamepads, &all);
+        let input = device_menu(device, &keys, &gamepads, &phones, &all);
         let step = i32::from(input.right) - i32::from(input.left);
         if step != 0 && !ready.0[slot] {
             let count = ROSTER.len() as i32;
