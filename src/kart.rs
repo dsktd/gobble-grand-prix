@@ -95,6 +95,8 @@ pub struct Kart {
     pub item: Option<Item>,
     /// Steering after the input ramp, -1..1.
     pub steer: f32,
+    /// Yaw rate in rad/s, positive turning left.
+    pub yaw_rate: f32,
     /// Visual body slide in radians, eased in and out of drifts.
     pub slide: f32,
     /// Wall contacts this race, for tuning logs.
@@ -108,31 +110,50 @@ pub struct Kart {
 impl Kart {
     pub const TOP_SPEED: f32 = 34.0;
     pub const ACCEL: f32 = 20.0;
-    /// Base steering rate in rad/s. 1.68 is 20% under the first 2.1, after Cal found
-    /// turning too quick.
-    pub const TURN: f32 = 1.68;
     /// Seconds for the steering input to ramp from centre to full lock.
     pub const STEER_RAMP: f32 = 0.15;
-    /// Share of steering lost at top speed, so fast karts turn gentler.
-    pub const HIGH_SPEED_CUT: f32 = 0.3;
     /// Scales the drift's visual slide. 1.0 was too shallow and 1.15 too much, so it
     /// sits between; it no longer touches the turn rate.
     pub const DRIFT_ANGLE: f32 = 1.05;
     /// Body slide in radians at `DRIFT_ANGLE` 1.
     pub const DRIFT_SLIDE: f32 = 0.4;
-    /// Drift turn rate as a share of normal steering, before the lean adds to it. Kept
-    /// under 1 so a drift arcs wider than steering and cannot spin into a donut.
-    pub const DRIFT_TURN: f32 = 0.55;
-    /// Extra share of normal steering when the stick leans into the drift.
-    pub const DRIFT_LEAN: f32 = 0.25;
-    /// Share when counter-steering: the arc widens, it never flips.
-    pub const DRIFT_COUNTER: f32 = 0.3;
     /// A drift starts only above this share of top speed.
     pub const DRIFT_MIN_SPEED: f32 = 0.4;
     /// How long the body takes to straighten after a drift.
     pub const DRIFT_SETTLE: f32 = 0.2;
-    /// Velocity follows the heading this fast while drifting (normal is about 10).
-    pub const DRIFT_GRIP: f32 = 6.0;
+    /// Fixed physics step, the same on every machine (needed for LAN play).
+    pub const STEP: f32 = 1.0 / 120.0;
+    /// Bicycle model: distance from the centre of mass to the front and rear axle.
+    pub const FRONT_AXLE: f32 = 0.8;
+    pub const REAR_AXLE: f32 = 0.8;
+    /// Yaw inertia per unit mass.
+    pub const INERTIA: f32 = 0.55;
+    /// Front wheel lock at a standstill (rad), shrinking with speed past `STEER_FALLOFF`.
+    pub const MAX_STEER: f32 = 0.45;
+    pub const STEER_FALLOFF: f32 = 14.0;
+    /// Tyre cornering stiffness per axle (lateral accel per rad of slip) and its saturation.
+    pub const CORNERING: f32 = 90.0;
+    pub const AXLE_GRIP: f32 = 17.0;
+    /// Below `BLEND_LOW` the kart moves as a pure kinematic bicycle; above `BLEND_HIGH` as a
+    /// dynamic one with tyre slip; blended between.
+    pub const BLEND_LOW: f32 = 2.0;
+    pub const BLEND_HIGH: f32 = 8.0;
+    /// Assist: yaw rate is pulled toward what the tyres can hold, per second.
+    pub const YAW_ASSIST: f32 = 3.0;
+    pub const DRIFT_ASSIST: f32 = 1.2;
+    /// Assist: largest body slip angle (rad) gripping and drifting; beyond it the kart
+    /// counter-steers itself.
+    pub const MAX_SLIP: f32 = 0.2;
+    pub const DRIFT_MAX_SLIP: f32 = 0.5;
+    /// A drift is a deliberate loss of rear grip.
+    pub const DRIFT_REAR_GRIP: f32 = 0.5;
+    /// Front wheels aim into the drift by this share of lock with the stick neutral; full
+    /// lean adds the rest, counter-steer takes away down to `DRIFT_MIN_AIM`.
+    pub const DRIFT_AIM: f32 = 0.55;
+    pub const DRIFT_MIN_AIM: f32 = 0.15;
+    /// A drift arcs: its turning radius never gets tighter than this (at full lean; the
+    /// radius grows as the lean eases off).
+    pub const DRIFT_MIN_RADIUS: f32 = 15.0;
 
     pub const fn new(
         racer: usize,
@@ -156,6 +177,7 @@ impl Kart {
             offroad: false,
             item: None,
             steer: 0.0,
+            yaw_rate: 0.0,
             slide: 0.0,
             walls: 0,
             on_wall: false,
@@ -203,109 +225,197 @@ fn approach(
 fn drive(
     time: Res<Time>,
     track: Res<Track>,
-    karts: Query<(&mut Kart, &KartInput)>,
+    mut karts: Query<(&mut Kart, &KartInput)>,
+    mut carry: Local<f32>,
 ) {
-    let dt = time.delta_secs().min(1.0 / 20.0);
-    for (mut kart, input) in karts {
+    let dt = time.delta_secs().min(0.1);
+    for (mut kart, _) in &mut karts {
         kart.fired = 0;
         kart.struck = false;
         kart.boost = (kart.boost - dt).max(0.0);
         kart.coma = (kart.coma - dt).max(0.0);
         kart.pied = (kart.pied - dt).max(0.0);
         kart.hop = (kart.hop - dt).max(0.0);
-        if kart.frozen {
-            continue;
-        }
-        let stats = kart.stats();
-        let spot = track.locate(kart.pos);
-        kart.offroad = spot.lateral.abs() > track.half_width + 1.2 && !track.in_shortcut(kart.pos);
-
-        let mut top = Kart::TOP_SPEED * stats.top_speed * kart.pace;
-        if kart.offroad && kart.boost <= 0.0 {
-            top *= 0.5;
-        }
-        if kart.coma > 0.0 {
-            top *= 0.55;
-        }
-        if kart.boost > 0.0 {
-            top *= 1.4;
-        }
-
-        if kart.spin > 0.0 {
-            // Spinning out: no control, bleed speed
-            kart.spin = (kart.spin - dt).max(0.0);
-            kart.speed *= (-2.5 * dt).exp();
-            kart.drift = None;
-        } else {
-            // Throttle and brakes
-            let accel = Kart::ACCEL * stats.accel;
+    }
+    // Fixed steps so every machine simulates the same race
+    *carry += dt;
+    while *carry >= Kart::STEP {
+        *carry -= Kart::STEP;
+        for (mut kart, input) in &mut karts {
+            if kart.frozen {
+                continue;
+            }
+            let spot = track.locate(kart.pos);
+            kart.offroad =
+                spot.lateral.abs() > track.half_width + 1.2 && !track.in_shortcut(kart.pos);
+            let stats = kart.stats();
+            let mut top = Kart::TOP_SPEED * stats.top_speed * kart.pace;
+            if kart.offroad && kart.boost <= 0.0 {
+                top *= 0.5;
+            }
+            if kart.coma > 0.0 {
+                top *= 0.55;
+            }
             if kart.boost > 0.0 {
-                kart.speed = approach(kart.speed, top, accel * 3.0 * dt);
-            } else if input.throttle > 0.1 {
-                let rate = if kart.speed > top {
-                    25.0
-                } else {
-                    accel * input.throttle * (1.2 - kart.speed / top).max(0.25)
-                };
-                kart.speed = approach(kart.speed, top, rate * dt);
-            } else if input.throttle < -0.1 {
-                kart.speed = approach(kart.speed, -top * 0.35, 40.0 * dt);
+                top *= 1.4;
+            }
+            step(&mut kart, input, stats, top, Kart::STEP);
+
+            // Invisible walls just past the shoulders
+            let spot = track.locate(kart.pos);
+            if spot.lateral.abs() > track.barrier() && !track.in_shortcut(kart.pos) {
+                let edge = track.offset(spot.along, track.barrier() * spot.lateral.signum());
+                kart.pos = edge;
+                kart.speed *= 0.6;
+                kart.vel *= 0.4;
+                kart.yaw_rate *= 0.5;
+                // Count separate wall contacts, not every step against it
+                if !kart.on_wall {
+                    kart.walls += 1;
+                }
+                kart.on_wall = true;
             } else {
-                kart.speed = approach(kart.speed, 0.0, 8.0 * dt);
+                kart.on_wall = false;
             }
-
-            let rate = steer_rate(&mut kart, input, stats, dt);
-            // Ease the body into and out of the slide
-            let target = kart
-                .drift
-                .map_or(0.0, |d| d.dir * Kart::DRIFT_SLIDE * Kart::DRIFT_ANGLE);
-            kart.slide = approach(
-                kart.slide,
-                target,
-                Kart::DRIFT_SLIDE * Kart::DRIFT_ANGLE * dt / Kart::DRIFT_SETTLE,
-            );
-            kart.yaw += rate * dt;
-
-            // Release a drift into a mini-turbo
-            let release = !input.drift || kart.speed < Kart::TOP_SPEED * stats.top_speed * 0.25;
-            if release && let Some(drift) = kart.drift.take() {
-                let tier = drift.tier();
-                kart.boost = kart.boost.max(match tier {
-                    2 => 1.1,
-                    1 => 0.55,
-                    _ => 0.0,
-                });
-                kart.fired = tier;
-            }
-        }
-
-        // Velocity slides toward the heading; drifting lets it slide more
-        let heading = kart.forward() * kart.speed;
-        let grip = match (kart.drift.is_some(), kart.spin > 0.0) {
-            (_, true) => 1.5,
-            (true, _) => Kart::DRIFT_GRIP,
-            _ => 10.0 * stats.weight.sqrt(),
-        };
-        kart.vel = kart.vel.lerp(heading, (grip * dt).min(1.0));
-        let step = kart.vel * dt;
-        kart.pos += step;
-
-        // Invisible walls just past the shoulders
-        let spot = track.locate(kart.pos);
-        if spot.lateral.abs() > track.barrier() && !track.in_shortcut(kart.pos) {
-            let edge = track.offset(spot.along, track.barrier() * spot.lateral.signum());
-            kart.pos = edge;
-            kart.speed *= 0.6;
-            kart.vel *= 0.4;
-            // Count separate wall contacts, not every frame against it
-            if !kart.on_wall {
-                kart.walls += 1;
-            }
-            kart.on_wall = true;
-        } else {
-            kart.on_wall = false;
         }
     }
+}
+
+fn smoothstep(
+    low: f32,
+    high: f32,
+    x: f32,
+) -> f32 {
+    let t = ((x - low) / (high - low)).clamp(0.0, 1.0);
+    t * t * (3.0 - 2.0 * t)
+}
+
+/// One fixed physics step for one kart: throttle, drift rules, then a bicycle model that is
+/// kinematic at low speed and has linear, saturating tyres at speed. Pure, for tests.
+pub fn step(
+    kart: &mut Kart,
+    input: &KartInput,
+    stats: Stats,
+    top: f32,
+    dt: f32,
+) {
+    let spinning = kart.spin > 0.0;
+    let fwd = kart.forward();
+    let left = Vec2::new(fwd.y, -fwd.x);
+    let mut vx = kart.vel.dot(fwd);
+    let mut vy = kart.vel.dot(left);
+    let mut r = kart.yaw_rate;
+    let quiet = KartInput::default();
+    let input = if spinning { &quiet } else { input };
+
+    if spinning {
+        // Knocked out: no control, bleed speed
+        kart.spin = (kart.spin - dt).max(0.0);
+        vx *= (-2.5 * dt).exp();
+        kart.drift = None;
+    } else {
+        // Throttle and brakes act on forward speed only
+        let accel = Kart::ACCEL * stats.accel;
+        if kart.boost > 0.0 {
+            vx = approach(vx, top, accel * 3.0 * dt);
+        } else if input.throttle > 0.1 {
+            let rate = if vx > top {
+                25.0
+            } else {
+                accel * input.throttle * (1.2 - vx / top).max(0.25)
+            };
+            vx = approach(vx, top, rate * dt);
+        } else if input.throttle < -0.1 {
+            vx = approach(vx, -top * 0.35, 40.0 * dt);
+        } else {
+            vx = approach(vx, 0.0, 8.0 * dt);
+        }
+    }
+    kart.speed = vx;
+
+    let fire = drift_control(kart, input, stats, dt);
+    if fire > 0 {
+        kart.fired = kart.fired.max(fire);
+    }
+
+    // Front wheel angle: the eased stick, or the drift's aim
+    let lock = Kart::MAX_STEER / (1.0 + vx.abs() / Kart::STEER_FALLOFF);
+    let mut share = 1.0;
+    let aim = match kart.drift {
+        Some(drift) => {
+            let lean = kart.steer * drift.dir;
+            share = (Kart::DRIFT_AIM + (1.0 - Kart::DRIFT_AIM) * lean).max(Kart::DRIFT_MIN_AIM);
+            drift.dir * share
+        }
+        None => kart.steer,
+    };
+    let delta = aim * lock * stats.turn;
+    let wheelbase = Kart::FRONT_AXLE + Kart::REAR_AXLE;
+
+    // Kinematic bicycle: the wheels roll where they point
+    let r_kinematic = vx * delta.tan() / wheelbase;
+
+    // Dynamic bicycle: slip angles, linear tyres that saturate
+    let rear_grip = match kart.drift {
+        Some(_) => Kart::DRIFT_REAR_GRIP,
+        None => 1.0,
+    };
+    let sx = vx.abs().max(0.5);
+    let alpha_front = (vy + Kart::FRONT_AXLE * r).atan2(sx) - delta * vx.signum();
+    let alpha_rear = (vy - Kart::REAR_AXLE * r).atan2(sx);
+    let grip = Kart::AXLE_GRIP * stats.weight.sqrt();
+    let f_front = (-Kart::CORNERING * alpha_front).clamp(-grip, grip);
+    let f_rear =
+        (-Kart::CORNERING * rear_grip * alpha_rear).clamp(-grip * rear_grip, grip * rear_grip);
+    let vy_dynamic = vy + (f_front * delta.cos() + f_rear - vx * r) * dt;
+    let r_dynamic = r
+        + (Kart::FRONT_AXLE * f_front * delta.cos() - Kart::REAR_AXLE * f_rear) / Kart::INERTIA
+            * dt;
+
+    let w = smoothstep(Kart::BLEND_LOW, Kart::BLEND_HIGH, vx.abs());
+    r = r_kinematic + (r_dynamic - r_kinematic) * w;
+    vy *= 0.0;
+    vy += vy_dynamic * w;
+
+    // Assists: settle the yaw toward what the tyres can hold, cap the slip angle
+    let hold = (grip * (1.0 + rear_grip)) / sx;
+    let settle = r_kinematic.clamp(-hold, hold);
+    let assist = match kart.drift {
+        Some(_) => Kart::DRIFT_ASSIST,
+        None => Kart::YAW_ASSIST,
+    };
+    if !spinning {
+        r += (settle - r) * (1.0 - (-assist * dt).exp());
+    }
+    let max_slip = match kart.drift {
+        Some(_) => Kart::DRIFT_MAX_SLIP,
+        None => Kart::MAX_SLIP,
+    };
+    let slip_limit = sx * max_slip.tan();
+    vy = vy.clamp(-slip_limit, slip_limit);
+    if let Some(drift) = kart.drift {
+        // A drift arcs, never spins: bounded rate, always its own direction, and wider
+        // the less the stick leans in
+        let cap = vx.abs() * share / Kart::DRIFT_MIN_RADIUS;
+        r = (r * drift.dir).clamp(0.0, cap) * drift.dir;
+    }
+
+    kart.yaw_rate = r;
+    kart.yaw += r * dt;
+    let fwd = kart.forward();
+    let left = Vec2::new(fwd.y, -fwd.x);
+    kart.vel = fwd * vx + left * vy;
+    kart.pos += kart.vel * dt;
+
+    // Ease the body into and out of the drift slide
+    let target = kart
+        .drift
+        .map_or(0.0, |d| d.dir * Kart::DRIFT_SLIDE * Kart::DRIFT_ANGLE);
+    kart.slide = approach(
+        kart.slide,
+        target,
+        Kart::DRIFT_SLIDE * Kart::DRIFT_ANGLE * dt / Kart::DRIFT_SETTLE,
+    );
 }
 
 /// Push overlapping karts apart, heavier karts win.
@@ -455,14 +565,14 @@ fn tears(
     }
 }
 
-/// Steering rate in rad/s for this tick: input ramp, drift start, drift turning and charge.
-/// Pure so the drift feel can be tested without the ECS.
-pub fn steer_rate(
+/// Stick easing, drift start and release, and mini-turbo charge for one step. Returns the
+/// mini-turbo tier fired by a release this step.
+fn drift_control(
     kart: &mut Kart,
     input: &KartInput,
     stats: Stats,
     dt: f32,
-) -> f32 {
+) -> u8 {
     let top = Kart::TOP_SPEED * stats.top_speed;
     // Start a drift with a little hop: fast enough and steering held
     if kart.drift.is_none()
@@ -477,52 +587,31 @@ pub fn steer_rate(
         });
         kart.hop = 0.25;
     }
-
     // Ease the stick so taps do not jerk the kart
     kart.steer = approach(kart.steer, input.steer, dt / Kart::STEER_RAMP);
-    let steer = kart.steer;
-    let fast = (kart.speed.abs() / top).min(1.0);
-    let grip = (kart.speed.abs() / 8.0).min(1.0)
-        * kart.speed.signum()
-        * (1.0 - Kart::HIGH_SPEED_CUT * fast);
-    let turn = Kart::TURN * stats.turn;
-    match kart.drift.as_mut() {
-        Some(drift) => {
-            let lean = steer * drift.dir;
-            drift.charge += dt * (0.7 + 0.6 * lean.max(0.0));
-            // Leaning in tightens up to DRIFT_TURN + DRIFT_LEAN, counter-steer widens to
-            // DRIFT_COUNTER; always the drift's own direction
-            let share = if lean >= 0.0 {
-                Kart::DRIFT_TURN + Kart::DRIFT_LEAN * lean
-            } else {
-                Kart::DRIFT_TURN + (Kart::DRIFT_TURN - Kart::DRIFT_COUNTER) * lean
-            };
-            drift.dir * turn * share * grip.abs()
-        }
-        None => steer * turn * grip,
+    if let Some(drift) = kart.drift.as_mut() {
+        let lean = kart.steer * drift.dir;
+        drift.charge += dt * (0.7 + 0.6 * lean.max(0.0));
     }
+    // Release a drift into a mini-turbo
+    let release = !input.drift || kart.speed < top * 0.25;
+    if release && let Some(drift) = kart.drift.take() {
+        let tier = drift.tier();
+        kart.boost = kart.boost.max(match tier {
+            2 => 1.1,
+            1 => 0.55,
+            _ => 0.0,
+        });
+        return tier;
+    }
+    0
 }
 
 #[cfg(test)]
 mod test {
     use super::*;
 
-    /// Turning radius after holding the inputs for a few seconds at a steady speed.
-    fn radius(
-        speed: f32,
-        input: &KartInput,
-    ) -> f32 {
-        let stats = ROSTER[0].stats;
-        let mut kart = Kart::new(0, Vec2::ZERO, 0.0);
-        kart.speed = speed;
-        let dt = 1.0 / 60.0;
-        let mut rate = 0.0;
-        for _ in 0..180 {
-            rate = steer_rate(&mut kart, input, stats, dt);
-            kart.hop = (kart.hop - dt).max(0.0);
-        }
-        speed / rate.abs().max(1e-6)
-    }
+    const DT: f32 = Kart::STEP;
 
     fn held(
         steer: f32,
@@ -536,17 +625,83 @@ mod test {
         }
     }
 
+    /// A kart rolling straight at `speed`.
+    fn rolling(speed: f32) -> Kart {
+        let mut kart = Kart::new(0, Vec2::ZERO, 0.0);
+        kart.frozen = false;
+        kart.speed = speed;
+        kart.vel = kart.forward() * speed;
+        kart
+    }
+
+    /// Run the inputs at a held speed and return the steady turning radius.
+    fn radius(
+        speed: f32,
+        input: &KartInput,
+    ) -> f32 {
+        let stats = ROSTER[0].stats;
+        let mut kart = rolling(speed);
+        for _ in 0..360 {
+            step(&mut kart, input, stats, speed, DT);
+            kart.hop = (kart.hop - DT).max(0.0);
+        }
+        kart.vel.length() / kart.yaw_rate.abs().max(1e-6)
+    }
+
+    /// Angle between where the kart points and where it goes.
+    fn slip(kart: &Kart) -> f32 {
+        if kart.vel.length() < 0.1 {
+            return 0.0;
+        }
+        kart.forward().angle_to(kart.vel).abs()
+    }
+
     #[test]
-    fn test_drift_arcs_wider_than_steering() {
+    fn test_standstill_no_sideways() {
+        let stats = ROSTER[0].stats;
+        let mut kart = rolling(0.0);
+        let quiet = KartInput {
+            throttle: 0.0,
+            steer: 1.0,
+            drift: true,
+            item: false,
+        };
+        for _ in 0..120 {
+            step(&mut kart, &quiet, stats, Kart::TOP_SPEED, DT);
+        }
+        assert!(kart.pos.length() < 1e-4, "moved {:?}", kart.pos);
+        assert!(kart.yaw.abs() < 1e-4, "turned {}", kart.yaw);
+    }
+
+    #[test]
+    fn test_low_speed_bicycle_radius() {
+        let speed = 1.5;
+        let stats = ROSTER[0].stats;
+        let measured = radius(speed, &held(1.0, false));
+        let delta = Kart::MAX_STEER / (1.0 + speed / Kart::STEER_FALLOFF) * stats.turn;
+        let formula = (Kart::FRONT_AXLE + Kart::REAR_AXLE) / delta.tan();
+        assert!(
+            (measured - formula).abs() / formula < 0.05,
+            "radius {measured} vs bicycle {formula}"
+        );
+    }
+
+    #[test]
+    fn test_drift_arcs_not_spins() {
+        let stats = ROSTER[0].stats;
         let speed = Kart::TOP_SPEED * 0.9;
-        let steer = radius(speed, &held(1.0, false));
-        let drift = radius(speed, &held(1.0, true));
-        assert!(drift > steer, "drift radius {drift} vs steer {steer}");
+        let mut kart = rolling(speed);
+        for _ in 0..360 {
+            step(&mut kart, &held(1.0, true), stats, speed, DT);
+            assert!(slip(&kart) < 1.0, "spinning: slip {}", slip(&kart));
+        }
+        assert!(kart.drift.is_some());
+        let r = kart.vel.length() / kart.yaw_rate.abs();
+        assert!(r >= Kart::DRIFT_MIN_RADIUS * 0.95, "radius {r}");
     }
 
     #[test]
     fn test_drift_no_donuts() {
-        // Even full lock into the drift keeps a wide arc at racing speed
         let drift = radius(Kart::TOP_SPEED * 0.6, &held(1.0, true));
         assert!(drift > 14.0, "drift radius {drift}");
     }
@@ -554,25 +709,46 @@ mod test {
     #[test]
     fn test_drift_needs_speed() {
         let stats = ROSTER[0].stats;
-        let mut kart = Kart::new(0, Vec2::ZERO, 0.0);
-        kart.speed = Kart::TOP_SPEED * 0.3;
-        steer_rate(&mut kart, &held(1.0, true), stats, 1.0 / 60.0);
+        let mut kart = rolling(Kart::TOP_SPEED * 0.3);
+        step(&mut kart, &held(1.0, true), stats, Kart::TOP_SPEED, DT);
         assert!(kart.drift.is_none());
     }
 
     #[test]
     fn test_drift_counter_steer_widens_not_flips() {
         let stats = ROSTER[0].stats;
-        let mut kart = Kart::new(0, Vec2::ZERO, 0.0);
-        kart.speed = Kart::TOP_SPEED * 0.8;
-        steer_rate(&mut kart, &held(1.0, true), stats, 1.0 / 60.0);
-        let mut rate = 0.0;
-        for _ in 0..60 {
-            rate = steer_rate(&mut kart, &held(-1.0, true), stats, 1.0 / 60.0);
+        let speed = Kart::TOP_SPEED * 0.8;
+        let mut kart = rolling(speed);
+        for _ in 0..120 {
+            step(&mut kart, &held(1.0, true), stats, speed, DT);
         }
-        assert!(rate > 0.0, "counter-steer flipped the drift: {rate}");
-        let into = radius(kart.speed, &held(1.0, true));
-        assert!(kart.speed / rate > into);
+        let into = kart.vel.length() / kart.yaw_rate.abs();
+        for _ in 0..240 {
+            step(&mut kart, &held(-1.0, true), stats, speed, DT);
+        }
+        assert!(
+            kart.yaw_rate > 0.0,
+            "counter-steer flipped the drift: {}",
+            kart.yaw_rate
+        );
+        let counter = kart.vel.length() / kart.yaw_rate;
+        assert!(counter > into, "counter radius {counter} vs into {into}");
+    }
+
+    #[test]
+    fn test_drift_release_recovers() {
+        let stats = ROSTER[0].stats;
+        let speed = Kart::TOP_SPEED * 0.8;
+        let mut kart = rolling(speed);
+        for _ in 0..240 {
+            step(&mut kart, &held(1.0, true), stats, speed, DT);
+        }
+        let steps = (0.5 / DT) as usize;
+        for _ in 0..steps {
+            step(&mut kart, &held(0.0, false), stats, speed, DT);
+        }
+        assert!(slip(&kart) < 0.09, "slip {} after 0.5 s", slip(&kart));
+        assert!(kart.slide.abs() < 1e-3, "body slide {}", kart.slide);
     }
 
     #[test]
@@ -595,7 +771,6 @@ mod test {
                 .collect();
             bends.sort_by(f32::total_cmp);
             let typical = bends[bends.len() / 2];
-            // Up to half the road width of drift either side still stays on the road
             assert!(
                 drift < typical + def.half_width,
                 "{}: drift radius {drift}, typical bend {typical}",
