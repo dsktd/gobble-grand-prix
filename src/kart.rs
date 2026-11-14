@@ -151,6 +151,15 @@ impl Kart {
     /// lean adds the rest, counter-steer takes away down to `DRIFT_MIN_AIM`.
     pub const DRIFT_AIM: f32 = 0.55;
     pub const DRIFT_MIN_AIM: f32 = 0.15;
+    /// Wall contact: share of along-wall speed lost on impact (scaled by how steep it is),
+    /// how steep a hit must be to bounce, and how much of the into-wall speed bounces back.
+    pub const WALL_FRICTION: f32 = 0.35;
+    /// Speed lost per second while scraping along a wall.
+    pub const WALL_DRAG: f32 = 0.6;
+    /// How fast (rad/s) a wall turns the nose along itself.
+    pub const WALL_ALIGN: f32 = 3.0;
+    pub const WALL_STEEP: f32 = 0.7;
+    pub const WALL_BOUNCE: f32 = 0.2;
     /// A drift arcs: its turning radius never gets tighter than this (at full lean; the
     /// radius grows as the lean eases off).
     pub const DRIFT_MIN_RADIUS: f32 = 15.0;
@@ -259,26 +268,81 @@ fn drive(
             if kart.boost > 0.0 {
                 top *= 1.4;
             }
+            let before = kart.pos;
             step(&mut kart, input, stats, top, Kart::STEP);
 
-            // Invisible walls just past the shoulders
-            let spot = track.locate(kart.pos);
-            if spot.lateral.abs() > track.barrier() && !track.in_shortcut(kart.pos) {
-                let edge = track.offset(spot.along, track.barrier() * spot.lateral.signum());
-                kart.pos = edge;
-                kart.speed *= 0.6;
-                kart.vel *= 0.4;
-                kart.yaw_rate *= 0.5;
+            // Walls just past the shoulders, swept so nothing tunnels through
+            let hit = wall(&mut kart, &track, before);
+            if hit && !kart.on_wall {
                 // Count separate wall contacts, not every step against it
-                if !kart.on_wall {
-                    kart.walls += 1;
-                }
-                kart.on_wall = true;
-            } else {
-                kart.on_wall = false;
+                kart.walls += 1;
             }
+            kart.on_wall = hit;
         }
     }
+}
+
+/// Swept wall contact for one step from `before` to the kart's new position. On a crossing
+/// the kart is put back on the wall line, the into-wall velocity is removed (a small bounce on
+/// steep hits) and the along-wall velocity kept with mild friction, so it slides. Heading and
+/// yaw stay the driver's. Returns whether the kart touched the wall.
+pub fn wall(
+    kart: &mut Kart,
+    track: &Track,
+    before: Vec2,
+) -> bool {
+    let limit = track.barrier();
+    let spot = track.locate(kart.pos);
+    if spot.lateral.abs() <= limit || track.in_shortcut(kart.pos) {
+        return false;
+    }
+    let side = spot.lateral.signum();
+    // Where along the step the wall line was crossed (the lateral offset is near linear
+    // over one short step)
+    let start = track.locate(before);
+    let crossed = if start.lateral.abs() < limit && start.lateral.signum() == side {
+        ((limit - start.lateral.abs()) / (spot.lateral.abs() - start.lateral.abs())).clamp(0.0, 1.0)
+    } else {
+        0.0
+    };
+    let contact = before.lerp(kart.pos, crossed);
+    let at = track.locate(contact).along;
+    let (_, dir) = track.sample(at);
+    // Outward normal: from the road toward this wall
+    let normal = dir.perp() * side;
+    let into = kart.vel.dot(normal).max(0.0);
+    let along = kart.vel - normal * kart.vel.dot(normal);
+    let steep = into / kart.vel.length().max(0.001);
+    let bounce = if steep > Kart::WALL_STEEP {
+        -into * Kart::WALL_BOUNCE
+    } else {
+        0.0
+    };
+    // A one-off loss on impact, scaled by how steep it was; then only light drag while scraping
+    let impact = if kart.on_wall {
+        0.0
+    } else {
+        Kart::WALL_FRICTION * steep
+    };
+    let drag = (-Kart::WALL_DRAG * Kart::STEP).exp();
+    kart.vel = along * (1.0 - impact) * drag + normal * bounce;
+    // Back onto the wall line, a hair inside, then slide for the rest of the step
+    kart.pos = track.offset(at, (limit - 0.01) * side) + kart.vel * Kart::STEP * (1.0 - crossed);
+    let settled = track.locate(kart.pos);
+    if settled.lateral.abs() > limit {
+        kart.pos = track.offset(settled.along, (limit - 0.01) * side);
+    }
+    // The wall turns the nose along it, gently, so the kart slides instead of grinding
+    if along.length() > 1.0 {
+        let tangent = along.normalize();
+        let want = (-tangent.x).atan2(-tangent.y);
+        let diff = (want - kart.yaw + std::f32::consts::PI).rem_euclid(std::f32::consts::TAU)
+            - std::f32::consts::PI;
+        let turn = Kart::WALL_ALIGN * Kart::STEP;
+        kart.yaw += diff.clamp(-turn, turn);
+    }
+    kart.speed = kart.vel.dot(kart.forward());
+    true
 }
 
 fn smoothstep(
@@ -749,6 +813,57 @@ mod test {
         }
         assert!(slip(&kart) < 0.09, "slip {} after 0.5 s", slip(&kart));
         assert!(kart.slide.abs() < 1e-3, "body slide {}", kart.slide);
+    }
+
+    /// Drive at top boost speed into the left wall of Harvest Lane's first straight at
+    /// `angle` (rad from the wall line) and check the kart never passes the wall.
+    fn into_wall(angle: f32) -> (Kart, f32) {
+        let track = Track::new(0);
+        let stats = ROSTER[0].stats;
+        let along = 20.0;
+        let (_, dir) = track.sample(along);
+        let left = dir.perp();
+        let heading = dir * angle.cos() + left * angle.sin();
+        let mut kart = Kart::new(
+            0,
+            track.offset(along, track.half_width),
+            (-heading.x).atan2(-heading.y),
+        );
+        kart.frozen = false;
+        let speed = Kart::TOP_SPEED * 1.4;
+        kart.speed = speed;
+        kart.vel = heading * speed;
+        let tangential = kart.vel.dot(dir);
+        for _ in 0..120 {
+            let before = kart.pos;
+            step(&mut kart, &held(0.0, false), stats, speed, DT);
+            let hit = wall(&mut kart, &track, before);
+            kart.on_wall = hit;
+            let lateral = track.locate(kart.pos).lateral;
+            assert!(
+                lateral <= track.barrier() + 1e-3,
+                "through the wall: {lateral}"
+            );
+        }
+        (kart, tangential)
+    }
+
+    #[test]
+    fn test_wall_shallow_slides() {
+        let (kart, tangential) = into_wall(0.25);
+        let track = Track::new(0);
+        let (_, dir) = track.sample(track.locate(kart.pos).along);
+        assert!(
+            kart.vel.dot(dir) > tangential * 0.6,
+            "lost too much speed along the wall: {} of {tangential}",
+            kart.vel.dot(dir)
+        );
+    }
+
+    #[test]
+    fn test_wall_steep_stops_not_tunnels() {
+        let (kart, _) = into_wall(1.3);
+        assert!(kart.vel.length().is_finite());
     }
 
     #[test]
