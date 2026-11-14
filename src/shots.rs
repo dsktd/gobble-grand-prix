@@ -104,6 +104,7 @@ fn tour(
     mut next: ResMut<NextState<GameState>>,
     mut virtual_time: ResMut<Time<Virtual>>,
     clock: Option<Res<RaceClock>>,
+    mut whats: ResMut<Whats>,
     mut exit: MessageWriter<AppExit>,
 ) {
     tour.clock += time.delta_secs();
@@ -111,29 +112,38 @@ fn tour(
     let name = TRACKS[tour.track].name.to_lowercase().replace(' ', "-");
     match tour.step {
         0 if t > 2.0 => shoot(&mut commands, "menu"),
-        1 if t > 2.5 => next.set(GameState::Options),
-        2 if t > 4.0 => shoot(&mut commands, "options"),
-        3 if t > 4.5 => {
+        1 if t > 2.5 => whats.open = true,
+        2 if t > 3.5 => shoot(&mut commands, "news"),
+        3 if t > 4.0 => {
+            whats.open = false;
+            next.set(GameState::Options);
+        }
+        4 if t > 5.5 => shoot(&mut commands, "options"),
+        5 if t > 6.0 => next.set(GameState::Lobby),
+        6 if t > 7.0 => shoot(&mut commands, "lobby"),
+        7 if t > 7.5 => {
             setup.racers[0] = tour.racer;
             next.set(GameState::PickRacer);
         }
-        4 if t > 6.0 => shoot(&mut commands, &format!("racer-{name}")),
-        5 if t > 6.5 => {
+        8 if t > 9.0 => shoot(&mut commands, &format!("racer-{name}")),
+        9 if t > 9.5 => {
             setup.track = tour.track;
-            next.set(GameState::Race);
+            next.set(GameState::PickTrack);
         }
-        6 if t > 9.0 => shoot(&mut commands, &format!("{name}-countdown")),
-        7 if t > 16.0 => shoot(&mut commands, &format!("{name}-racing")),
-        8 if t > 24.0 => {
+        10 if t > 11.0 => shoot(&mut commands, &format!("track-{name}")),
+        11 if t > 11.5 => next.set(GameState::Race),
+        12 if t > 14.0 => shoot(&mut commands, &format!("{name}-countdown")),
+        13 if t > 21.0 => shoot(&mut commands, &format!("{name}-racing")),
+        14 if t > 29.0 => {
             shoot(&mut commands, &format!("{name}-pack"));
             virtual_time.set_relative_speed(4.0);
         }
-        9 if clock.is_some_and(|c| c.phase == Phase::Done) => {
+        15 if clock.is_some_and(|c| c.phase == Phase::Done) => {
             virtual_time.set_relative_speed(1.0);
             tour.clock = 1000.0;
         }
-        10 if t > 1001.0 => shoot(&mut commands, &format!("{name}-results")),
-        11 if t > 1002.5 => {
+        16 if t > 1001.0 => shoot(&mut commands, &format!("{name}-results")),
+        17 if t > 1002.5 => {
             exit.write(AppExit::Success);
         }
         _ => return,

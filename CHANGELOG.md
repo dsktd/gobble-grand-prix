@@ -5,6 +5,8 @@ Add yours under the heading below, at the top.
 
 ## Unreleased
 
+- A minimap in every corner of the race, north up, with crates, hazards and the start line.
+- New menus: no text runs out of its box, and the title shows the version and What's new.
 - Phone controllers work from any network: scan the QR, no shared Wi-Fi needed.
 - Drifting is subtler: wider arcs, no donuts, only above 40% speed.
 - Each phone is its own player with its own seat, colour and HUD badge.

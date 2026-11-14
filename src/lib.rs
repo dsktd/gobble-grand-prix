@@ -10,6 +10,7 @@ mod kart;
 #[cfg(test)]
 mod layout_test;
 mod menu;
+mod minimap;
 mod music;
 mod phone;
 mod prompts;
@@ -32,6 +33,7 @@ pub(crate) mod prelude {
     pub use super::input::prelude::*;
     pub use super::items::prelude::*;
     pub use super::kart::prelude::*;
+    pub use super::menu::prelude::*;
     pub use super::phone::prelude::*;
     pub use super::prompts::prelude::*;
     pub use super::race::prelude::*;
@@ -111,6 +113,7 @@ pub fn plugin(app: &mut App) {
         items::plugin,
         kart::plugin,
         menu::plugin,
+        minimap::plugin,
         music::plugin,
         phone::plugin,
     ));

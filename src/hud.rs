@@ -5,6 +5,7 @@
 
 use bevy::prelude::*;
 
+use crate::minimap;
 use crate::prelude::*;
 
 pub(super) mod prelude {
@@ -202,12 +203,16 @@ fn chip(
 
 fn spawn(
     mut commands: Commands,
+    track: Res<Track>,
     setup: Res<Setup>,
     options: Res<Options>,
     mut images: ResMut<Assets<Image>>,
 ) {
     let scope = DespawnOnExit(GameState::Race);
     let lines = images.add(burst_image());
+    let map = minimap::Map::new(&track);
+    let art = images.add(minimap::art(&track, &map));
+    commands.insert_resource(map);
     let seats = setup.racers.len();
     // One window-sized root: percentages need a sized parent to resolve against
     let hud = commands
@@ -349,6 +354,8 @@ fn spawn(
                     ));
                 });
 
+                minimap::spawn(root, slot, k, &art);
+
                 // Drift meter, bottom left
                 root.spawn((
                     Seat(slot),
@@ -489,7 +496,7 @@ fn spawn(
 
     commands.spawn((
         Board,
-        BackgroundColor(Tone::BROWN_900.with_alpha(0.92)),
+        BackgroundColor(Tone::BROWN_900.with_alpha(0.98)),
         Node {
             position_type: PositionType::Absolute,
             width: percent(100),

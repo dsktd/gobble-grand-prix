@@ -5,7 +5,7 @@ use bevy::prelude::*;
 use crate::prelude::*;
 
 pub(super) mod prelude {
-    //
+    pub use super::Whats;
 }
 
 /// The build's version line, from build.rs.
@@ -271,6 +271,8 @@ fn stage(
     commands: &mut Commands,
     state: GameState,
 ) -> Entity {
+    // Screens without a 3D preview hide the platter behind a solid backdrop
+    let solid = !matches!(state, GameState::Menu | GameState::PickRacer);
     commands
         .spawn((
             Node {
@@ -280,6 +282,7 @@ fn stage(
                 align_items: AlignItems::Center,
                 ..default()
             },
+            BackgroundColor(if solid { Tone::BROWN_900 } else { Color::NONE }),
             DespawnOnExit(state),
         ))
         .id()
@@ -1136,7 +1139,7 @@ fn bind(
     seats: Res<Seats>,
     ready: Res<Ready>,
     mut texts: Query<(&Bind, &mut Fitted)>,
-    mut nodes: Query<(&Bind, &mut Node, &mut Fill), Without<Fitted>>,
+    mut nodes: Query<(&Bind, &mut Node, Option<&mut Fill>), Without<Fitted>>,
 ) {
     let racer = &ROSTER[setup
         .racers
@@ -1184,13 +1187,19 @@ fn bind(
                     }
                     fitted.set(lines.join("\n"));
                 } else {
-                    fitted.set(format!("{} racers", ROSTER.len()));
+                    fitted.set("");
                 }
             }
             _ => {}
         }
     }
-    for (bind, mut node, mut fill) in &mut nodes {
+    for (bind, mut node, fill) in &mut nodes {
+        let Some(mut fill) = fill else {
+            if let Bind::RacerStat(i) = *bind {
+                node.width = px(stat(i));
+            }
+            continue;
+        };
         match *bind {
             Bind::Pip(opt, i) => {
                 let on = opt.level(&options).is_some_and(|level| i < level);
@@ -1215,7 +1224,6 @@ fn bind(
                 };
                 *fill = Fill { idle: c, focus: c };
             }
-            Bind::RacerStat(i) => node.width = px(stat(i)),
             Bind::RacerRow(i) => {
                 // Taken by another seat: cranberry
                 let taken = setup
