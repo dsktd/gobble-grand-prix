@@ -2,12 +2,21 @@
   description = "Gobble Grand Prix: a Thanksgiving kart racer";
 
   inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+  inputs.rust-overlay = {
+    url = "github:oxalica/rust-overlay";
+    inputs.nixpkgs.follows = "nixpkgs";
+  };
 
   outputs =
-    { nixpkgs, ... }:
+    { nixpkgs, rust-overlay, ... }:
     let
       system = "x86_64-linux";
-      pkgs = nixpkgs.legacyPackages.${system};
+      pkgs = import nixpkgs {
+        inherit system;
+        overlays = [ rust-overlay.overlays.default ];
+      };
+      # The pinned toolchain from rust-toolchain.toml, the same one CI installs.
+      toolchain = pkgs.rust-bin.fromRustupToolchainFile ./rust-toolchain.toml;
       runtimeLibs = with pkgs; [
         alsa-lib
         udev
@@ -19,10 +28,7 @@
     {
       devShells.${system}.default = pkgs.mkShell {
         packages = with pkgs; [
-          cargo
-          rustc
-          rustfmt
-          clippy
+          toolchain
           pkg-config
           just
         ];

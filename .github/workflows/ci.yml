@@ -23,9 +23,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          components: rustfmt, clippy
+      - name: Rust toolchain (rust-toolchain.toml)
+        run: rustup toolchain install
       - run: cargo fmt --all --check
       - name: Linux deps
         run: ci/linux-deps.sh
