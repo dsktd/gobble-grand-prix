@@ -36,7 +36,13 @@ impl Cpu {
 fn drive(
     time: Res<Time>,
     track: Res<Track>,
-    karts: Query<(&mut Kart, &mut KartInput, &mut Cpu, &Progress, Has<Finished>)>,
+    karts: Query<(
+        &mut Kart,
+        &mut KartInput,
+        &mut Cpu,
+        &Progress,
+        Has<Finished>,
+    )>,
     players: Query<&Progress, With<Human>>,
 ) {
     let dt = time.delta_secs();

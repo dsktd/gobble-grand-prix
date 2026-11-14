@@ -6,6 +6,7 @@ use crate::prelude::*;
 
 pub(super) mod prelude {
     pub use super::MenuInput;
+    pub use super::menu as menu_input;
 }
 
 pub(super) fn plugin(app: &mut App) {
@@ -43,9 +44,10 @@ pub struct MenuInput {
     pub right: bool,
     pub confirm: bool,
     pub back: bool,
+    pub pause: bool,
 }
 
-fn menu(
+pub fn menu(
     keys: Res<ButtonInput<KeyCode>>,
     gamepads: Query<&Gamepad>,
     mut input: ResMut<MenuInput>,
@@ -59,6 +61,7 @@ fn menu(
         right: any(&[KeyCode::ArrowRight, KeyCode::KeyD]),
         confirm: any(&[KeyCode::Enter, KeyCode::Space]),
         back: any(&[KeyCode::Escape, KeyCode::Backspace]),
+        pause: any(&[KeyCode::KeyP]),
     };
 
     // Stick flicks count once until the stick returns to center
@@ -71,6 +74,7 @@ fn menu(
         next.confirm |= gamepad.just_pressed(GamepadButton::South)
             || gamepad.just_pressed(GamepadButton::Start);
         next.back |= gamepad.just_pressed(GamepadButton::East);
+        next.pause |= gamepad.just_pressed(GamepadButton::Start);
         let s = gamepad.left_stick();
         if s.x.abs() > 0.6 {
             stick.x = s.x.signum() as i32;
@@ -154,8 +158,10 @@ fn drive(
     keys: Res<ButtonInput<KeyCode>>,
     gamepads: Query<(Entity, &Gamepad)>,
     seats: Res<Seats>,
+    mut phones: ResMut<Phones>,
     karts: Query<(&Driver, &mut KartInput)>,
 ) {
+    let phone = phones.take_input();
     for (driver, mut input) in karts {
         let Driver::Local(slot) = driver else {
             continue;
@@ -169,9 +175,15 @@ fn drive(
                 Ok((_, gamepad)) => pad(gamepad),
                 Err(_) => KartInput::default(),
             },
-            Device::Any => gamepads
-                .iter()
-                .fold(keyboard(&keys), |acc, (_, gamepad)| merge(acc, pad(gamepad))),
+            Device::Any => {
+                let local = gamepads.iter().fold(keyboard(&keys), |acc, (_, gamepad)| {
+                    merge(acc, pad(gamepad))
+                });
+                match (&phone, phones.driving) {
+                    (Some(phone), _) => merge(local, phone.clone()),
+                    _ => local,
+                }
+            }
         };
     }
 }

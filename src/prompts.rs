@@ -88,39 +88,105 @@ fn bytes(
     action: Action,
 ) -> &'static [u8] {
     match (family, action) {
-        (Family::Keyboard, Action::Confirm) => include_bytes!("../assets/prompts/keyboard/keyboard_enter.png").as_slice(),
-        (Family::Keyboard, Action::Back) => include_bytes!("../assets/prompts/keyboard/keyboard_escape.png").as_slice(),
-        (Family::Keyboard, Action::Navigate) => include_bytes!("../assets/prompts/keyboard/keyboard_arrows_all.png").as_slice(),
-        (Family::Keyboard, Action::Gas) => include_bytes!("../assets/prompts/keyboard/keyboard_arrow_up.png").as_slice(),
-        (Family::Keyboard, Action::GasButton) => include_bytes!("../assets/prompts/keyboard/keyboard_w.png").as_slice(),
-        (Family::Keyboard, Action::BrakeButton) => include_bytes!("../assets/prompts/keyboard/keyboard_s.png").as_slice(),
-        (Family::Keyboard, Action::Brake) => include_bytes!("../assets/prompts/keyboard/keyboard_arrow_down.png").as_slice(),
-        (Family::Keyboard, Action::Steer) => include_bytes!("../assets/prompts/keyboard/keyboard_arrows_horizontal.png").as_slice(),
-        (Family::Keyboard, Action::Drift) => include_bytes!("../assets/prompts/keyboard/keyboard_space.png").as_slice(),
-        (Family::Keyboard, Action::Item) => include_bytes!("../assets/prompts/keyboard/keyboard_shift.png").as_slice(),
-        (Family::Keyboard, Action::Quit) => include_bytes!("../assets/prompts/keyboard/keyboard_escape.png").as_slice(),
-        (Family::Xbox, Action::Confirm) => include_bytes!("../assets/prompts/xbox/xbox_button_color_a.png").as_slice(),
-        (Family::Xbox, Action::Back) => include_bytes!("../assets/prompts/xbox/xbox_button_color_b.png").as_slice(),
-        (Family::Xbox, Action::Navigate) => include_bytes!("../assets/prompts/xbox/xbox_dpad.png").as_slice(),
-        (Family::Xbox, Action::Gas) => include_bytes!("../assets/prompts/xbox/xbox_rt.png").as_slice(),
-        (Family::Xbox, Action::GasButton) => include_bytes!("../assets/prompts/xbox/xbox_button_color_a.png").as_slice(),
-        (Family::Xbox, Action::BrakeButton) => include_bytes!("../assets/prompts/xbox/xbox_button_color_x.png").as_slice(),
-        (Family::Xbox, Action::Brake) => include_bytes!("../assets/prompts/xbox/xbox_lt.png").as_slice(),
-        (Family::Xbox, Action::Steer) => include_bytes!("../assets/prompts/xbox/xbox_stick_l.png").as_slice(),
-        (Family::Xbox, Action::Drift) => include_bytes!("../assets/prompts/xbox/xbox_rb.png").as_slice(),
-        (Family::Xbox, Action::Item) => include_bytes!("../assets/prompts/xbox/xbox_button_color_b.png").as_slice(),
-        (Family::Xbox, Action::Quit) => include_bytes!("../assets/prompts/xbox/xbox_button_view.png").as_slice(),
-        (Family::Deck, Action::Confirm) => include_bytes!("../assets/prompts/steamdeck/steamdeck_button_a.png").as_slice(),
-        (Family::Deck, Action::Back) => include_bytes!("../assets/prompts/steamdeck/steamdeck_button_b.png").as_slice(),
-        (Family::Deck, Action::Navigate) => include_bytes!("../assets/prompts/steamdeck/steamdeck_dpad.png").as_slice(),
-        (Family::Deck, Action::Gas) => include_bytes!("../assets/prompts/steamdeck/steamdeck_button_r2.png").as_slice(),
-        (Family::Deck, Action::GasButton) => include_bytes!("../assets/prompts/steamdeck/steamdeck_button_a.png").as_slice(),
-        (Family::Deck, Action::BrakeButton) => include_bytes!("../assets/prompts/steamdeck/steamdeck_button_x.png").as_slice(),
-        (Family::Deck, Action::Brake) => include_bytes!("../assets/prompts/steamdeck/steamdeck_button_l2.png").as_slice(),
-        (Family::Deck, Action::Steer) => include_bytes!("../assets/prompts/steamdeck/steamdeck_stick_l.png").as_slice(),
-        (Family::Deck, Action::Drift) => include_bytes!("../assets/prompts/steamdeck/steamdeck_button_r1.png").as_slice(),
-        (Family::Deck, Action::Item) => include_bytes!("../assets/prompts/steamdeck/steamdeck_button_b.png").as_slice(),
-        (Family::Deck, Action::Quit) => include_bytes!("../assets/prompts/steamdeck/steamdeck_button_view.png").as_slice(),
+        (Family::Keyboard, Action::Confirm) => {
+            include_bytes!("../assets/prompts/keyboard/keyboard_enter.png").as_slice()
+        }
+        (Family::Keyboard, Action::Back) => {
+            include_bytes!("../assets/prompts/keyboard/keyboard_escape.png").as_slice()
+        }
+        (Family::Keyboard, Action::Navigate) => {
+            include_bytes!("../assets/prompts/keyboard/keyboard_arrows_all.png").as_slice()
+        }
+        (Family::Keyboard, Action::Gas) => {
+            include_bytes!("../assets/prompts/keyboard/keyboard_arrow_up.png").as_slice()
+        }
+        (Family::Keyboard, Action::GasButton) => {
+            include_bytes!("../assets/prompts/keyboard/keyboard_w.png").as_slice()
+        }
+        (Family::Keyboard, Action::BrakeButton) => {
+            include_bytes!("../assets/prompts/keyboard/keyboard_s.png").as_slice()
+        }
+        (Family::Keyboard, Action::Brake) => {
+            include_bytes!("../assets/prompts/keyboard/keyboard_arrow_down.png").as_slice()
+        }
+        (Family::Keyboard, Action::Steer) => {
+            include_bytes!("../assets/prompts/keyboard/keyboard_arrows_horizontal.png").as_slice()
+        }
+        (Family::Keyboard, Action::Drift) => {
+            include_bytes!("../assets/prompts/keyboard/keyboard_space.png").as_slice()
+        }
+        (Family::Keyboard, Action::Item) => {
+            include_bytes!("../assets/prompts/keyboard/keyboard_shift.png").as_slice()
+        }
+        (Family::Keyboard, Action::Quit) => {
+            include_bytes!("../assets/prompts/keyboard/keyboard_escape.png").as_slice()
+        }
+        (Family::Xbox, Action::Confirm) => {
+            include_bytes!("../assets/prompts/xbox/xbox_button_color_a.png").as_slice()
+        }
+        (Family::Xbox, Action::Back) => {
+            include_bytes!("../assets/prompts/xbox/xbox_button_color_b.png").as_slice()
+        }
+        (Family::Xbox, Action::Navigate) => {
+            include_bytes!("../assets/prompts/xbox/xbox_dpad.png").as_slice()
+        }
+        (Family::Xbox, Action::Gas) => {
+            include_bytes!("../assets/prompts/xbox/xbox_rt.png").as_slice()
+        }
+        (Family::Xbox, Action::GasButton) => {
+            include_bytes!("../assets/prompts/xbox/xbox_button_color_a.png").as_slice()
+        }
+        (Family::Xbox, Action::BrakeButton) => {
+            include_bytes!("../assets/prompts/xbox/xbox_button_color_x.png").as_slice()
+        }
+        (Family::Xbox, Action::Brake) => {
+            include_bytes!("../assets/prompts/xbox/xbox_lt.png").as_slice()
+        }
+        (Family::Xbox, Action::Steer) => {
+            include_bytes!("../assets/prompts/xbox/xbox_stick_l.png").as_slice()
+        }
+        (Family::Xbox, Action::Drift) => {
+            include_bytes!("../assets/prompts/xbox/xbox_rb.png").as_slice()
+        }
+        (Family::Xbox, Action::Item) => {
+            include_bytes!("../assets/prompts/xbox/xbox_button_color_b.png").as_slice()
+        }
+        (Family::Xbox, Action::Quit) => {
+            include_bytes!("../assets/prompts/xbox/xbox_button_view.png").as_slice()
+        }
+        (Family::Deck, Action::Confirm) => {
+            include_bytes!("../assets/prompts/steamdeck/steamdeck_button_a.png").as_slice()
+        }
+        (Family::Deck, Action::Back) => {
+            include_bytes!("../assets/prompts/steamdeck/steamdeck_button_b.png").as_slice()
+        }
+        (Family::Deck, Action::Navigate) => {
+            include_bytes!("../assets/prompts/steamdeck/steamdeck_dpad.png").as_slice()
+        }
+        (Family::Deck, Action::Gas) => {
+            include_bytes!("../assets/prompts/steamdeck/steamdeck_button_r2.png").as_slice()
+        }
+        (Family::Deck, Action::GasButton) => {
+            include_bytes!("../assets/prompts/steamdeck/steamdeck_button_a.png").as_slice()
+        }
+        (Family::Deck, Action::BrakeButton) => {
+            include_bytes!("../assets/prompts/steamdeck/steamdeck_button_x.png").as_slice()
+        }
+        (Family::Deck, Action::Brake) => {
+            include_bytes!("../assets/prompts/steamdeck/steamdeck_button_l2.png").as_slice()
+        }
+        (Family::Deck, Action::Steer) => {
+            include_bytes!("../assets/prompts/steamdeck/steamdeck_stick_l.png").as_slice()
+        }
+        (Family::Deck, Action::Drift) => {
+            include_bytes!("../assets/prompts/steamdeck/steamdeck_button_r1.png").as_slice()
+        }
+        (Family::Deck, Action::Item) => {
+            include_bytes!("../assets/prompts/steamdeck/steamdeck_button_b.png").as_slice()
+        }
+        (Family::Deck, Action::Quit) => {
+            include_bytes!("../assets/prompts/steamdeck/steamdeck_button_view.png").as_slice()
+        }
     }
 }
 

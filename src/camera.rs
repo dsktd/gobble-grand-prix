@@ -12,7 +12,9 @@ pub(super) fn plugin(app: &mut App) {
     app.add_systems(OnEnter(GameState::Race), spawn.after(spawn_track));
     app.add_systems(
         Update,
-        chase.after(KartSet::Physics).run_if(in_state(GameState::Race)),
+        chase
+            .after(KartSet::Physics)
+            .run_if(in_state(GameState::Race)),
     );
 }
 

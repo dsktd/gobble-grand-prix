@@ -6,8 +6,8 @@ use bevy::window::WindowResolution;
 
 fn main() {
     // Steam sets SteamDeck=1 in Game Mode; there the game fills the 1280x800 screen
-    let fullscreen = std::env::var_os("SteamDeck").is_some()
-        || std::env::args().any(|a| a == "--fullscreen");
+    let fullscreen =
+        std::env::var_os("SteamDeck").is_some() || std::env::args().any(|a| a == "--fullscreen");
     let mode = match fullscreen {
         true => WindowMode::BorderlessFullscreen(MonitorSelection::Primary),
         false => WindowMode::Windowed,

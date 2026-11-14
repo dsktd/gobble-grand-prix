@@ -76,18 +76,48 @@ fn spawn(
 
     match track.def().scenery {
         Scenery::Farm => {
-            let post = kit(m, mt, Cuboid::new(0.3, 1.4, 0.3), Color::srgb(0.45, 0.30, 0.18));
-            let rail = kit(m, mt, Cuboid::new(0.15, 0.15, 4.0), Color::srgb(0.55, 0.38, 0.22));
-            let trunk = kit(m, mt, Cylinder::new(0.5, 6.0), Color::srgb(0.35, 0.22, 0.12));
+            let post = kit(
+                m,
+                mt,
+                Cuboid::new(0.3, 1.4, 0.3),
+                Color::srgb(0.45, 0.30, 0.18),
+            );
+            let rail = kit(
+                m,
+                mt,
+                Cuboid::new(0.15, 0.15, 4.0),
+                Color::srgb(0.55, 0.38, 0.22),
+            );
+            let trunk = kit(
+                m,
+                mt,
+                Cylinder::new(0.5, 6.0),
+                Color::srgb(0.35, 0.22, 0.12),
+            );
             let crowns = [
                 kit(m, mt, Sphere::new(3.5), Color::srgb(0.90, 0.45, 0.10)),
                 kit(m, mt, Sphere::new(3.5), Color::srgb(0.80, 0.20, 0.08)),
                 kit(m, mt, Sphere::new(3.5), Color::srgb(0.95, 0.70, 0.15)),
             ];
-            let hay = kit(m, mt, Cylinder::new(1.2, 1.8), Color::srgb(0.88, 0.75, 0.40));
+            let hay = kit(
+                m,
+                mt,
+                Cylinder::new(1.2, 1.8),
+                Color::srgb(0.88, 0.75, 0.40),
+            );
             let pumpkin = kit(m, mt, Sphere::new(0.9), Color::srgb(0.95, 0.50, 0.08));
-            let barn = kit(m, mt, Cuboid::new(16.0, 10.0, 22.0), Color::srgb(0.62, 0.12, 0.08));
-            let roof = kit(m, mt, Cuboid::new(12.5, 0.6, 23.0), Color::srgb(0.25, 0.20, 0.18));
+            let barn = kit(
+                m,
+                mt,
+                Cuboid::new(16.0, 10.0, 22.0),
+                Color::srgb(0.62, 0.12, 0.08),
+            );
+            let roof = kit(
+                m,
+                mt,
+                Cuboid::new(12.5, 0.6, 23.0),
+                Color::srgb(0.25, 0.20, 0.18),
+            );
 
             // Fences both sides
             let mut along = 0.0;
@@ -96,7 +126,11 @@ fn spawn(
                     let p = track.offset(along, side * edge);
                     let (_, dir) = track.sample(along);
                     let yaw = (-dir.x).atan2(-dir.y);
-                    put(&mut commands, &post, Transform::from_translation(flat(p, 0.7)));
+                    put(
+                        &mut commands,
+                        &post,
+                        Transform::from_translation(flat(p, 0.7)),
+                    );
                     put(
                         &mut commands,
                         &rail,
@@ -122,17 +156,27 @@ fn spawn(
                 if !clear(p, &track) {
                     continue;
                 }
-                put(&mut commands, &trunk, Transform::from_translation(flat(p, 3.0)));
+                put(
+                    &mut commands,
+                    &trunk,
+                    Transform::from_translation(flat(p, 3.0)),
+                );
                 put(
                     &mut commands,
                     &crowns[i % 3],
-                    Transform::from_translation(flat(p, 7.5))
-                        .with_scale(Vec3::new(1.0, rng.random_range(0.8..1.2), 1.0)),
+                    Transform::from_translation(flat(p, 7.5)).with_scale(Vec3::new(
+                        1.0,
+                        rng.random_range(0.8..1.2),
+                        1.0,
+                    )),
                 );
             }
             for _ in 0..40 {
                 let along = rng.random_range(0.0..lap);
-                let p = track.offset(along, rng.random_range(edge + 1.5..edge + 6.0) * [1.0, -1.0][rng.random_range(0..2)]);
+                let p = track.offset(
+                    along,
+                    rng.random_range(edge + 1.5..edge + 6.0) * [1.0, -1.0][rng.random_range(0..2)],
+                );
                 if !clear(p, &track) {
                     continue;
                 }
@@ -146,7 +190,8 @@ fn spawn(
                     false => put(
                         &mut commands,
                         &pumpkin,
-                        Transform::from_translation(flat(p, 0.7)).with_scale(Vec3::new(1.2, 0.8, 1.2)),
+                        Transform::from_translation(flat(p, 0.7))
+                            .with_scale(Vec3::new(1.2, 0.8, 1.2)),
                     ),
                 }
             }
@@ -161,11 +206,26 @@ fn spawn(
             }
         }
         Scenery::Table => {
-            let plate = kit(m, mt, Cylinder::new(9.0, 0.4), Color::srgb(0.97, 0.96, 0.92));
+            let plate = kit(
+                m,
+                mt,
+                Cylinder::new(9.0, 0.4),
+                Color::srgb(0.97, 0.96, 0.92),
+            );
             let rim = kit(m, mt, Torus::new(8.0, 9.4), Color::srgb(0.85, 0.70, 0.30));
             let roast = kit(m, mt, Sphere::new(14.0), Color::srgb(0.60, 0.33, 0.12));
-            let drum = kit(m, mt, Capsule3d::new(3.5, 10.0), Color::srgb(0.65, 0.36, 0.14));
-            let candle = kit(m, mt, Cylinder::new(1.0, 12.0), Color::srgb(0.95, 0.92, 0.85));
+            let drum = kit(
+                m,
+                mt,
+                Capsule3d::new(3.5, 10.0),
+                Color::srgb(0.65, 0.36, 0.14),
+            );
+            let candle = kit(
+                m,
+                mt,
+                Cylinder::new(1.0, 12.0),
+                Color::srgb(0.95, 0.92, 0.85),
+            );
             let flame = Kit {
                 mesh: m.add(Sphere::new(0.7)),
                 material: mt.add(StandardMaterial {
@@ -178,22 +238,45 @@ fn spawn(
             let roll = kit(m, mt, Sphere::new(1.8), Color::srgb(0.85, 0.60, 0.30));
 
             // The roast sits in the middle of the table
-            put(&mut commands, &roast, Transform::from_xyz(0.0, 4.0, -18.0).with_scale(Vec3::new(1.3, 0.7, 1.0)));
+            put(
+                &mut commands,
+                &roast,
+                Transform::from_xyz(0.0, 4.0, -18.0).with_scale(Vec3::new(1.3, 0.7, 1.0)),
+            );
             for side in [-1.0f32, 1.0] {
                 put(
                     &mut commands,
                     &drum,
-                    Transform::from_xyz(side * 16.0, 5.0, -10.0)
-                        .with_rotation(Quat::from_rotation_x(1.2) * Quat::from_rotation_z(side * 0.4)),
+                    Transform::from_xyz(side * 16.0, 5.0, -10.0).with_rotation(
+                        Quat::from_rotation_x(1.2) * Quat::from_rotation_z(side * 0.4),
+                    ),
                 );
             }
-            for (x, z) in [(-60.0, -15.0), (60.0, -15.0), (-140.0, 20.0), (140.0, 20.0), (0.0, -90.0), (0.0, 100.0), (-100.0, -80.0), (100.0, -80.0)] {
+            for (x, z) in [
+                (-60.0, -15.0),
+                (60.0, -15.0),
+                (-140.0, 20.0),
+                (140.0, 20.0),
+                (0.0, -90.0),
+                (0.0, 100.0),
+                (-100.0, -80.0),
+                (100.0, -80.0),
+            ] {
                 put(&mut commands, &plate, Transform::from_xyz(x, 0.2, z));
                 put(&mut commands, &rim, Transform::from_xyz(x, 0.35, z));
             }
-            for (x, z) in [(-130.0, -60.0), (130.0, -60.0), (-130.0, 80.0), (130.0, 80.0)] {
+            for (x, z) in [
+                (-130.0, -60.0),
+                (130.0, -60.0),
+                (-130.0, 80.0),
+                (130.0, 80.0),
+            ] {
                 put(&mut commands, &candle, Transform::from_xyz(x, 6.0, z));
-                put(&mut commands, &flame, Transform::from_xyz(x, 12.8, z).with_scale(Vec3::new(1.0, 1.8, 1.0)));
+                put(
+                    &mut commands,
+                    &flame,
+                    Transform::from_xyz(x, 12.8, z).with_scale(Vec3::new(1.0, 1.8, 1.0)),
+                );
             }
             // Peas and rolls spilled along the runner
             let mut along = 0.0;
@@ -201,19 +284,48 @@ fn spawn(
                 for side in [-1.0, 1.0] {
                     let p = track.offset(along, side * edge);
                     match (along as i32 / 6) % 4 {
-                        0 => put(&mut commands, &roll, Transform::from_translation(flat(p, 1.2)).with_scale(Vec3::new(1.0, 0.7, 1.4))),
-                        _ => put(&mut commands, &pea, Transform::from_translation(flat(p, 0.8))),
+                        0 => put(
+                            &mut commands,
+                            &roll,
+                            Transform::from_translation(flat(p, 1.2))
+                                .with_scale(Vec3::new(1.0, 0.7, 1.4)),
+                        ),
+                        _ => put(
+                            &mut commands,
+                            &pea,
+                            Transform::from_translation(flat(p, 0.8)),
+                        ),
                     }
                 }
                 along += 6.0;
             }
         }
         Scenery::Maze => {
-            let stalk = kit(m, mt, Cylinder::new(0.18, 5.5), Color::srgb(0.55, 0.60, 0.20));
-            let cob = kit(m, mt, Capsule3d::new(0.25, 0.7), Color::srgb(0.95, 0.80, 0.25));
+            let stalk = kit(
+                m,
+                mt,
+                Cylinder::new(0.18, 5.5),
+                Color::srgb(0.55, 0.60, 0.20),
+            );
+            let cob = kit(
+                m,
+                mt,
+                Capsule3d::new(0.25, 0.7),
+                Color::srgb(0.95, 0.80, 0.25),
+            );
             let tassel = kit(m, mt, Cone::new(0.5, 1.2), Color::srgb(0.85, 0.70, 0.35));
-            let pole = kit(m, mt, Cylinder::new(0.2, 6.0), Color::srgb(0.40, 0.28, 0.15));
-            let shirt = kit(m, mt, Cuboid::new(2.8, 1.8, 0.6), Color::srgb(0.65, 0.25, 0.20));
+            let pole = kit(
+                m,
+                mt,
+                Cylinder::new(0.2, 6.0),
+                Color::srgb(0.40, 0.28, 0.15),
+            );
+            let shirt = kit(
+                m,
+                mt,
+                Cuboid::new(2.8, 1.8, 0.6),
+                Color::srgb(0.65, 0.25, 0.20),
+            );
             let head = kit(m, mt, Sphere::new(0.7), Color::srgb(0.90, 0.75, 0.45));
             let hat = kit(m, mt, Cone::new(1.1, 1.0), Color::srgb(0.55, 0.40, 0.20));
 
@@ -235,9 +347,14 @@ fn spawn(
                         put(
                             &mut commands,
                             &stalk,
-                            Transform::from_translation(flat(p, 2.75 * h)).with_scale(Vec3::new(1.0, h, 1.0)),
+                            Transform::from_translation(flat(p, 2.75 * h))
+                                .with_scale(Vec3::new(1.0, h, 1.0)),
                         );
-                        put(&mut commands, &tassel, Transform::from_translation(flat(p, 5.5 * h + 0.4)));
+                        put(
+                            &mut commands,
+                            &tassel,
+                            Transform::from_translation(flat(p, 5.5 * h + 0.4)),
+                        );
                         if rng.random_bool(0.3) {
                             put(
                                 &mut commands,
@@ -253,10 +370,26 @@ fn spawn(
             // Scarecrows keep watch
             for frac in [0.1, 0.35, 0.6, 0.85] {
                 let p = track.offset(lap * frac, -(hw + 3.5));
-                put(&mut commands, &pole, Transform::from_translation(flat(p, 3.0)));
-                put(&mut commands, &shirt, Transform::from_translation(flat(p, 4.0)));
-                put(&mut commands, &head, Transform::from_translation(flat(p, 5.6)));
-                put(&mut commands, &hat, Transform::from_translation(flat(p, 6.5)));
+                put(
+                    &mut commands,
+                    &pole,
+                    Transform::from_translation(flat(p, 3.0)),
+                );
+                put(
+                    &mut commands,
+                    &shirt,
+                    Transform::from_translation(flat(p, 4.0)),
+                );
+                put(
+                    &mut commands,
+                    &head,
+                    Transform::from_translation(flat(p, 5.6)),
+                );
+                put(
+                    &mut commands,
+                    &hat,
+                    Transform::from_translation(flat(p, 6.5)),
+                );
             }
         }
     }
@@ -287,12 +420,24 @@ fn spawn(
     for i in 0..count {
         commands.spawn((
             Leaf {
-                vel: Vec3::new(rng.random_range(-1.0..1.0), -rng.random_range(1.0..2.5), rng.random_range(-1.0..1.0)),
-                spin: Vec3::new(rng.random_range(-3.0..3.0), rng.random_range(-3.0..3.0), 0.0),
+                vel: Vec3::new(
+                    rng.random_range(-1.0..1.0),
+                    -rng.random_range(1.0..2.5),
+                    rng.random_range(-1.0..1.0),
+                ),
+                spin: Vec3::new(
+                    rng.random_range(-3.0..3.0),
+                    rng.random_range(-3.0..3.0),
+                    0.0,
+                ),
             },
             Mesh3d(leaf_mesh.clone()),
             MeshMaterial3d(leaf_mats[i % leaf_mats.len()].clone()),
-            Transform::from_xyz(rng.random_range(-40.0..40.0), rng.random_range(0.0..25.0), rng.random_range(-40.0..40.0)),
+            Transform::from_xyz(
+                rng.random_range(-40.0..40.0),
+                rng.random_range(0.0..25.0),
+                rng.random_range(-40.0..40.0),
+            ),
             DespawnOnExit(GameState::Race),
         ));
     }
@@ -311,7 +456,11 @@ fn fall(
     let t = time.elapsed_secs();
     let center = camera.translation;
     for (leaf, mut transform) in leaves {
-        let sway = Vec3::new((t * 1.3 + transform.translation.y).sin(), 0.0, (t * 0.9).cos()) * 0.8;
+        let sway = Vec3::new(
+            (t * 1.3 + transform.translation.y).sin(),
+            0.0,
+            (t * 0.9).cos(),
+        ) * 0.8;
         transform.translation += (leaf.vel + sway) * dt;
         transform.rotate_local_x(leaf.spin.x * dt);
         transform.rotate_local_y(leaf.spin.y * dt);

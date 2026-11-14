@@ -26,6 +26,7 @@ pub(super) fn plugin(app: &mut App) {
             .chain()
             .run_if(in_state(InMenus)),
     );
+    app.add_systems(Update, invite.run_if(in_state(GameState::Menu)));
 }
 
 /// Every screen but the race itself.
@@ -61,7 +62,11 @@ const CONTROLS: [(Action, Option<Action>, &str); 6] = [
     (Action::Gas, Some(Action::GasButton), "Gas"),
     (Action::Brake, Some(Action::BrakeButton), "Brake"),
     (Action::Steer, None, "Steer"),
-    (Action::Drift, None, "Drift (hold, then release for a turbo)"),
+    (
+        Action::Drift,
+        None,
+        "Drift (hold, then release for a turbo)",
+    ),
     (Action::Item, None, "Use item"),
     (Action::Quit, None, "Quit race"),
 ];
@@ -253,6 +258,65 @@ fn screen(
         });
 }
 
+/// Marks the phone invite so it is spawned once per visit to the title menu.
+#[derive(Component, Copy, Clone, Debug)]
+struct Invite;
+
+/// The phone controller QR, bottom left of the title menu, once the server is up.
+fn invite(
+    mut commands: Commands,
+    join: Option<Res<JoinInfo>>,
+    shown: Query<(), With<Invite>>,
+) {
+    let Some(join) = join else {
+        return;
+    };
+    if !shown.is_empty() {
+        return;
+    }
+    let state = GameState::Menu;
+    // Phone controller invite, bottom left
+    commands
+        .spawn((
+            Node {
+                position_type: PositionType::Absolute,
+                left: px(Size::PAD * 1.5),
+                bottom: px(Size::PAD * 1.5),
+                column_gap: px(Size::GAP * 1.5),
+                align_items: AlignItems::Center,
+                ..default()
+            },
+            Invite,
+            DespawnOnExit(state),
+        ))
+        .with_children(|invite| {
+            invite.spawn((
+                ImageNode::new(join.qr.clone()),
+                Node {
+                    width: px(150),
+                    height: px(150),
+                    ..default()
+                },
+            ));
+            invite
+                .spawn(Node {
+                    flex_direction: FlexDirection::Column,
+                    row_gap: px(4),
+                    ..default()
+                })
+                .with_children(|text| {
+                    text.spawn(label("Phone controller", Size::BODY, Tone::GOLD));
+                    text.spawn(label(format!("PIN {}", join.pin), Size::BODY, Tone::CREAM));
+                    text.spawn(label(join.url.clone(), Size::SMALL, Tone::DIM));
+                    text.spawn(label(
+                        "Accept the certificate warning once",
+                        Size::SMALL,
+                        Tone::DIM,
+                    ));
+                });
+        });
+}
+
 fn navigate(
     input: Res<MenuInput>,
     state: Res<State<GameState>>,
@@ -394,6 +458,7 @@ fn spin(
     previews: Query<&mut Transform, Or<(With<Preview>, With<Platter>)>>,
 ) {
     for mut transform in previews {
-        transform.rotation = Quat::from_rotation_y(time.elapsed_secs() * 0.8);
+        // Swing to and fro so the racer's face stays in view
+        transform.rotation = Quat::from_rotation_y((time.elapsed_secs() * 0.7).sin() * 1.0 - 0.3);
     }
 }

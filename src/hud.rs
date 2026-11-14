@@ -12,7 +12,7 @@ pub(super) fn plugin(app: &mut App) {
     app.add_systems(OnEnter(GameState::Race), spawn);
     app.add_systems(
         Update,
-        (stats, banner, results)
+        (stats, banner, results, burst)
             .after(KartSet::Race)
             .run_if(in_state(GameState::Race)),
     );
@@ -33,6 +33,48 @@ struct Seat(usize);
 
 #[derive(Component, Copy, Clone, Debug)]
 struct Banner;
+
+/// Manga speed-line burst over a seat's view, fading over [`Burst::TIME`].
+#[derive(Component, Copy, Clone, Debug)]
+struct Burst {
+    slot: usize,
+    left: f32,
+}
+impl Burst {
+    const TIME: f32 = 0.4;
+}
+
+/// Black radial speed lines around a clear centre, made once.
+fn burst_image() -> Image {
+    let (w, h) = (640u32, 400u32);
+    let mut data = vec![0u8; (w * h * 4) as usize];
+    for y in 0..h {
+        for x in 0..w {
+            let dx = (x as f32 - w as f32 / 2.0) / (w as f32 / 2.0);
+            let dy = (y as f32 - h as f32 / 2.0) / (h as f32 / 2.0);
+            let r = (dx * dx + dy * dy).sqrt();
+            let a = dy.atan2(dx);
+            // Uneven spikes: several sine bands multiplied
+            let spikes = ((a * 37.0).sin() * (a * 23.0 + 1.3).sin() * (a * 11.0 + 0.7).sin()).abs();
+            let line = spikes > 0.35 && r > 0.45 + (1.0 - spikes) * 0.3;
+            if line {
+                let at = ((y * w + x) * 4) as usize;
+                data[at + 3] = (((r - 0.45) * 3.0).clamp(0.0, 1.0) * 255.0) as u8;
+            }
+        }
+    }
+    Image::new(
+        bevy::render::render_resource::Extent3d {
+            width: w,
+            height: h,
+            depth_or_array_layers: 1,
+        },
+        bevy::render::render_resource::TextureDimension::D2,
+        data,
+        bevy::render::render_resource::TextureFormat::Rgba8UnormSrgb,
+        bevy::asset::RenderAssetUsages::RENDER_WORLD,
+    )
+}
 
 #[derive(Component, Copy, Clone, Debug)]
 struct Board;
@@ -55,8 +97,24 @@ fn clock_text(t: f32) -> String {
 fn spawn(
     mut commands: Commands,
     setup: Res<Setup>,
+    mut images: ResMut<Assets<Image>>,
 ) {
     let scope = DespawnOnExit(GameState::Race);
+    let lines = images.add(burst_image());
+    for slot in 0..setup.racers.len() {
+        commands.spawn((
+            Burst { slot, left: 0.0 },
+            ImageNode::new(lines.clone()),
+            Node {
+                width: percent(100),
+                height: percent(100),
+                position_type: PositionType::Absolute,
+                ..default()
+            },
+            Visibility::Hidden,
+            scope.clone(),
+        ));
+    }
     // One HUD per seat. With split screen these get their viewport's rect.
     for slot in 0..setup.racers.len() {
         commands
@@ -87,7 +145,11 @@ fn spawn(
                         left.spawn((Seat(slot), Readout::Lap, label("", Size::HUD, Tone::CREAM)));
                         left.spawn((Seat(slot), Readout::Time, label("", Size::HUD, Tone::CREAM)));
                     });
-                    top.spawn((Seat(slot), Readout::Place, label("", Size::PLACE, Tone::GOLD)));
+                    top.spawn((
+                        Seat(slot),
+                        Readout::Place,
+                        label("", Size::PLACE, Tone::GOLD),
+                    ));
                 });
                 root.spawn(Node {
                     align_items: AlignItems::Center,
@@ -96,15 +158,20 @@ fn spawn(
                 })
                 .with_children(|bottom| {
                     bottom.spawn(prompt(Action::Drift, "Drift"));
-                    bottom.spawn(Node {
-                        align_items: AlignItems::Center,
-                        column_gap: px(6),
-                        ..default()
-                    })
-                    .with_children(|item| {
-                        item.spawn(prompt(Action::Item, ""));
-                        item.spawn((Seat(slot), Readout::Item, label("", Size::BODY, Tone::GOLD)));
-                    });
+                    bottom
+                        .spawn(Node {
+                            align_items: AlignItems::Center,
+                            column_gap: px(6),
+                            ..default()
+                        })
+                        .with_children(|item| {
+                            item.spawn(prompt(Action::Item, ""));
+                            item.spawn((
+                                Seat(slot),
+                                Readout::Item,
+                                label("", Size::BODY, Tone::GOLD),
+                            ));
+                        });
                 });
             });
     }
@@ -177,11 +244,13 @@ fn stats(
 
 fn banner(
     clock: Res<RaceClock>,
+    time: Res<Time<Virtual>>,
     humans: Query<Option<&Finished>, With<Human>>,
     banners: Query<&mut Text, With<Banner>>,
 ) {
     let finished = humans.iter().any(|f| f.is_some());
     let shown = match clock.phase {
+        _ if time.is_paused() => "PAUSED".to_string(),
         Phase::Countdown if clock.countdown <= 3.0 => format!("{}", clock.countdown.ceil() as u32),
         Phase::Countdown => String::new(),
         Phase::Running if clock.time < 1.2 => "GOBBLE!".to_string(),
@@ -217,34 +286,66 @@ fn results(
 
     let mut rows: Vec<_> = karts.iter().collect();
     rows.sort_by_key(|(_, progress, _, _)| progress.place);
-    commands.entity(board_id).despawn_children().with_children(|board| {
-        board.spawn(label("Results", Size::HEADING, Tone::GOLD));
-        for (kart, progress, finished, human) in rows {
-            let time = match finished {
-                Some(f) => clock_text(f.time),
-                None => "--:--.--".to_string(),
-            };
-            let color = match human {
-                true => Tone::GOLD,
-                false => Tone::CREAM,
-            };
-            board
-                .spawn(Node {
-                    column_gap: px(Size::PAD),
-                    ..default()
-                })
-                .with_children(|row| {
-                    let cell = |width: f32| Node {
-                        width: px(width),
+    commands
+        .entity(board_id)
+        .despawn_children()
+        .with_children(|board| {
+            board.spawn(label("Results", Size::HEADING, Tone::GOLD));
+            for (kart, progress, finished, human) in rows {
+                let time = match finished {
+                    Some(f) => clock_text(f.time),
+                    None => "--:--.--".to_string(),
+                };
+                let color = match human {
+                    true => Tone::GOLD,
+                    false => Tone::CREAM,
+                };
+                board
+                    .spawn(Node {
+                        column_gap: px(Size::PAD),
                         ..default()
-                    };
-                    row.spawn(cell(60.0))
-                        .with_child(label(ordinal(progress.place), Size::BODY, color));
-                    row.spawn(cell(240.0))
-                        .with_child(label(ROSTER[kart.racer].name, Size::BODY, color));
-                    row.spawn(cell(130.0)).with_child(label(time, Size::BODY, color));
-                });
+                    })
+                    .with_children(|row| {
+                        let cell = |width: f32| Node {
+                            width: px(width),
+                            ..default()
+                        };
+                        row.spawn(cell(60.0)).with_child(label(
+                            ordinal(progress.place),
+                            Size::BODY,
+                            color,
+                        ));
+                        row.spawn(cell(240.0)).with_child(label(
+                            ROSTER[kart.racer].name,
+                            Size::BODY,
+                            color,
+                        ));
+                        row.spawn(cell(130.0))
+                            .with_child(label(time, Size::BODY, color));
+                    });
+            }
+            board.spawn(prompt(Action::Confirm, "Back to menu"));
+        });
+}
+
+/// Flash the speed lines when a crying racer gets a turbo or a hit.
+fn burst(
+    time: Res<Time>,
+    karts: Query<(&Kart, &Human)>,
+    bursts: Query<(&mut Burst, &mut Visibility, &mut ImageNode)>,
+) {
+    for (mut burst, mut visibility, mut image) in bursts {
+        let Some((kart, _)) = karts.iter().find(|(_, human)| human.0 == burst.slot) else {
+            continue;
+        };
+        if ROSTER[kart.racer].body == Body::Cat && (kart.fired > 0 || kart.struck) {
+            burst.left = Burst::TIME;
         }
-        board.spawn(prompt(Action::Confirm, "Back to menu"));
-    });
+        burst.left = (burst.left - time.delta_secs()).max(0.0);
+        *visibility = match burst.left > 0.0 {
+            true => Visibility::Inherited,
+            false => Visibility::Hidden,
+        };
+        image.color = Color::WHITE.with_alpha(burst.left / Burst::TIME);
+    }
 }

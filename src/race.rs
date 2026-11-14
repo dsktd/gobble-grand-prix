@@ -24,6 +24,11 @@ pub(super) fn plugin(app: &mut App) {
             .chain()
             .in_set(KartSet::Race),
     );
+    app.add_systems(Update, pause.run_if(in_state(GameState::Race)));
+    app.add_systems(
+        OnExit(GameState::Race),
+        |mut time: ResMut<Time<Virtual>>| time.unpause(),
+    );
 }
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
@@ -243,9 +248,7 @@ fn finish(
         });
         if human {
             // Hand the wheel to the CPU for a victory lap
-            commands
-                .entity(id)
-                .insert((Driver::Cpu, Cpu::new(0.8)));
+            commands.entity(id).insert((Driver::Cpu, Cpu::new(0.8)));
             sfx.write(Sfx::Fanfare);
         }
     }
@@ -271,5 +274,19 @@ fn leave(
     let done = clock.phase == Phase::Done && menu.confirm;
     if quit || done {
         next.set(GameState::Menu);
+    }
+}
+
+/// Start, P, or the phone's pause button freeze the race.
+fn pause(
+    menu: Res<MenuInput>,
+    mut time: ResMut<Time<Virtual>>,
+) {
+    if !menu.pause {
+        return;
+    }
+    match time.is_paused() {
+        true => time.unpause(),
+        false => time.pause(),
     }
 }

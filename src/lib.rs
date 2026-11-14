@@ -8,9 +8,10 @@ mod input;
 mod items;
 mod kart;
 mod menu;
+mod phone;
+mod prompts;
 mod race;
 mod roster;
-mod prompts;
 mod scenery;
 mod shots;
 mod style;
@@ -28,6 +29,7 @@ pub(crate) mod prelude {
     pub use super::input::prelude::*;
     pub use super::items::prelude::*;
     pub use super::kart::prelude::*;
+    pub use super::phone::prelude::*;
     pub use super::prompts::prelude::*;
     pub use super::race::prelude::*;
     pub use super::roster::prelude::*;
@@ -92,6 +94,9 @@ pub fn plugin(app: &mut App) {
         items::plugin,
         kart::plugin,
         menu::plugin,
+        phone::plugin,
+    ));
+    app.add_plugins((
         race::plugin,
         roster::plugin,
         scenery::plugin,
