@@ -41,3 +41,13 @@ Public domain, see UNLICENSE.
 `just deck-build` makes the Deck binary. `deck/art.sh` turns the screenshot tour into library art, and
 `deck/shortcut.py` (run on the Deck as `deck`, with Steam stopped) adds the "Gobble Grand Prix" non-Steam shortcut
 with that art. On the Deck the game runs borderless fullscreen at 1280x800.
+
+## Music
+
+The game plays its own synthesised harvest-fair soundtrack (menu loop, race loop, faster final lap). To use your
+own music, put files in `~/.local/share/gobble-gp/music/` (`$XDG_DATA_HOME/gobble-gp/music/`):
+
+- `menu.ogg` / `menu.mp3` / `menu.flac` plays on the menus, `race.*` during races;
+- with neither name present, every other file there becomes the race playlist.
+
+Options has a separate Music volume. Nothing from that folder is ever part of the game.

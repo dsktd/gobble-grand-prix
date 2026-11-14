@@ -90,6 +90,7 @@ fn rows(
         GameState::Menu => vec!["Start Race".into(), "Options".into(), "Exit".into()],
         GameState::Options => vec![
             format!("Volume   <  {}  >", options.volume),
+            format!("Music   <  {}  >", options.music),
             format!(
                 "Quality  <  {}  >",
                 match options.high_quality {
@@ -133,7 +134,7 @@ fn rows(
 fn selectable(state: GameState) -> usize {
     match state {
         GameState::Menu => 3,
-        GameState::Options => 5,
+        GameState::Options => 6,
         _ => 1,
     }
 }
@@ -368,14 +369,17 @@ fn navigate(
                 0 if step != 0 => {
                     options.volume = (options.volume as i32 + step).clamp(0, 10) as u8;
                 }
-                1 if step != 0 => options.high_quality = !options.high_quality,
-                2 if step != 0 => {
+                1 if step != 0 => {
+                    options.music = (options.music as i32 + step).clamp(0, 10) as u8;
+                }
+                2 if step != 0 => options.high_quality = !options.high_quality,
+                3 if step != 0 => {
                     options.smoothing = (options.smoothing as i32 + step).clamp(0, 10) as u8;
                 }
-                3 if step != 0 => options.shake = !options.shake,
+                4 if step != 0 => options.shake = !options.shake,
                 _ => {}
             }
-            if input.back || (input.confirm && cursor.0 == 4) {
+            if input.back || (input.confirm && cursor.0 == 5) {
                 next.set(GameState::Menu);
             }
         }

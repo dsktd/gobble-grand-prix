@@ -7,10 +7,12 @@ use bevy::prelude::*;
 use crate::prelude::*;
 
 pub(super) mod prelude {
+    pub use super::RATE;
     pub use super::Sfx;
+    pub use super::wav;
 }
 
-const RATE: u32 = 22050;
+pub const RATE: u32 = 22050;
 
 pub(super) fn plugin(app: &mut App) {
     app.add_message::<Sfx>();
@@ -46,7 +48,7 @@ struct Sounds {
 struct Engine;
 
 /// Encode mono samples in -1..1 as a 16 bit WAV file.
-fn wav(samples: &[f32]) -> Vec<u8> {
+pub fn wav(samples: &[f32]) -> Vec<u8> {
     let data = (samples.len() * 2) as u32;
     let mut out = Vec::with_capacity(44 + data as usize);
     out.extend(b"RIFF");

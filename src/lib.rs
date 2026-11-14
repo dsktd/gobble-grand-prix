@@ -8,6 +8,7 @@ mod input;
 mod items;
 mod kart;
 mod menu;
+mod music;
 mod phone;
 mod prompts;
 mod race;
@@ -75,6 +76,8 @@ pub struct Options {
     pub smoothing: u8,
     /// Small camera shake on hits. Off by default for motion comfort.
     pub shake: bool,
+    /// Music volume, 0 to 10, on top of the main volume.
+    pub music: u8,
 }
 impl Default for Options {
     fn default() -> Self {
@@ -83,6 +86,7 @@ impl Default for Options {
             high_quality: true,
             smoothing: 5,
             shake: false,
+            music: 6,
         }
     }
 }
@@ -100,6 +104,7 @@ pub fn plugin(app: &mut App) {
         items::plugin,
         kart::plugin,
         menu::plugin,
+        music::plugin,
         phone::plugin,
     ));
     app.add_plugins((
