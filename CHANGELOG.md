@@ -4,6 +4,7 @@ Newest first. One short line per change a player can see; the title screen shows
 Add yours under the heading below, at the top.
 
 ## Unreleased
+- Two-player split screen can be cut diagonally, corner to corner (Options, "2 players").
 
 - The menus play a live CPU race behind them, filmed with TV-style camera cuts.
 - Racer select: every player picks with up and down on their own cursor, A locks in, B unlocks; phones tap a racer on their screen.

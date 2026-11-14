@@ -29,6 +29,7 @@ pub(crate) mod prelude {
     pub use super::GameState;
     pub use super::Options;
     pub use super::Setup;
+    pub use super::Split;
     pub use super::attract::prelude::*;
     pub use super::audio::prelude::*;
     pub use super::camera::prelude::*;
@@ -88,8 +89,30 @@ pub struct Options {
     pub shake: bool,
     /// Music volume, 0 to 10, on top of the main volume.
     pub music: u8,
-    /// Two players side by side instead of top and bottom.
-    pub side_by_side: bool,
+    /// How two players share the screen.
+    pub split: Split,
+}
+
+/// How two seats share the window. Three and four seats always use the 2x2 grid.
+#[derive(Copy, Clone, Debug, Default, Eq, PartialEq)]
+pub enum Split {
+    #[default]
+    TopBottom,
+    SideBySide,
+    /// Cut corner to corner, top left to bottom right: P1 top right, P2 bottom left.
+    Diagonal,
+}
+impl Split {
+    /// The next mode, wrapping, in `step` direction.
+    #[must_use]
+    pub fn cycle(
+        self,
+        step: i32,
+    ) -> Self {
+        const ALL: [Split; 3] = [Split::TopBottom, Split::SideBySide, Split::Diagonal];
+        let at = ALL.iter().position(|s| *s == self).unwrap_or(0) as i32;
+        ALL[(at + step).rem_euclid(3) as usize]
+    }
 }
 impl Default for Options {
     fn default() -> Self {
@@ -99,7 +122,7 @@ impl Default for Options {
             smoothing: 5,
             shake: false,
             music: 6,
-            side_by_side: false,
+            split: Split::TopBottom,
         }
     }
 }

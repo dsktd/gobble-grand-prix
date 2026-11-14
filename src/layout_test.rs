@@ -21,7 +21,7 @@ const SIZES: [(u32, u32); 3] = [(1280, 800), (1920, 1080), (800, 600)];
 
 fn app(
     size: (u32, u32),
-    side_by_side: bool,
+    split: Split,
 ) -> App {
     let mut app = App::new();
     app.add_plugins(
@@ -48,10 +48,7 @@ fn app(
     app.add_message::<Sfx>();
     app.init_state::<GameState>();
     app.init_resource::<Setup>();
-    app.insert_resource(Options {
-        side_by_side,
-        ..default()
-    });
+    app.insert_resource(Options { split, ..default() });
     app.init_resource::<Phones>();
     app.init_resource::<SeatNames>();
     app.insert_resource(RaceClock {
@@ -159,6 +156,46 @@ fn check(
     problems
 }
 
+/// Diagonal split: every HUD text must sit wholly on one side of the corner-to-corner line,
+/// so no chip or minimap label is cut by the divider. The one race-wide banner (countdown, track
+/// name) spans both views in every split and is left out.
+fn inside_triangles(
+    app: &mut App,
+    size: (u32, u32),
+) -> Vec<String> {
+    let (w, h) = (size.0 as f32, size.1 as f32);
+    // Signed distance to the top-left to bottom-right line, in pixels
+    let side = |p: Vec2| (p.y * w - p.x * h) / w.hypot(h);
+    let world = app.world_mut();
+    let mut texts = world
+        .query_filtered::<(&Text, &ComputedNode, &UiGlobalTransform), Without<crate::hud::Banner>>(
+        );
+    let mut problems = Vec::new();
+    for (text, node, at) in texts.iter(world) {
+        if text.0.is_empty() {
+            continue;
+        }
+        let r = rect(node, at);
+        let d = [
+            r.min,
+            r.max,
+            Vec2::new(r.min.x, r.max.y),
+            Vec2::new(r.max.x, r.min.y),
+        ]
+        .map(side);
+        let (lo, hi) = d
+            .iter()
+            .fold((f32::MAX, f32::MIN), |(lo, hi), v| (lo.min(*v), hi.max(*v)));
+        if lo < -1.5 && hi > 1.5 {
+            problems.push(format!(
+                "{}x{} diagonal: {:?} {r:?} crosses the divider",
+                size.0, size.1, text.0
+            ));
+        }
+    }
+    problems
+}
+
 fn go(
     app: &mut App,
     state: GameState,
@@ -176,7 +213,7 @@ fn no_text_overflows() {
         STRESS.store(stress, Ordering::Relaxed);
         for size in SIZES {
             let tag = |screen: &str| format!("{}x{} stress={stress} {screen}", size.0, size.1);
-            let mut app = app(size, false);
+            let mut app = app(size, Split::TopBottom);
             app.insert_resource(JoinInfo {
                 url: "https://192-168-100-200.example-very-long-host-name.local:7777/join".into(),
                 pin: "123456".into(),
@@ -206,18 +243,21 @@ fn no_text_overflows() {
             app.world_mut().resource_mut::<Setup>().racers = vec![0];
 
             for seats in 1..=4 {
-                for side in [false, true] {
-                    if seats != 2 && side {
+                for split in [Split::TopBottom, Split::SideBySide, Split::Diagonal] {
+                    if seats != 2 && split != Split::TopBottom {
                         continue;
                     }
-                    let mut app = app_with(size, side);
+                    let mut app = self::app(size, split);
                     app.world_mut().resource_mut::<Setup>().racers = (0..seats).collect();
                     go(&mut app, GameState::Race);
                     problems.extend(check(
                         &mut app,
-                        &tag(&format!("hud x{seats} side={side}")),
+                        &tag(&format!("hud x{seats} {split:?}")),
                         size,
                     ));
+                    if seats == 2 && split == Split::Diagonal {
+                        problems.extend(inside_triangles(&mut app, size));
+                    }
                     if seats == 4 {
                         results(&mut app);
                         frames(&mut app, 4);
@@ -233,13 +273,6 @@ fn no_text_overflows() {
         problems.len(),
         problems.join("\n")
     );
-}
-
-fn app_with(
-    size: (u32, u32),
-    side: bool,
-) -> App {
-    app(size, side)
 }
 
 fn results(app: &mut App) {

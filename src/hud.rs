@@ -41,7 +41,7 @@ enum Part {
 struct Seat(usize);
 
 #[derive(Component, Copy, Clone, Debug)]
-struct Banner;
+pub(crate) struct Banner;
 
 #[derive(Component, Copy, Clone, Debug)]
 struct Standings(usize);
@@ -227,7 +227,7 @@ fn spawn(
         ))
         .id();
     for slot in 0..seats {
-        let rect = seat_rect(slot, seats, options.side_by_side);
+        let rect = hud_rect(slot, seats, options.split);
         // Chips shrink with the viewport, but never below a readable size
         let k = rect.width().min(rect.height()).max(0.6);
         commands
