@@ -36,6 +36,10 @@
 <div id="cover">
   <h1>Gobble Grand Prix</h1>
   <div id="status">Tap to connect. Turn your phone sideways.</div>
+  <label style="flex-direction:column;gap:6px">Your name
+    <input id="name" maxlength="12" autocomplete="nickname"
+      style="font:inherit;font-size:22px;padding:8px 12px;border-radius:12px;border:2px solid #ffd25a;background:#2A170E;color:#faeed2;text-align:center;width:12em">
+  </label>
   <button id="go" style="font-size:24px;padding:14px 30px">Tap to start</button>
 </div>
 <div id="full" style="display:none;position:fixed;inset:0;z-index:3;background:#2A170E;align-items:center;justify-content:center;flex-direction:column;gap:12px;text-align:center">
@@ -75,6 +79,13 @@ const $ = (id) => document.getElementById(id);
 const hash = new URLSearchParams(location.hash.slice(1));
 const game = hash.get("g");
 const pin = hash.get("pin") || new URLSearchParams(location.search).get("pin") || prompt("Room PIN") || "";
+// The player's name, asked once and remembered
+$("name").value = localStorage.getItem("gobble-name") || "";
+const playerName = () => {
+  const name = $("name").value.trim().slice(0, 12);
+  localStorage.setItem("gobble-name", name);
+  return name;
+};
 // A stable id for this phone, so a reload gets the same seat back
 let token = localStorage.getItem("gobble-token");
 if (!token) {
@@ -98,7 +109,7 @@ async function connect() {
       const pad = await import("./pkg/gobble_pad.js");
       await pad.default();
       const link = await pad.connect(game, (line) => receive(line), closed);
-      link.send(JSON.stringify({ t: "join", pin, token }));
+      link.send(JSON.stringify({ t: "join", pin, token, name: playerName() }));
       ws = { readyState: 1, send: (text) => link.send(text) };
       $("cover").style.display = "none";
     } catch (e) {
@@ -106,7 +117,7 @@ async function connect() {
     }
     return;
   }
-  ws = new WebSocket(`wss://${location.host}/ws?pin=${encodeURIComponent(pin)}&token=${token}`);
+  ws = new WebSocket(`wss://${location.host}/ws?pin=${encodeURIComponent(pin)}&token=${token}&name=${encodeURIComponent(playerName())}`);
   ws.onopen = () => { $("cover").style.display = "none"; };
   ws.onclose = closed;
   ws.onmessage = (event) => receive(event.data);
@@ -119,7 +130,7 @@ function receive(text) {
     if (msg.t === "buzz" && navigator.vibrate) navigator.vibrate(msg.ms);
     if (msg.t === "ack") $("ping").textContent = `${Math.round(performance.now() - msg.ms)} ms`;
     if (msg.t === "seat") {
-      $("seat").textContent = msg.p ? `P${msg.p}` : "no seat: press A to join";
+      $("seat").textContent = msg.p ? `P${msg.p} ${msg.name || ""}` : "no seat: press A to join";
       $("seat").style.cssText = msg.p ? `background:${msg.color};color:#2A170E;padding:4px 12px;border-radius:12px;font-size:20px` : "";
       $("full").style.display = "none";
     }

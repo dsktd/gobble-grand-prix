@@ -205,6 +205,7 @@ fn spawn(
     mut commands: Commands,
     track: Res<Track>,
     setup: Res<Setup>,
+    names: Res<SeatNames>,
     options: Res<Options>,
     mut images: ResMut<Assets<Image>>,
 ) {
@@ -270,6 +271,24 @@ fn spawn(
                     "TIME",
                     Part::Time,
                 );
+                if seats > 1 {
+                    // Seat badge: number and name in the seat's colour, as on its phone
+                    let mut badge = place(k, Some(32.0), Some(200.0), None, None, 184.0, 36.0);
+                    badge.justify_content = JustifyContent::Center;
+                    badge.align_items = AlignItems::Center;
+                    badge.overflow = Overflow::clip();
+                    let tag = format!("P{} {}", slot + 1, names.get(slot));
+                    root.spawn((badge, BackgroundColor(seat_color(slot))))
+                        .with_child(fit_text_min(
+                            tag,
+                            Size::LABEL * k,
+                            12.0 * k,
+                            Weight::Bold,
+                            Tone::BROWN_900,
+                            176.0 * k,
+                            1,
+                        ));
+                }
 
                 // Item slot, centred at the top
                 let mut item = place(k, None, Some(32.0), None, None, 104.0, 104.0);
@@ -630,6 +649,7 @@ fn banner(
 }
 
 fn standings(
+    names: Res<SeatNames>,
     karts: Query<(&Kart, &Progress, Option<&Human>)>,
     texts: Query<(&Standings, &mut Fitted)>,
 ) {
@@ -639,7 +659,7 @@ fn standings(
         let shown = rows
             .get(row.0)
             .map_or(String::new(), |(kart, progress, human)| {
-                let who = human.map_or(String::new(), |h| format!("  P{}", h.0 + 1));
+                let who = human.map_or(String::new(), |h| format!("  {}", names.get(h.0)));
                 format!(
                     "{}  {}{who}",
                     ordinal(progress.place),
@@ -652,6 +672,7 @@ fn standings(
 
 fn results(
     mut commands: Commands,
+    names: Res<SeatNames>,
     clock: Res<RaceClock>,
     track: Res<Track>,
     karts: Query<(&Kart, &Progress, Option<&Finished>, Option<&Human>)>,
@@ -680,7 +701,7 @@ fn results(
         .map(|(kart, progress, finished, human)| {
             let name = match (human, solo) {
                 (Some(_), true) => format!("{} (you)", ROSTER[kart.racer].name),
-                (Some(h), false) => format!("{} (P{})", ROSTER[kart.racer].name, h.0 + 1),
+                (Some(h), false) => format!("{} ({})", ROSTER[kart.racer].name, names.get(h.0)),
                 (None, _) => ROSTER[kart.racer].name.to_string(),
             };
             ResultRow {

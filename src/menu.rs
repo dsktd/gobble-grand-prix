@@ -1137,6 +1137,7 @@ fn bind(
     setup: Res<Setup>,
     options: Res<Options>,
     seats: Res<Seats>,
+    names: Res<SeatNames>,
     ready: Res<Ready>,
     mut texts: Query<(&Bind, &mut Fitted)>,
     mut nodes: Query<(&Bind, &mut Node, Option<&mut Fill>), Without<Fitted>>,
@@ -1160,7 +1161,7 @@ fn bind(
             Bind::Value(opt) => fitted.set(opt.value(&options)),
             Bind::Seat(slot) => fitted.set(seats.0.get(slot).map_or_else(
                 || format!("P{}  press A or Enter to join", slot + 1),
-                |device| format!("P{}  {}", slot + 1, device_name(*device)),
+                |device| format!("P{}  {}  ({})", slot + 1, names.get(slot), device_name(*device)),
             )),
             Bind::LobbyHelp => fitted.set(if seats.0.is_empty() {
                 "Press A or Enter on a controller, the keyboard or a phone to take a seat. B or Esc goes back to the menu."

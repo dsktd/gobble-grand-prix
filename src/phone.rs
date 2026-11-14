@@ -115,9 +115,12 @@ pub struct Pad {
     pub menu: MenuInput,
     /// When the socket closed; the seat is kept for [`REJOIN`].
     pub gone: Option<Instant>,
+    /// The name the phone page sent, already sanitised.
+    pub name: Option<String>,
     /// Whether the phone page knows its seat, and which seat that was.
     told: bool,
     told_seat: Option<usize>,
+    told_name: Option<String>,
 }
 
 /// Connected phones and the channel back to them.
@@ -137,6 +140,17 @@ impl Phones {
         if let Some(tx) = &self.tx {
             let _ = tx.send(message);
         }
+    }
+
+    /// The name a phone chose, if any.
+    pub fn name(
+        &self,
+        id: u32,
+    ) -> Option<String> {
+        self.pads
+            .iter()
+            .find(|(p, _)| *p == id)
+            .and_then(|(_, pad)| pad.name.clone())
     }
 
     /// Menu presses from one phone this frame.
@@ -213,7 +227,7 @@ enum Wire {
 }
 
 enum Inbound {
-    Joined(u32),
+    Joined(u32, Option<String>),
     Left(u32),
     Wire(u32, Wire),
 }
@@ -385,6 +399,9 @@ struct Join {
     /// Random id the page keeps in localStorage.
     #[serde(default)]
     token: String,
+    /// The player's chosen name.
+    #[serde(default)]
+    name: String,
 }
 
 async fn socket(
@@ -396,15 +413,17 @@ async fn socket(
         return (StatusCode::FORBIDDEN, "Wrong PIN").into_response();
     }
     let id = claim(&shared, &join.token);
-    upgrade.on_upgrade(move |ws| session(ws, shared, id))
+    let name = Some(join.name);
+    upgrade.on_upgrade(move |ws| session(ws, shared, id, name))
 }
 
 async fn session(
     ws: WebSocket,
     shared: Shared,
     id: u32,
+    name: Option<String>,
 ) {
-    let _ = shared.tx.send(Inbound::Joined(id));
+    let _ = shared.tx.send(Inbound::Joined(id, name));
     let (mut sink, mut stream) = ws.split();
     let mut out = shared.out.subscribe();
     let _ = sink
@@ -479,6 +498,8 @@ struct Hello {
     pin: String,
     #[serde(default)]
     token: String,
+    #[serde(default)]
+    name: String,
 }
 
 /// Accept phones over iroh: relayed or direct QUIC, newline-delimited JSON on one stream.
@@ -536,7 +557,7 @@ async fn iroh_session(
                             }
                             let phone = claim(&shared, &hello.token);
                             id = Some(phone);
-                            let _ = shared.tx.send(Inbound::Joined(phone));
+                            let _ = shared.tx.send(Inbound::Joined(phone, Some(hello.name)));
                             let _ = send
                                 .write_all(format!("{{\"t\":\"hello\",\"id\":{phone}}}\n").as_bytes())
                                 .await;
@@ -601,14 +622,24 @@ fn receive(
     }
     for message in inbound {
         match message {
-            Inbound::Joined(id) => {
+            Inbound::Joined(id, name) => {
                 info!("Phone {id} connected");
+                let name = name.as_deref().and_then(sanitize);
                 match phones.pads.iter_mut().find(|(p, _)| *p == id) {
                     Some((_, pad)) => {
                         pad.gone = None;
                         pad.told = false;
+                        if name.is_some() {
+                            pad.name = name;
+                        }
                     }
-                    None => phones.pads.push((id, Pad::default())),
+                    None => phones.pads.push((
+                        id,
+                        Pad {
+                            name,
+                            ..Pad::default()
+                        },
+                    )),
                 }
             }
             Inbound::Left(id) => {
@@ -680,16 +711,19 @@ fn receive(
 fn tell_seats(
     mut phones: ResMut<Phones>,
     seats: Res<Seats>,
+    names: Res<SeatNames>,
 ) {
     let mut messages = Vec::new();
     for (id, pad) in &mut phones.pads {
         let slot = seats.0.iter().position(|d| *d == Device::Phone(*id));
         // Only on change, or to a phone that just (re)connected
-        if pad.told && pad.told_seat == slot {
+        let name = slot.map(|s| names.get(s));
+        if pad.told && pad.told_seat == slot && pad.told_name == name {
             continue;
         }
         pad.told = true;
         pad.told_seat = slot;
+        pad.told_name = name;
         let message = seats
             .0
             .iter()
@@ -699,8 +733,9 @@ fn tell_seats(
                 |slot| {
                     let [r, g, b, _] = seat_color(slot).to_srgba().to_u8_array();
                     format!(
-                        r##"{{"t":"seat","id":{id},"p":{},"color":"#{r:02x}{g:02x}{b:02x}"}}"##,
-                        slot + 1
+                        r##"{{"t":"seat","id":{id},"p":{},"color":"#{r:02x}{g:02x}{b:02x}","name":{}}}"##,
+                        slot + 1,
+                        serde_json::to_string(&names.get(slot)).unwrap_or_default()
                     )
                 },
             );

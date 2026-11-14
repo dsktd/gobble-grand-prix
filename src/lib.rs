@@ -12,6 +12,7 @@ mod layout_test;
 mod menu;
 mod minimap;
 mod music;
+mod names;
 mod phone;
 mod prompts;
 mod race;
@@ -34,6 +35,7 @@ pub(crate) mod prelude {
     pub use super::items::prelude::*;
     pub use super::kart::prelude::*;
     pub use super::menu::prelude::*;
+    pub use super::names::prelude::*;
     pub use super::phone::prelude::*;
     pub use super::prompts::prelude::*;
     pub use super::race::prelude::*;
@@ -115,6 +117,7 @@ pub fn plugin(app: &mut App) {
         menu::plugin,
         minimap::plugin,
         music::plugin,
+        names::plugin,
         phone::plugin,
     ));
     app.add_plugins((

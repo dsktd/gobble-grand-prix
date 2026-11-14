@@ -5,6 +5,8 @@ Add yours under the heading below, at the top.
 
 ## Unreleased
 
+- Every player shows a name: your phone name, your Steam name, or the pad's name.
+- Karts now handle like real (arcade) cars: they roll where the wheels point, slide on tyre grip, and drift by letting the rear go.
 - A minimap in every corner of the race, north up, with crates, hazards and the start line.
 - New menus: no text runs out of its box, and the title shows the version and What's new.
 - Phone controllers work from any network: scan the QR, no shared Wi-Fi needed.
