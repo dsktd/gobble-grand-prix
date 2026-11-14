@@ -1,0 +1,26 @@
+[package]
+name = "gobble"
+version = "0.1.0"
+edition = "2024"
+license = "Unlicense"
+
+[dependencies]
+# BEVY
+bevy = { version = "0.20.1", features = ["wayland", "wav"] }
+
+rand = "0.9"
+
+[profile.dev]
+opt-level = 1
+debug = 0
+strip = "debuginfo"
+
+[profile.dev.package."*"]
+opt-level = 3
+
+[profile.release]
+opt-level = 3
+lto = "thin" # lto = true is slower to link for little gain
+codegen-units = 1
+panic = 'abort'
+strip = true
