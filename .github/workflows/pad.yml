@@ -47,5 +47,11 @@ jobs:
         run: |
           pip install playwright
           python -m playwright install --with-deps chromium webkit
-      - name: Join from Chromium and WebKit
-        run: python ../tools/pad_join_test.py target/release/pad-host ../site
+      - name: Join from Chromium and WebKit, then lay out every screen on phone viewports
+        run: python ../tools/pad_join_test.py target/release/pad-host ../site ../pad-shots
+      - name: Screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pad-shots
+          path: pad-shots
