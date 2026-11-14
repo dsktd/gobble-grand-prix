@@ -14,6 +14,26 @@ use iroh::endpoint::presets;
 /// Must match the game.
 pub const ALPN: &[u8] = b"gobble/controller/1";
 
+/// n0's relays without the trailing dot iroh writes in their hostnames: `WebKit` (every iOS
+/// browser) rejects the TLS certificate of `use1-1.relay.n0.iroh.link.`. The game uses the
+/// same map, so the home relay it publishes is one a browser can dial.
+pub fn relays() -> iroh::RelayMode {
+    use iroh::defaults::prod;
+    let urls = [
+        prod::NA_EAST_RELAY_HOSTNAME,
+        prod::NA_WEST_RELAY_HOSTNAME,
+        prod::EU_RELAY_HOSTNAME,
+        prod::AP_RELAY_HOSTNAME,
+    ]
+    .map(|host| {
+        let url: iroh::RelayUrl = format!("https://{}", host.trim_end_matches('.'))
+            .parse()
+            .expect("relay url");
+        iroh::RelayConfig::from(url)
+    });
+    iroh::RelayMode::Custom(iroh::RelayMap::from_iter(urls))
+}
+
 /// An open link: send lines on `outgoing`, read lines from `incoming`.
 pub struct Link {
     pub outgoing: Sender<String>,
@@ -30,7 +50,7 @@ pub async fn connect(
     spawn: impl Fn(std::pin::Pin<Box<dyn Future<Output = ()> + 'static>>),
 ) -> Result<Link, String> {
     let id = EndpointId::from_str(id.trim()).map_err(|e| format!("bad game id: {e}"))?;
-    let mut builder = Endpoint::builder(presets::N0);
+    let mut builder = Endpoint::builder(presets::N0).relay_mode(relays());
     // Browsers have no UDP and are always relay only
     #[cfg(not(target_arch = "wasm32"))]
     if relay_only {

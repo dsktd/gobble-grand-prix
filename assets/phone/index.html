@@ -49,6 +49,10 @@
       style="font:inherit;font-size:22px;padding:8px 12px;border-radius:12px;border:2px solid #ffd25a;background:#2A170E;color:#faeed2;text-align:center;width:12em">
   </label>
   <button id="go" style="font-size:24px;padding:14px 30px">Tap to start</button>
+  <div id="lan" style="display:none;flex-direction:column;align-items:center;gap:6px">
+    <a id="lanlink" style="font-size:26px;padding:16px 30px;background:#ffd25a;color:#2A170E;border-radius:14px;text-decoration:none;font-weight:bold">On the same Wi-Fi? Tap here</a>
+    <small>Your phone warns about the game's certificate once: choose Advanced / Show details, then continue.</small>
+  </div>
 </div>
 <div id="full" style="display:none;position:fixed;inset:0;z-index:3;background:#2A170E;align-items:center;justify-content:center;flex-direction:column;gap:12px;text-align:center">
   <h2 style="color:#F28C28;margin:0">Lobby full</h2>
@@ -88,6 +92,9 @@ const $ = (id) => document.getElementById(id);
 const hash = new URLSearchParams(location.hash.slice(1));
 const game = hash.get("g");
 const pin = hash.get("pin") || new URLSearchParams(location.search).get("pin") || prompt("Room PIN") || "";
+// The game's own page on the local network (ip:port), the way in when iroh cannot connect
+const lan = /^[0-9A-Fa-f.:\[\]]+$/.test(hash.get("lan") || "") ? hash.get("lan") : null;
+if (lan) $("lanlink").href = `https://${lan}/?pin=${encodeURIComponent(pin)}`;
 // The player's name, asked once and remembered
 $("name").value = localStorage.getItem("gobble-name") || "";
 const playerName = () => {
@@ -120,17 +127,21 @@ async function connect() {
       gaveUp = true;
       $("status").textContent = "Game not found, scan the QR code again.";
     }, 10000);
+    // Same Wi-Fi as the game: offer its LAN page if iroh is slow
+    const lanTimer = lan && setTimeout(() => { $("lan").style.display = "flex"; }, 5000);
     try {
       const pad = await import("./pkg/gobble_pad.js");
       await pad.default();
       const link = await pad.connect(game, (line) => receive(line), closed);
       clearTimeout(timer);
+      clearTimeout(lanTimer);
       if (gaveUp) return;
       link.send(JSON.stringify({ t: "join", pin, token, name: playerName() }));
       ws = { readyState: 1, send: (text) => link.send(text) };
       $("cover").style.display = "none";
     } catch (e) {
       clearTimeout(timer);
+      if (lan) $("lan").style.display = "flex";
       $("status").textContent = gaveUp ? "Game not found, scan the QR code again." : `Could not reach the game: ${e}`;
     }
     return;
