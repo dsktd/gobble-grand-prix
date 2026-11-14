@@ -73,6 +73,8 @@ pub struct JoinInfo {
 struct Anywhere {
     rx: std::sync::Mutex<mpsc::Receiver<String>>,
     pin: String,
+    /// The game's own HTTPS page, for phones on the same Wi-Fi when iroh fails.
+    lan: SocketAddr,
 }
 
 /// Once iroh is up, point the QR code at the anywhere link.
@@ -88,7 +90,7 @@ fn anywhere(
     let Ok(id) = waiting.rx.lock().unwrap().try_recv() else {
         return;
     };
-    let link = format!("{PAGES}#g={id}&pin={}", waiting.pin);
+    let link = format!("{PAGES}#g={id}&pin={}&lan={}", waiting.pin, waiting.lan);
     info!("Phone join anywhere {link}");
     if let Some(image) = qr_image(&link) {
         join.qr = images.add(image);
@@ -348,6 +350,7 @@ fn start(
     commands.insert_resource(Anywhere {
         rx: std::sync::Mutex::new(id_rx),
         pin: pin.clone(),
+        lan: addr,
     });
     let _handle = std::thread::spawn(move || {
         let runtime = tokio::runtime::Builder::new_multi_thread()
