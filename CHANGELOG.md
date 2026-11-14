@@ -1,5 +1,8 @@
 # Changelog
 
+Newest first. One short line per change a player can see; the title screen shows the top few.
+Add yours under the heading below, at the top.
+
 ## Unreleased
 
 - Phone controllers work from any network: scan the QR, no shared Wi-Fi needed.

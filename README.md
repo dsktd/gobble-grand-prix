@@ -32,6 +32,11 @@ Hold drift while steering into a turn: sparks go white, then blue, then orange. 
 
 `gobble shots <track>` runs a scripted tour and saves screenshots to `screenshots/`.
 
+## Changelog
+
+Every user-visible change adds one short line at the top of `CHANGELOG.md`. The title screen
+shows the newest few under "What's new", and the version line is built in by `build.rs`.
+
 ## License
 
 Public domain, see UNLICENSE.
