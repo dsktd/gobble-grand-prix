@@ -115,8 +115,9 @@ pub struct Pad {
     pub menu: MenuInput,
     /// When the socket closed; the seat is kept for [`REJOIN`].
     pub gone: Option<Instant>,
-    /// The seat last told to the phone page.
-    told: Option<Option<usize>>,
+    /// Whether the phone page knows its seat, and which seat that was.
+    told: bool,
+    told_seat: Option<usize>,
 }
 
 /// Connected phones and the channel back to them.
@@ -467,7 +468,8 @@ fn claim(
     if token.is_empty() {
         fresh()
     } else {
-        *ids.entry(token.chars().take(64).collect()).or_insert_with(fresh)
+        *ids.entry(token.chars().take(64).collect())
+            .or_insert_with(fresh)
     }
 }
 
@@ -604,7 +606,7 @@ fn receive(
                 match phones.pads.iter_mut().find(|(p, _)| *p == id) {
                     Some((_, pad)) => {
                         pad.gone = None;
-                        pad.told = None;
+                        pad.told = false;
                     }
                     None => phones.pads.push((id, Pad::default())),
                 }
@@ -683,10 +685,11 @@ fn tell_seats(
     for (id, pad) in &mut phones.pads {
         let slot = seats.0.iter().position(|d| *d == Device::Phone(*id));
         // Only on change, or to a phone that just (re)connected
-        if pad.told == Some(slot) {
+        if pad.told && pad.told_seat == slot {
             continue;
         }
-        pad.told = Some(slot);
+        pad.told = true;
+        pad.told_seat = slot;
         let message = seats
             .0
             .iter()
