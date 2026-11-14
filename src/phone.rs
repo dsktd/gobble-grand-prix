@@ -38,6 +38,16 @@ pub(super) mod prelude {
     pub use super::Phones;
 }
 
+macro_rules! glyph {
+    ($file:literal) => {
+        (
+            concat!("/glyphs/", $file),
+            "image/png",
+            include_bytes!(concat!("../assets/prompts/steamdeck/", $file)),
+        )
+    };
+}
+
 pub const PORT: u16 = 7777;
 /// How long a silent phone keeps its kart before the CPU takes over.
 const TAKEOVER: Duration = Duration::from_secs(3);
@@ -48,6 +58,31 @@ const ALPN: &[u8] = b"gobble/controller/1";
 /// The phone page on GitHub Pages; the game id and PIN ride in the fragment so no server logs them.
 const PAGES: &str = "https://dsktd.github.io/gobble-grand-prix/pad/";
 const PAGE: &str = include_str!("../assets/phone/index.html");
+/// Files the page loads next to itself: its font and the Kenney button glyphs.
+const FILES: &[(&str, &str, &[u8])] = &[
+    (
+        "/fonts/Fredoka-500.ttf",
+        "font/ttf",
+        include_bytes!("../assets/fonts/Fredoka-500.ttf"),
+    ),
+    (
+        "/fonts/Fredoka-600.ttf",
+        "font/ttf",
+        include_bytes!("../assets/fonts/Fredoka-600.ttf"),
+    ),
+    (
+        "/fonts/Fredoka-700.ttf",
+        "font/ttf",
+        include_bytes!("../assets/fonts/Fredoka-700.ttf"),
+    ),
+    glyph!("steamdeck_button_a.png"),
+    glyph!("steamdeck_button_b.png"),
+    glyph!("steamdeck_button_l2.png"),
+    glyph!("steamdeck_button_r1.png"),
+    glyph!("steamdeck_button_r2.png"),
+    glyph!("steamdeck_button_options.png"),
+    glyph!("steamdeck_dpad.png"),
+];
 
 pub(super) fn plugin(app: &mut App) {
     app.init_resource::<Phones>();
@@ -380,10 +415,14 @@ fn start(
                     return;
                 }
             };
-            let app = Router::new()
-                .route("/", get(page))
-                .route("/ws", get(socket))
-                .with_state(shared);
+            let mut app = Router::new().route("/", get(page));
+            for &(path, kind, bytes) in FILES {
+                app = app.route(
+                    path,
+                    get(move || async move { ([(axum::http::header::CONTENT_TYPE, kind)], bytes) }),
+                );
+            }
+            let app = app.route("/ws", get(socket)).with_state(shared);
             info!("Phone controller on https://{addr}");
             if let Err(err) = axum_server::bind_rustls(addr, config)
                 .serve(app.into_make_service())

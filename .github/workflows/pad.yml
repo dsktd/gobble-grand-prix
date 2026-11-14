@@ -4,7 +4,7 @@ name: Pad
 # Only runs when the pad or the page changes.
 on:
   pull_request:
-    paths: ["pad/**", "assets/phone/**", "tools/pad_join_test.py", ".github/workflows/pad.yml"]
+    paths: ["pad/**", "assets/phone/**", "assets/fonts/**", "src/phone.rs", "tools/pad_join_test.py", ".github/workflows/pad.yml"]
   workflow_dispatch:
 
 concurrency:
@@ -42,9 +42,7 @@ jobs:
           cargo +stable build --release --locked --bin pad-host
           CC_wasm32_unknown_unknown=clang cargo +stable build --release --locked --lib --target wasm32-unknown-unknown
           wasm-bindgen --target web --no-typescript --out-dir pkg target/wasm32-unknown-unknown/release/gobble_pad.wasm
-          mkdir -p ../site/pad
-          cp ../assets/phone/index.html ../site/pad/
-          cp -r pkg ../site/pad/
+          ./site.sh ../site
       - name: Playwright
         run: |
           pip install playwright
