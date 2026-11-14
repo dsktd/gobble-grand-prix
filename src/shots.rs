@@ -88,27 +88,29 @@ fn tour(
     let name = TRACKS[tour.track].name.to_lowercase().replace(' ', "-");
     match tour.step {
         0 if t > 2.0 => shoot(&mut commands, "menu"),
-        1 if t > 2.5 => {
+        1 if t > 2.5 => next.set(GameState::Options),
+        2 if t > 4.0 => shoot(&mut commands, "options"),
+        3 if t > 4.5 => {
             setup.racers[0] = tour.track * 2 % ROSTER.len();
             next.set(GameState::PickRacer);
         }
-        2 if t > 4.0 => shoot(&mut commands, &format!("racer-{name}")),
-        3 if t > 4.5 => {
+        4 if t > 6.0 => shoot(&mut commands, &format!("racer-{name}")),
+        5 if t > 6.5 => {
             setup.track = tour.track;
             next.set(GameState::Race);
         }
-        4 if t > 7.0 => shoot(&mut commands, &format!("{name}-countdown")),
-        5 if t > 14.0 => shoot(&mut commands, &format!("{name}-racing")),
-        6 if t > 22.0 => {
+        6 if t > 9.0 => shoot(&mut commands, &format!("{name}-countdown")),
+        7 if t > 16.0 => shoot(&mut commands, &format!("{name}-racing")),
+        8 if t > 24.0 => {
             shoot(&mut commands, &format!("{name}-pack"));
             virtual_time.set_relative_speed(4.0);
         }
-        7 if clock.is_some_and(|c| c.phase == Phase::Done) => {
+        9 if clock.is_some_and(|c| c.phase == Phase::Done) => {
             virtual_time.set_relative_speed(1.0);
             tour.clock = 1000.0;
         }
-        8 if t > 1001.0 => shoot(&mut commands, &format!("{name}-results")),
-        9 if t > 1002.5 => {
+        10 if t > 1001.0 => shoot(&mut commands, &format!("{name}-results")),
+        11 if t > 1002.5 => {
             exit.write(AppExit::Success);
         }
         _ => return,

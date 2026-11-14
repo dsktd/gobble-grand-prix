@@ -18,9 +18,6 @@ pub(super) fn plugin(app: &mut App) {
     );
 }
 
-const GOLD: Color = Color::srgb(1.0, 0.82, 0.35);
-const CREAM: Color = Color::srgb(0.98, 0.93, 0.82);
-
 /// Which piece of a seat's HUD a text node shows.
 #[derive(Component, Copy, Clone, Debug, Eq, PartialEq)]
 enum Readout {
@@ -55,19 +52,6 @@ fn clock_text(t: f32) -> String {
     format!("{}:{:05.2}", (t / 60.0) as u32, t % 60.0)
 }
 
-fn text(
-    value: &str,
-    size: f32,
-    color: Color,
-) -> (Text, TextFont, TextColor, TextShadow) {
-    (
-        Text::new(value),
-        TextFont::from_font_size(size),
-        TextColor(color),
-        TextShadow::default(),
-    )
-}
-
 fn spawn(
     mut commands: Commands,
     setup: Res<Setup>,
@@ -81,24 +65,47 @@ fn spawn(
                     width: percent(100),
                     height: percent(100),
                     position_type: PositionType::Absolute,
+                    flex_direction: FlexDirection::Column,
                     justify_content: JustifyContent::SpaceBetween,
-                    padding: UiRect::all(px(24)),
+                    padding: UiRect::all(px(Size::PAD)),
                     ..default()
                 },
                 scope.clone(),
             ))
             .with_children(|root| {
                 root.spawn(Node {
-                    flex_direction: FlexDirection::Column,
-                    row_gap: px(4),
+                    justify_content: JustifyContent::SpaceBetween,
                     ..default()
                 })
-                .with_children(|left| {
-                    left.spawn((Seat(slot), Readout::Lap, text("", 40.0, CREAM)));
-                    left.spawn((Seat(slot), Readout::Time, text("", 32.0, CREAM)));
-                    left.spawn((Seat(slot), Readout::Item, text("", 36.0, GOLD)));
+                .with_children(|top| {
+                    top.spawn(Node {
+                        flex_direction: FlexDirection::Column,
+                        row_gap: px(4),
+                        ..default()
+                    })
+                    .with_children(|left| {
+                        left.spawn((Seat(slot), Readout::Lap, label("", Size::HUD, Tone::CREAM)));
+                        left.spawn((Seat(slot), Readout::Time, label("", Size::HUD, Tone::CREAM)));
+                    });
+                    top.spawn((Seat(slot), Readout::Place, label("", Size::PLACE, Tone::GOLD)));
                 });
-                root.spawn((Seat(slot), Readout::Place, text("", 96.0, GOLD)));
+                root.spawn(Node {
+                    align_items: AlignItems::Center,
+                    column_gap: px(Size::PAD),
+                    ..default()
+                })
+                .with_children(|bottom| {
+                    bottom.spawn(prompt(Action::Drift, "Drift"));
+                    bottom.spawn(Node {
+                        align_items: AlignItems::Center,
+                        column_gap: px(6),
+                        ..default()
+                    })
+                    .with_children(|item| {
+                        item.spawn(prompt(Action::Item, ""));
+                        item.spawn((Seat(slot), Readout::Item, label("", Size::BODY, Tone::GOLD)));
+                    });
+                });
             });
     }
 
@@ -115,25 +122,24 @@ fn spawn(
             scope.clone(),
         ))
         .with_children(|root| {
-            root.spawn((Banner, text("", 140.0, GOLD)));
+            root.spawn((Banner, label("", Size::BANNER, Tone::GOLD)));
         });
 
-    commands.spawn((
-        Board,
-        Node {
-            position_type: PositionType::Absolute,
-            left: percent(25),
-            top: percent(15),
-            width: percent(50),
-            padding: UiRect::all(px(28)),
-            flex_direction: FlexDirection::Column,
-            row_gap: px(8),
-            ..default()
-        },
-        BackgroundColor(Color::srgba(0.25, 0.10, 0.04, 0.85)),
-        Visibility::Hidden,
-        scope,
-    ));
+    commands
+        .spawn((
+            Node {
+                width: percent(100),
+                height: percent(100),
+                position_type: PositionType::Absolute,
+                justify_content: JustifyContent::Center,
+                align_items: AlignItems::Center,
+                ..default()
+            },
+            scope,
+        ))
+        .with_children(|root| {
+            root.spawn((Board, panel(), Visibility::Hidden));
+        });
 }
 
 fn stats(
@@ -155,11 +161,11 @@ fn stats(
             Readout::Item => match kart.item {
                 Some(item) => {
                     color.0 = item.color().mix(&Color::WHITE, 0.4);
-                    format!("[ {} ]", item.name())
+                    item.name().to_string()
                 }
                 None => {
-                    color.0 = CREAM.with_alpha(0.5);
-                    "[ empty ]".to_string()
+                    color.0 = Tone::DIM;
+                    "no item".to_string()
                 }
             },
         };
@@ -212,27 +218,33 @@ fn results(
     let mut rows: Vec<_> = karts.iter().collect();
     rows.sort_by_key(|(_, progress, _, _)| progress.place);
     commands.entity(board_id).despawn_children().with_children(|board| {
-        board.spawn(text("Results", 56.0, GOLD));
+        board.spawn(label("Results", Size::HEADING, Tone::GOLD));
         for (kart, progress, finished, human) in rows {
             let time = match finished {
                 Some(f) => clock_text(f.time),
                 None => "--:--.--".to_string(),
             };
             let color = match human {
-                true => GOLD,
-                false => CREAM,
+                true => Tone::GOLD,
+                false => Tone::CREAM,
             };
-            board.spawn(text(
-                &format!(
-                    "{:<5} {:<16} {}",
-                    ordinal(progress.place),
-                    ROSTER[kart.racer].name,
-                    time
-                ),
-                32.0,
-                color,
-            ));
+            board
+                .spawn(Node {
+                    column_gap: px(Size::PAD),
+                    ..default()
+                })
+                .with_children(|row| {
+                    let cell = |width: f32| Node {
+                        width: px(width),
+                        ..default()
+                    };
+                    row.spawn(cell(60.0))
+                        .with_child(label(ordinal(progress.place), Size::BODY, color));
+                    row.spawn(cell(240.0))
+                        .with_child(label(ROSTER[kart.racer].name, Size::BODY, color));
+                    row.spawn(cell(130.0)).with_child(label(time, Size::BODY, color));
+                });
         }
-        board.spawn(text("A / Enter: back to menu", 24.0, CREAM));
+        board.spawn(prompt(Action::Confirm, "Back to menu"));
     });
 }

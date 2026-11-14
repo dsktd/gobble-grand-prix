@@ -56,16 +56,15 @@ struct Preview(usize);
 #[derive(Component, Copy, Clone, Debug)]
 struct Platter;
 
-const GOLD: Color = Color::srgb(1.0, 0.82, 0.35);
-const CREAM: Color = Color::srgb(0.98, 0.93, 0.82);
-
-const CONTROLS: &str = "\
-Gas        W / Up       A or RT
-Brake      S / Down     X or LT
-Steer      A D / arrows  stick or D-pad
-Drift      Space        RB or LB
-Item       Shift or E   B or Y
-Quit race  Esc          View";
+/// Controls listed on the options screen.
+const CONTROLS: [(Action, &str); 6] = [
+    (Action::Gas, "Gas"),
+    (Action::Brake, "Brake"),
+    (Action::Steer, "Steer"),
+    (Action::Drift, "Drift (hold, then release for a turbo)"),
+    (Action::Item, "Use item"),
+    (Action::Quit, "Quit race"),
+];
 
 fn header(state: GameState) -> &'static str {
     match state {
@@ -132,7 +131,7 @@ fn backdrop(
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
     let scope = DespawnOnExit(InMenus);
-    commands.insert_resource(ClearColor(Color::srgb(0.55, 0.22, 0.10)));
+    commands.insert_resource(ClearColor(Tone::MENU_BG));
     commands.insert_resource(GlobalAmbientLight {
         color: Color::srgb(1.0, 0.8, 0.6),
         brightness: 500.0,
@@ -158,7 +157,7 @@ fn backdrop(
         Platter,
         Mesh3d(meshes.add(Cylinder::new(2.6, 0.15))),
         MeshMaterial3d(materials.add(StandardMaterial {
-            base_color: CREAM,
+            base_color: Tone::CREAM,
             perceptual_roughness: 0.3,
             ..default()
         })),
@@ -168,7 +167,7 @@ fn backdrop(
     commands.spawn((
         Mesh3d(meshes.add(Torus::new(2.4, 2.75))),
         MeshMaterial3d(materials.add(StandardMaterial {
-            base_color: GOLD,
+            base_color: Tone::GOLD,
             metallic: 0.6,
             perceptual_roughness: 0.3,
             ..default()
@@ -188,6 +187,7 @@ fn screen(
     let state = *state.get();
     cursor.0 = 0;
     let count = rows(state, &setup, &options).len();
+    let big = matches!(state, GameState::Menu | GameState::Options);
     commands
         .spawn((
             Node {
@@ -196,51 +196,53 @@ fn screen(
                 flex_direction: FlexDirection::Column,
                 justify_content: JustifyContent::SpaceBetween,
                 align_items: AlignItems::End,
-                padding: UiRect::all(px(40)),
+                padding: UiRect::all(px(Size::PAD * 1.5)),
                 ..default()
             },
             DespawnOnExit(state),
         ))
         .with_children(|root| {
-            root.spawn((
-                Text::new(header(state)),
-                TextFont::from_font_size(64.0),
-                TextColor(GOLD),
-            ));
+            let size = match state {
+                GameState::Menu => Size::TITLE,
+                _ => Size::HEADING,
+            };
+            root.spawn(label(header(state), size, Tone::GOLD));
             root.spawn(Node {
                 flex_direction: FlexDirection::Column,
                 align_items: AlignItems::End,
-                row_gap: px(14),
-                max_width: percent(55),
+                row_gap: px(Size::GAP * 1.5),
+                max_width: percent(50),
                 ..default()
             })
             .with_children(|list| {
                 for i in 0..count {
+                    let size = match (i, big) {
+                        (0, _) | (_, true) => Size::HEADING,
+                        _ => Size::BODY,
+                    };
                     list.spawn((
                         Line(i),
-                        Text::new(""),
-                        TextFont::from_font_size(match i {
-                            0 => 44.0,
-                            _ if state == GameState::Menu || state == GameState::Options => 44.0,
-                            _ => 28.0,
-                        }),
-                        TextColor(CREAM),
+                        label("", size, Tone::CREAM),
                         TextLayout::justify(Justify::Right),
                     ));
                 }
                 if state == GameState::Options {
-                    list.spawn((
-                        Text::new(CONTROLS),
-                        TextFont::from_font_size(24.0),
-                        TextColor(CREAM),
-                    ));
+                    list.spawn(panel()).with_children(|controls| {
+                        for (action, text) in CONTROLS {
+                            controls.spawn(prompt(action, text));
+                        }
+                    });
                 }
             });
-            root.spawn((
-                Text::new("D-pad / arrows: choose     A / Enter: OK     B / Esc: back"),
-                TextFont::from_font_size(24.0),
-                TextColor(CREAM.with_alpha(0.8)),
-            ));
+            root.spawn(Node {
+                column_gap: px(Size::PAD),
+                ..default()
+            })
+            .with_children(|hints| {
+                hints.spawn(prompt(Action::Navigate, "Choose"));
+                hints.spawn(prompt(Action::Confirm, "OK"));
+                hints.spawn(prompt(Action::Back, "Back"));
+            });
         });
 }
 
@@ -345,8 +347,8 @@ fn lines(
             text.0 = shown;
         }
         color.0 = match on {
-            true => GOLD,
-            false => CREAM,
+            true => Tone::GOLD,
+            false => Tone::CREAM,
         };
     }
 }

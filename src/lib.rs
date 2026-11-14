@@ -10,8 +10,10 @@ mod kart;
 mod menu;
 mod race;
 mod roster;
+mod prompts;
 mod scenery;
 mod shots;
+mod style;
 mod track;
 
 use bevy::prelude::*;
@@ -26,8 +28,10 @@ pub(crate) mod prelude {
     pub use super::input::prelude::*;
     pub use super::items::prelude::*;
     pub use super::kart::prelude::*;
+    pub use super::prompts::prelude::*;
     pub use super::race::prelude::*;
     pub use super::roster::prelude::*;
+    pub use super::style::prelude::*;
     pub use super::track::prelude::*;
 }
 
@@ -91,7 +95,9 @@ pub fn plugin(app: &mut App) {
         race::plugin,
         roster::plugin,
         scenery::plugin,
+        prompts::plugin,
         shots::plugin,
+        style::plugin,
         track::plugin,
     ));
 }
