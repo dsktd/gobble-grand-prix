@@ -160,6 +160,8 @@ pub struct Pad {
     told: bool,
     told_seat: Option<usize>,
     told_name: Option<String>,
+    /// Whether the phone page knows the race is on (drive controls) or not (menu keys).
+    told_race: Option<bool>,
 }
 
 /// Connected phones and the channel back to them.
@@ -706,6 +708,7 @@ fn receive(
                     Some((_, pad)) => {
                         pad.gone = None;
                         pad.told = false;
+                        pad.told_race = None;
                         if name.is_some() {
                             pad.name = name;
                         }
@@ -790,14 +793,20 @@ fn receive(
     }
 }
 
-/// Tell each phone which seat it holds, so its page can show "P2".
+/// Tell each phone which seat it holds, so its page can show "P2", and whether the race is on.
 fn tell_seats(
     mut phones: ResMut<Phones>,
     seats: Res<Seats>,
     names: Res<SeatNames>,
+    state: Res<State<GameState>>,
 ) {
+    let race = *state.get() == GameState::Race;
     let mut messages = Vec::new();
     for (id, pad) in &mut phones.pads {
+        if pad.told_race != Some(race) {
+            pad.told_race = Some(race);
+            messages.push(format!(r#"{{"t":"screen","id":{id},"race":{race}}}"#));
+        }
         let slot = seats.0.iter().position(|d| *d == Device::Phone(*id));
         // Only on change, or to a phone that just (re)connected
         let name = slot.map(|s| names.get(s));
