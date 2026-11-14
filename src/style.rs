@@ -511,32 +511,44 @@ pub fn pill(radius: f32) -> BorderRadius {
     BorderRadius::all(px(radius))
 }
 
-/// A stat bar (spec 336x32): caption, track and fill. `fill` is set by the caller (0..=200).
+/// Width of a stat bar's track when the whole bar is `width` wide (spec: 200 of 336).
+pub fn bar_track(width: f32) -> f32 {
+    (width - bar_label(width) - 4.0).min(200.0)
+}
+
+pub fn bar_label(width: f32) -> f32 {
+    if width >= 336.0 { 108.0 } else { 64.0 }
+}
+
+/// A stat bar (spec 336x32, narrower in a seat card): caption, track and fill. The caller
+/// sets `fill` (its width is 0..=`bar_track(width)`).
 pub fn bar(
     parent: &mut ChildSpawnerCommands,
     left: f32,
     top: f32,
+    width: f32,
     name: &str,
     fill: impl Bundle,
 ) {
+    let label = bar_label(width);
     parent
-        .spawn(boxed(left, top, 336.0, 32.0))
+        .spawn(boxed(left, top, width, 32.0))
         .with_children(|bar| {
             bar.spawn((
-                boxed(0.0, 4.0, 108.0, 24.0),
+                boxed(0.0, 4.0, label, 24.0),
                 children![fit_text(
                     name,
                     Size::LABEL,
                     Weight::SemiBold,
                     Tone::CREAM_300,
-                    108.0,
+                    label,
                     1
                 )],
             ));
             bar.spawn((
                 Node {
                     border_radius: pill(8.0),
-                    ..boxed(112.0, 8.0, 200.0, 16.0)
+                    ..boxed(label + 4.0, 8.0, bar_track(width), 16.0)
                 },
                 BackgroundColor(Tone::BROWN_700),
             ));

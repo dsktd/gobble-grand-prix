@@ -6,6 +6,7 @@ Add yours under the heading below, at the top.
 ## Unreleased
 - Two-player split screen can be cut diagonally, corner to corner (Options, "2 players").
 
+- Racer select with 2-4 players: every seat gets its own card with its racer's 3D model, name and stats.
 - The menus play a live CPU race behind them, filmed with TV-style camera cuts.
 - Racer select: every player picks with up and down on their own cursor, A locks in, B unlocks; phones tap a racer on their screen.
 - The lobby shows the phone join QR code too.
