@@ -48,8 +48,7 @@ fn playable(path: &std::path::Path) -> bool {
     let ext = path
         .extension()
         .and_then(|e| e.to_str())
-        .map(str::to_lowercase)
-        .unwrap_or_default();
+        .map_or_default(str::to_lowercase);
     matches!(ext.as_str(), "ogg" | "mp3" | "flac" | "wav")
 }
 
@@ -76,8 +75,7 @@ fn setup(
             let stem = path
                 .file_stem()
                 .and_then(|s| s.to_str())
-                .map(str::to_lowercase)
-                .unwrap_or_default();
+                .map_or_default(str::to_lowercase);
             let handle = sources.add(AudioSource {
                 bytes: bytes.into(),
             });
