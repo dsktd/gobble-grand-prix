@@ -13,6 +13,7 @@ categories = ["games"]
 bevy = { version = "0.20.1", features = ["wayland", "wav", "mp3", "flac"] }
 
 rand = "0.9"
+ttf-parser = { version = "0.25", default-features = false, features = ["std"] } # text measuring for fit_text
 
 # PHONE CONTROLLER
 anyhow = "1"

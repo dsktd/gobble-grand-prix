@@ -8,7 +8,92 @@ pub(super) mod prelude {
     //
 }
 
+/// The build's version line, from build.rs.
+pub const VERSION: &str = env!("GOBBLE_VERSION");
+
+/// CHANGELOG.md, embedded.
+const CHANGELOG: &str = include_str!("../CHANGELOG.md");
+
+/// Lines of "What's new" shown at most.
+const NEWS_LINES: usize = 5;
+
+/// The newest changes: the first few bullet lines of the changelog.
+fn news() -> Vec<&'static str> {
+    CHANGELOG
+        .lines()
+        .filter_map(|l| l.strip_prefix("- "))
+        .take(NEWS_LINES)
+        .collect()
+}
+
+/// Whether the "What's new" box is open on the title screen.
+#[derive(Resource, Copy, Clone, Debug, Default)]
+pub struct Whats {
+    pub open: bool,
+}
+
+#[derive(Component, Copy, Clone, Debug)]
+struct NewsBox;
+
+/// A new build opens the box on its first launch; the build line is stored to tell.
+#[cfg(not(test))]
+fn first_launch(mut whats: ResMut<Whats>) {
+    let Some(path) = dirs::data_dir().map(|d| d.join("gobble-gp").join("last-seen")) else {
+        return;
+    };
+    // The build time changes on every compile; the tag, count and sha say what it is
+    let build = VERSION.rsplit_once(" \u{b7} ").map_or(VERSION, |(b, _)| b);
+    if std::fs::read_to_string(&path).is_ok_and(|seen| seen.trim() == build) {
+        return;
+    }
+    whats.open = true;
+    if let Some(dir) = path.parent() {
+        let _ = std::fs::create_dir_all(dir);
+    }
+    let _ = std::fs::write(path, build);
+}
+
+/// Y or T opens the box on the title screen; any of A, B, Y closes it.
+fn whats(
+    keys: Res<ButtonInput<KeyCode>>,
+    gamepads: Query<&Gamepad>,
+    mut input: ResMut<MenuInput>,
+    mut whats: ResMut<Whats>,
+    mut boxes: Query<&mut Visibility, With<NewsBox>>,
+) {
+    let y = keys.just_pressed(KeyCode::KeyT)
+        || gamepads
+            .iter()
+            .any(|g| g.just_pressed(GamepadButton::North));
+    if whats.open {
+        if y || input.confirm || input.back {
+            whats.open = false;
+        }
+        // The box swallows the press
+        *input = MenuInput::default();
+    } else if y {
+        whats.open = true;
+    }
+    for mut visibility in &mut boxes {
+        *visibility = if whats.open {
+            Visibility::Inherited
+        } else {
+            Visibility::Hidden
+        };
+    }
+}
+
 pub(super) fn plugin(app: &mut App) {
+    app.init_resource::<Whats>();
+    #[cfg(not(test))]
+    app.add_systems(Startup, first_launch);
+    app.add_systems(
+        PreUpdate,
+        whats
+            .after(bevy::input::InputSystems)
+            .after(crate::input::menu)
+            .run_if(in_state(GameState::Menu)),
+    );
     app.add_computed_state::<InMenus>();
     app.init_resource::<Cursor>();
     app.add_systems(OnEnter(InMenus), backdrop);
@@ -23,11 +108,11 @@ pub(super) fn plugin(app: &mut App) {
     }
     app.add_systems(
         Update,
-        (navigate, lines, preview, spin)
+        (navigate, focus, bind, frame, preview, spin)
             .chain()
             .run_if(in_state(InMenus)),
     );
-    app.add_systems(Update, invite.run_if(in_state(GameState::Menu)));
+    app.add_systems(Update, late_invite.run_if(in_state(GameState::Menu)));
     app.init_resource::<Ready>();
     app.add_systems(OnEnter(GameState::Lobby), |mut seats: ResMut<Seats>| {
         seats.0.clear();
@@ -63,9 +148,6 @@ impl ComputedStates for InMenus {
 #[derive(Resource, Copy, Clone, Debug, Default)]
 struct Cursor(usize);
 
-#[derive(Component, Copy, Clone, Debug)]
-struct Line(usize);
-
 /// The racer model on the menu platter.
 #[derive(Component, Copy, Clone, Debug)]
 struct Preview(usize);
@@ -73,30 +155,97 @@ struct Preview(usize);
 #[derive(Component, Copy, Clone, Debug)]
 struct Platter;
 
-/// Controls listed on the options screen.
-const CONTROLS: [(Action, Option<Action>, &str); 6] = [
-    (Action::Gas, Some(Action::GasButton), "Gas"),
-    (Action::Brake, Some(Action::BrakeButton), "Brake"),
-    (Action::Steer, None, "Steer"),
-    (
-        Action::Drift,
-        None,
-        "Drift (hold, then release for a turbo)",
-    ),
-    (Action::Item, None, "Use item"),
-    (Action::Quit, None, "Quit race"),
-];
+/// Something on a menu screen that shows live data.
+#[derive(Component, Copy, Clone, Debug, Eq, PartialEq)]
+enum Bind {
+    /// Value text of an option row.
+    Value(Opt),
+    /// Pip `n` of a slider row.
+    Pip(Opt, u8),
+    /// A lobby seat row's text and its colour.
+    Seat(usize),
+    LobbyHelp,
+    RacerName,
+    RacerBlurb,
+    RacerStat(usize),
+    RacerRow(usize),
+    SeatPlayer,
+    SeatStrip,
+}
 
-const fn header(state: GameState) -> &'static str {
-    match state {
-        GameState::Menu => "GOBBLE GRAND PRIX",
-        GameState::Options => "Options",
-        GameState::Lobby => "Join in",
-        GameState::PickRacer => "Pick your racer",
-        GameState::PickTrack => "Pick a track",
-        GameState::Race => "",
+/// The settings on the options screen, in row order.
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+enum Opt {
+    Volume,
+    Music,
+    Quality,
+    Smoothing,
+    Shake,
+    Sides,
+}
+impl Opt {
+    const ALL: [Self; 6] = [
+        Self::Volume,
+        Self::Music,
+        Self::Quality,
+        Self::Smoothing,
+        Self::Shake,
+        Self::Sides,
+    ];
+
+    const fn name(self) -> &'static str {
+        match self {
+            Self::Volume => "Volume",
+            Self::Music => "Music",
+            Self::Quality => "Quality",
+            Self::Smoothing => "Camera smoothing",
+            Self::Shake => "Camera shake",
+            Self::Sides => "2 players",
+        }
+    }
+
+    /// The 0..=10 level of a slider row.
+    const fn level(
+        self,
+        options: &Options,
+    ) -> Option<u8> {
+        match self {
+            Self::Volume => Some(options.volume),
+            Self::Music => Some(options.music),
+            Self::Smoothing => Some(options.smoothing),
+            _ => None,
+        }
+    }
+
+    fn value(
+        self,
+        options: &Options,
+    ) -> String {
+        match self {
+            Self::Quality => if options.high_quality { "High" } else { "Low" }.into(),
+            Self::Shake => if options.shake { "On" } else { "Off" }.into(),
+            Self::Sides => if options.side_by_side {
+                "Side by side"
+            } else {
+                "Top / bottom"
+            }
+            .into(),
+            _ => self.level(options).unwrap_or(0).to_string(),
+        }
     }
 }
+
+/// The controls panel on the options screen: what each glyph does.
+const CONTROLS: [(Action, &str); 8] = [
+    (Action::Gas, "Gas"),
+    (Action::GasButton, "Gas (button)"),
+    (Action::Brake, "Brake"),
+    (Action::BrakeButton, "Brake (button)"),
+    (Action::Steer, "Steer"),
+    (Action::Drift, "Drift: hold, release for a turbo"),
+    (Action::Item, "Use item"),
+    (Action::Quit, "Quit race"),
+];
 
 const fn device_name(device: Device) -> &'static str {
     match device {
@@ -108,94 +257,1003 @@ const fn device_name(device: Device) -> &'static str {
     }
 }
 
-fn rows(
-    state: GameState,
-    setup: &Setup,
-    options: &Options,
-    seats: &Seats,
-    ready: &Ready,
-) -> Vec<String> {
-    match state {
-        GameState::Lobby => {
-            let mut rows: Vec<String> = (0..4)
-                .map(|slot| {
-                    seats.0.get(slot).map_or_else(
-                        || format!("P{}  press A or Enter to join", slot + 1),
-                        |device| format!("P{}  {}", slot + 1, device_name(*device)),
-                    )
-                })
-                .collect();
-            rows.push(if seats.0.is_empty() {
-                "B / Esc: back to menu".into()
-            } else {
-                "Joined players press A / Enter again to start".into()
-            });
-            rows
-        }
-        GameState::PickRacer if setup.racers.len() > 1 => setup
-            .racers
-            .iter()
-            .enumerate()
-            .map(|(slot, racer)| {
-                let done = if ready.0.get(slot).copied().unwrap_or(false) {
-                    "  READY"
-                } else {
-                    ""
-                };
-                format!("P{}  <  {}  >{done}", slot + 1, ROSTER[*racer].name)
-            })
-            .collect(),
-        GameState::Menu => vec!["Start Race".into(), "Options".into(), "Exit".into()],
-        GameState::Options => vec![
-            format!("Volume   <  {}  >", options.volume),
-            format!("Music   <  {}  >", options.music),
-            format!(
-                "Quality  <  {}  >",
-                if options.high_quality { "High" } else { "Low" }
-            ),
-            format!("Camera smoothing  <  {}  >", options.smoothing),
-            format!(
-                "Camera shake  <  {}  >",
-                if options.shake { "On" } else { "Off" }
-            ),
-            format!(
-                "2 players  <  {}  >",
-                if options.side_by_side {
-                    "Side by side"
-                } else {
-                    "Top / bottom"
-                }
-            ),
-            "Back".into(),
-        ],
-        GameState::PickRacer => {
-            let racer = &ROSTER[setup.racers[0]];
-            let bar = |v: f32| "#".repeat(((v - 0.7) * 20.0).round().max(1.0) as usize);
-            vec![
-                format!("<  {}  >", racer.name),
-                racer.blurb.into(),
-                format!(
-                    "Speed {}   Accel {}   Turn {}",
-                    bar(racer.stats.top_speed),
-                    bar(racer.stats.accel),
-                    bar(racer.stats.turn),
-                ),
-            ]
-        }
-        GameState::PickTrack => {
-            let track = &TRACKS[setup.track];
-            vec![format!("<  {}  >", track.name), track.blurb.into()]
-        }
-        GameState::Race => vec![],
-    }
-}
-
 /// Rows the cursor can stop on.
 const fn selectable(state: GameState) -> usize {
     match state {
         GameState::Menu => 3,
         GameState::Options => 7,
         _ => 1,
+    }
+}
+
+/// The 1280x800 design, centred in the window; everything inside is placed in spec px.
+fn stage(
+    commands: &mut Commands,
+    state: GameState,
+) -> Entity {
+    commands
+        .spawn((
+            Node {
+                width: percent(100),
+                height: percent(100),
+                justify_content: JustifyContent::Center,
+                align_items: AlignItems::Center,
+                ..default()
+            },
+            DespawnOnExit(state),
+        ))
+        .id()
+}
+
+fn page(
+    commands: &mut Commands,
+    state: GameState,
+    build: impl FnOnce(&mut ChildSpawnerCommands),
+) {
+    let root = stage(commands, state);
+    commands.entity(root).with_children(|root| {
+        root.spawn(Node {
+            width: px(1280),
+            height: px(800),
+            flex_shrink: 0.0,
+            ..default()
+        })
+        .with_children(build);
+    });
+}
+
+fn heading(
+    stage: &mut ChildSpawnerCommands,
+    value: &str,
+    width: f32,
+) {
+    stage.spawn((
+        boxed(48.0, 40.0, width, 48.0),
+        children![fit_text(
+            value,
+            Size::H1,
+            Weight::Bold,
+            Tone::CREAM_100,
+            width,
+            1
+        )],
+    ));
+}
+
+/// A line of text in a fixed box, vertically centred, `inset` from the left (or centred).
+fn caption(
+    stage: &mut ChildSpawnerCommands,
+    at: (f32, f32),
+    size: (f32, f32),
+    text: impl Bundle,
+    centred: bool,
+) -> Entity {
+    stage
+        .spawn((
+            Node {
+                align_items: AlignItems::Center,
+                justify_content: if centred {
+                    JustifyContent::Center
+                } else {
+                    JustifyContent::Start
+                },
+                ..boxed(at.0, at.1, size.0, size.1)
+            },
+            children![text],
+        ))
+        .id()
+}
+
+fn button(
+    stage: &mut ChildSpawnerCommands,
+    slot: usize,
+    at: (f32, f32),
+    width: f32,
+    value: &str,
+) {
+    stage
+        .spawn((
+            Slot(slot),
+            Ring,
+            Fill {
+                idle: Tone::BROWN_700,
+                focus: Tone::PUMPKIN,
+            },
+            BackgroundColor(Tone::BROWN_700),
+            BorderColor::all(Color::NONE),
+            Node {
+                align_items: AlignItems::Center,
+                justify_content: JustifyContent::Center,
+                border: UiRect::all(px(Space::FOCUS)),
+                border_radius: pill(Space::RADIUS_M),
+                ..boxed(at.0, at.1, width, 72.0)
+            },
+        ))
+        .with_children(|b| {
+            b.spawn((
+                Slot(slot),
+                Ink {
+                    idle: Tone::CREAM_100,
+                    focus: Tone::BROWN_900,
+                },
+                fit_text(
+                    value,
+                    Size::BODY,
+                    Weight::Medium,
+                    Tone::CREAM_100,
+                    width - 48.0,
+                    1,
+                ),
+            ));
+        });
+}
+
+/// A list row (spec 360x64 style) with its text inset 24.
+fn list_row(
+    stage: &mut ChildSpawnerCommands,
+    slot: usize,
+    at: (f32, f32),
+    size: (f32, f32),
+    value: &str,
+    extra: impl Bundle,
+) {
+    stage
+        .spawn((
+            Slot(slot),
+            Fill {
+                idle: Tone::BROWN_800,
+                focus: Tone::PUMPKIN,
+            },
+            BackgroundColor(Tone::BROWN_800),
+            Node {
+                align_items: AlignItems::Center,
+                padding: UiRect::horizontal(px(Space::L)),
+                border_radius: pill(Space::RADIUS_S),
+                ..boxed(at.0, at.1, size.0, size.1)
+            },
+            extra,
+        ))
+        .with_children(|row| {
+            row.spawn((
+                Slot(slot),
+                Ink {
+                    idle: Tone::CREAM_100,
+                    focus: Tone::BROWN_900,
+                },
+                fit_text(
+                    value,
+                    Size::BODY,
+                    Weight::Medium,
+                    Tone::CREAM_100,
+                    size.0 - 48.0,
+                    1,
+                ),
+            ));
+            // The focus marker on the left edge
+            row.spawn((
+                Slot(slot),
+                Fill {
+                    idle: Color::NONE,
+                    focus: Tone::CREAM_100,
+                },
+                BackgroundColor(Color::NONE),
+                Node {
+                    left: px(0),
+                    ..boxed(0.0, 0.0, 8.0, size.1)
+                },
+            ));
+        });
+}
+
+/// One option or slider row (spec 600x72).
+fn option_row(
+    stage: &mut ChildSpawnerCommands,
+    slot: usize,
+    at: (f32, f32),
+    opt: Opt,
+) {
+    let ink = Ink {
+        idle: Tone::CREAM_100,
+        focus: Tone::BROWN_900,
+    };
+    stage
+        .spawn((
+            Slot(slot),
+            Fill {
+                idle: Tone::BROWN_800,
+                focus: Tone::PUMPKIN,
+            },
+            BackgroundColor(Tone::BROWN_800),
+            Node {
+                border_radius: pill(Space::RADIUS_S),
+                ..boxed(at.0, at.1, 600.0, 72.0)
+            },
+        ))
+        .with_children(|row| {
+            row.spawn((
+                Node {
+                    align_items: AlignItems::Center,
+                    ..boxed(24.0, 0.0, 316.0, 72.0)
+                },
+                children![(
+                    Slot(slot),
+                    ink,
+                    fit_text(
+                        opt.name(),
+                        Size::BODY,
+                        Weight::Medium,
+                        Tone::CREAM_100,
+                        316.0,
+                        1
+                    )
+                )],
+            ));
+            if opt.level(&Options::default()).is_some() {
+                // Ten pips, then the number
+                for i in 0..10u8 {
+                    row.spawn((
+                        Bind::Pip(opt, i),
+                        Slot(slot),
+                        Fill {
+                            idle: Tone::BROWN_700,
+                            focus: Tone::CREAM_100,
+                        },
+                        BackgroundColor(Tone::BROWN_700),
+                        Node {
+                            border_radius: pill(4.0),
+                            ..boxed(356.0 + f32::from(i) * 18.0, 24.0, 14.0, 24.0)
+                        },
+                    ));
+                }
+                row.spawn((
+                    Node {
+                        align_items: AlignItems::Center,
+                        justify_content: JustifyContent::End,
+                        ..boxed(546.0, 0.0, 30.0, 72.0)
+                    },
+                    children![(
+                        Bind::Value(opt),
+                        Slot(slot),
+                        ink,
+                        fit_text("0", Size::BODY, Weight::Medium, Tone::CREAM_100, 30.0, 1)
+                    )],
+                ));
+            } else {
+                for (x, mark) in [(356.0, "<"), (562.0, ">")] {
+                    row.spawn((
+                        Node {
+                            align_items: AlignItems::Center,
+                            ..boxed(x, 0.0, 14.0, 72.0)
+                        },
+                        children![(
+                            Slot(slot),
+                            ink,
+                            fit_text(mark, Size::BODY, Weight::Medium, Tone::CREAM_100, 14.0, 1)
+                        )],
+                    ));
+                }
+                row.spawn((
+                    Node {
+                        align_items: AlignItems::Center,
+                        justify_content: JustifyContent::Center,
+                        ..boxed(376.0, 0.0, 180.0, 72.0)
+                    },
+                    children![(
+                        Bind::Value(opt),
+                        Slot(slot),
+                        ink,
+                        fit_text("", Size::BODY, Weight::Medium, Tone::CREAM_100, 180.0, 1)
+                    )],
+                ));
+            }
+        });
+}
+
+fn screen(
+    mut commands: Commands,
+    state: Res<State<GameState>>,
+    setup: Res<Setup>,
+    mut cursor: ResMut<Cursor>,
+) {
+    let state = *state.get();
+    cursor.0 = 0;
+    match state {
+        GameState::Menu => title(&mut commands),
+        GameState::Options => options(&mut commands),
+        GameState::Lobby => lobby_screen(&mut commands),
+        GameState::PickRacer => racers(&mut commands, setup.racers.len()),
+        GameState::PickTrack => tracks(&mut commands),
+        GameState::Race => {}
+    }
+}
+
+fn title(commands: &mut Commands) {
+    page(commands, GameState::Menu, |stage| {
+        stage.spawn((
+            Node {
+                border_radius: pill(Space::RADIUS_S),
+                align_items: AlignItems::Center,
+                justify_content: JustifyContent::Center,
+                ..boxed(720.0, 96.0, 512.0, 44.0)
+            },
+            BackgroundColor(Tone::CRANBERRY),
+            children![fit_text(
+                "THANKSGIVING KART RACING",
+                Size::LABEL,
+                Weight::SemiBold,
+                Tone::CREAM_100,
+                480.0,
+                1
+            )],
+        ));
+        caption(
+            stage,
+            (720.0, 154.0),
+            (512.0, 108.0),
+            fit_text(
+                "GOBBLE",
+                Size::DISPLAY,
+                Weight::Bold,
+                Tone::PUMPKIN,
+                512.0,
+                1,
+            ),
+            false,
+        );
+        caption(
+            stage,
+            (720.0, 262.0),
+            (512.0, 78.0),
+            fit_text(
+                "GRAND PRIX",
+                Size::DISPLAY_SUB,
+                Weight::Bold,
+                Tone::CREAM_100,
+                512.0,
+                1,
+            ),
+            false,
+        );
+        for (i, name) in ["Start Race", "Options", "Exit"].into_iter().enumerate() {
+            button(stage, i, (720.0, 416.0 + i as f32 * 88.0), 512.0, name);
+        }
+        caption(
+            stage,
+            (48.0, 760.0),
+            (560.0, 28.0),
+            fit_text(
+                VERSION,
+                Size::LABEL,
+                Weight::SemiBold,
+                Tone::CREAM_300,
+                560.0,
+                1,
+            ),
+            false,
+        );
+        hint_bar(
+            stage,
+            &[
+                (Action::Alt, "What's new"),
+                (Action::Navigate, "Choose"),
+                (Action::Confirm, "OK"),
+                (Action::Back, "Back"),
+            ],
+        );
+        news_box(stage);
+    });
+}
+
+/// The "What's new" box: the latest changelog lines over the title screen.
+fn news_box(stage: &mut ChildSpawnerCommands) {
+    stage
+        .spawn((
+            NewsBox,
+            Visibility::Hidden,
+            GlobalZIndex(10),
+            Node {
+                flex_direction: FlexDirection::Column,
+                row_gap: px(Space::S),
+                padding: UiRect::all(px(Space::L)),
+                border: UiRect::all(px(Space::FOCUS)),
+                border_radius: pill(Space::RADIUS_M),
+                ..boxed(320.0, 160.0, 640.0, 440.0)
+            },
+            BackgroundColor(Tone::BROWN_800),
+            BorderColor::all(Tone::CREAM_100),
+        ))
+        .with_children(|b| {
+            b.spawn(fit_text(
+                "What's new",
+                Size::H2,
+                Weight::Bold,
+                Tone::PUMPKIN,
+                584.0,
+                1,
+            ));
+            b.spawn(fit_text(
+                VERSION,
+                Size::LABEL,
+                Weight::SemiBold,
+                Tone::CREAM_300,
+                584.0,
+                1,
+            ));
+            for line in news() {
+                b.spawn(fit_text(
+                    line,
+                    Size::BODY,
+                    Weight::Medium,
+                    Tone::CREAM_100,
+                    584.0,
+                    2,
+                ));
+            }
+        });
+}
+
+/// Marks the phone invite so it is spawned once per visit to the title menu.
+#[derive(Component, Copy, Clone, Debug)]
+struct Invite;
+
+/// The phone controller QR over the title's turntable area, once the server is up.
+fn late_invite(
+    mut commands: Commands,
+    join: Option<Res<JoinInfo>>,
+    shown: Query<(), With<Invite>>,
+) {
+    let Some(join) = join else {
+        return;
+    };
+    if !shown.is_empty() {
+        return;
+    }
+    let root = stage(&mut commands, GameState::Menu);
+    commands.entity(root).insert(Invite).with_children(|root| {
+        root.spawn(Node {
+            width: px(1280),
+            height: px(800),
+            flex_shrink: 0.0,
+            ..default()
+        })
+        .with_children(|stage| invite(stage, &join));
+    });
+}
+
+fn invite(
+    stage: &mut ChildSpawnerCommands,
+    join: &JoinInfo,
+) {
+    stage
+        .spawn((
+            Node {
+                align_items: AlignItems::Center,
+                column_gap: px(Space::M),
+                padding: UiRect::all(px(Space::S)),
+                border_radius: pill(Space::RADIUS_M),
+                ..boxed(64.0, 560.0, 600.0, 168.0)
+            },
+            BackgroundColor(Tone::CHIP),
+        ))
+        .with_children(|invite| {
+            invite.spawn((
+                ImageNode::new(join.qr.clone()),
+                Node {
+                    width: px(150),
+                    height: px(150),
+                    flex_shrink: 0.0,
+                    ..default()
+                },
+            ));
+            invite
+                .spawn(Node {
+                    flex_direction: FlexDirection::Column,
+                    row_gap: px(4),
+                    ..default()
+                })
+                .with_children(|text| {
+                    // 600 - 2 * 8 padding - 150 QR - 16 gap
+                    let w = 418.0;
+                    text.spawn(fit_text(
+                        "Phone controller",
+                        Size::BODY,
+                        Weight::Medium,
+                        Tone::PUMPKIN,
+                        w,
+                        1,
+                    ));
+                    text.spawn(fit_text(
+                        format!("PIN {}", join.pin),
+                        Size::BODY,
+                        Weight::Medium,
+                        Tone::CREAM_100,
+                        w,
+                        1,
+                    ));
+                    let shown = match &join.anywhere {
+                        Some(_) => format!("Any network, or same Wi-Fi: {}", join.url),
+                        None => join.url.clone(),
+                    };
+                    text.spawn(fit_text(
+                        shown,
+                        Size::LABEL,
+                        Weight::SemiBold,
+                        Tone::CREAM_300,
+                        w,
+                        2,
+                    ));
+                    text.spawn(fit_text(
+                        "Accept the certificate warning once",
+                        Size::LABEL,
+                        Weight::SemiBold,
+                        Tone::CREAM_300,
+                        w,
+                        2,
+                    ));
+                });
+        });
+}
+
+fn options(commands: &mut Commands) {
+    page(commands, GameState::Options, |stage| {
+        heading(stage, "Options", 560.0);
+        for (i, opt) in Opt::ALL.into_iter().enumerate() {
+            option_row(stage, i, (48.0, 120.0 + i as f32 * 80.0), opt);
+        }
+        button(stage, 6, (48.0, 600.0), 600.0, "Back");
+        stage
+            .spawn((
+                Node {
+                    border_radius: pill(Space::RADIUS_M),
+                    ..boxed(672.0, 120.0, 560.0, 488.0)
+                },
+                BackgroundColor(Tone::BROWN_800),
+            ))
+            .with_children(|panel| {
+                caption(
+                    panel,
+                    (24.0, 20.0),
+                    (512.0, 40.0),
+                    fit_text(
+                        "Controls",
+                        Size::H2,
+                        Weight::Bold,
+                        Tone::CREAM_100,
+                        512.0,
+                        1,
+                    ),
+                    false,
+                );
+                for (i, (action, name)) in CONTROLS.into_iter().enumerate() {
+                    let y = 72.0 + i as f32 * 50.0;
+                    if i > 0 {
+                        panel.spawn((boxed(24.0, y, 512.0, 2.0), BackgroundColor(Tone::BROWN_700)));
+                    }
+                    panel.spawn((
+                        Glyph(action, None),
+                        ImageNode::default(),
+                        boxed(24.0, y + 5.0, 40.0, 40.0),
+                    ));
+                    caption(
+                        panel,
+                        (84.0, y),
+                        (452.0, 50.0),
+                        fit_text(name, Size::BODY, Weight::Medium, Tone::CREAM_100, 452.0, 1),
+                        false,
+                    );
+                }
+            });
+        hint_bar(
+            stage,
+            &[
+                (Action::Navigate, "Choose / adjust"),
+                (Action::Confirm, "OK"),
+                (Action::Back, "Back"),
+            ],
+        );
+    });
+}
+
+fn lobby_screen(commands: &mut Commands) {
+    page(commands, GameState::Lobby, |stage| {
+        heading(stage, "Join in", 800.0);
+        for slot in 0..4 {
+            stage
+                .spawn((
+                    Bind::Seat(slot),
+                    Fill {
+                        idle: Tone::BROWN_800,
+                        focus: Tone::BROWN_800,
+                    },
+                    BackgroundColor(Tone::BROWN_800),
+                    Node {
+                        align_items: AlignItems::Center,
+                        padding: UiRect::horizontal(px(Space::L)),
+                        border_radius: pill(Space::RADIUS_S),
+                        ..boxed(48.0, 120.0 + slot as f32 * 88.0, 600.0, 72.0)
+                    },
+                ))
+                .with_child((
+                    Bind::Seat(slot),
+                    fit_text("", Size::BODY, Weight::Medium, Tone::CREAM_300, 552.0, 1),
+                ));
+        }
+        stage
+            .spawn((
+                Node {
+                    padding: UiRect::all(px(Space::L)),
+                    border_radius: pill(Space::RADIUS_M),
+                    ..boxed(672.0, 120.0, 560.0, 200.0)
+                },
+                BackgroundColor(Tone::BROWN_800),
+            ))
+            .with_child((
+                Bind::LobbyHelp,
+                fit_text("", Size::BODY, Weight::Medium, Tone::CREAM_100, 512.0, 5),
+            ));
+        hint_bar(
+            stage,
+            &[
+                (Action::Confirm, "Join / start"),
+                (Action::Back, "Leave / back"),
+            ],
+        );
+    });
+}
+
+/// The racer panel: name, blurb and stat bars of one seat's pick. Built per seat so split
+/// screen can hang one per player; `left` is its x on the stage.
+fn racer_panel(
+    stage: &mut ChildSpawnerCommands,
+    left: f32,
+) {
+    caption(
+        stage,
+        (left, 120.0),
+        (336.0, 48.0),
+        (
+            Bind::RacerName,
+            fit_text("", Size::H1, Weight::Bold, Tone::PUMPKIN, 336.0, 1),
+        ),
+        false,
+    );
+    stage.spawn((
+        boxed(left, 176.0, 336.0, 150.0),
+        children![(
+            Bind::RacerBlurb,
+            fit_text("", Size::BODY, Weight::Medium, Tone::CREAM_100, 336.0, 5)
+        )],
+    ));
+    for (i, name) in ["Speed", "Accel", "Turn"].into_iter().enumerate() {
+        bar(
+            stage,
+            left,
+            336.0 + i as f32 * 48.0,
+            name,
+            (
+                Bind::RacerStat(i),
+                Node {
+                    border_radius: pill(8.0),
+                    ..boxed(112.0, 8.0, 20.0, 16.0)
+                },
+                BackgroundColor(Tone::PUMPKIN),
+            ),
+        );
+    }
+}
+
+fn racers(
+    commands: &mut Commands,
+    seats: usize,
+) {
+    page(commands, GameState::PickRacer, |stage| {
+        heading(stage, "Pick your racer", 640.0);
+        caption(
+            stage,
+            (912.0, 52.0),
+            (320.0, 28.0),
+            (
+                Bind::SeatPlayer,
+                fit_text(
+                    "Player 1",
+                    Size::LABEL,
+                    Weight::SemiBold,
+                    Tone::CREAM_300,
+                    320.0,
+                    1,
+                ),
+            ),
+            false,
+        );
+        for (i, racer) in ROSTER.iter().enumerate() {
+            list_row(
+                stage,
+                i,
+                (48.0, 120.0 + i as f32 * 72.0),
+                (360.0, 64.0),
+                racer.name,
+                Bind::RacerRow(i),
+            );
+        }
+        // The 3D turntable shows through here
+        stage.spawn(boxed(432.0, 120.0, 440.0, 568.0));
+        racer_panel(stage, 896.0);
+        let strip = if seats > 1 { 4 } else { 1 };
+        stage.spawn((
+            boxed(896.0, 536.0, 336.0, 152.0),
+            children![(
+                Bind::SeatStrip,
+                fit_text(
+                    format!("{} racers", ROSTER.len()),
+                    Size::LABEL,
+                    Weight::SemiBold,
+                    Tone::CREAM_300,
+                    336.0,
+                    strip + 1
+                )
+            )],
+        ));
+        hint_bar(
+            stage,
+            &[
+                (Action::Navigate, "Choose"),
+                (Action::Confirm, "Pick"),
+                (Action::Back, "Back"),
+            ],
+        );
+    });
+}
+
+fn tracks(commands: &mut Commands) {
+    page(commands, GameState::PickTrack, |stage| {
+        heading(stage, "Pick a track", 800.0);
+        for (i, track) in TRACKS.iter().enumerate() {
+            stage
+                .spawn((
+                    Slot(i),
+                    Ring,
+                    Fill {
+                        idle: Tone::BROWN_800,
+                        focus: Tone::PUMPKIN,
+                    },
+                    BackgroundColor(Tone::BROWN_800),
+                    BorderColor::all(Color::NONE),
+                    Node {
+                        border: UiRect::all(px(Space::FOCUS)),
+                        border_radius: pill(Space::RADIUS_M),
+                        ..boxed(48.0 + i as f32 * 400.0, 120.0, 384.0, 520.0)
+                    },
+                ))
+                .with_children(|card| {
+                    // Sky over ground stands in for the flyover
+                    card.spawn((
+                        Node {
+                            overflow: Overflow::clip(),
+                            flex_direction: FlexDirection::Column,
+                            border_radius: pill(Space::RADIUS_M),
+                            ..boxed(12.0, 12.0, 352.0, 264.0)
+                        },
+                        BackgroundColor(track.theme.sky),
+                        children![(
+                            Node {
+                                width: percent(100),
+                                height: percent(40),
+                                margin: UiRect::top(percent(60)),
+                                ..default()
+                            },
+                            BackgroundColor(track.theme.ground)
+                        )],
+                    ));
+                    let ink = Ink {
+                        idle: Tone::CREAM_100,
+                        focus: Tone::BROWN_900,
+                    };
+                    caption(
+                        card,
+                        (20.0, 296.0),
+                        (336.0, 44.0),
+                        (
+                            Slot(i),
+                            ink,
+                            fit_text(
+                                track.name,
+                                Size::H2,
+                                Weight::Bold,
+                                Tone::CREAM_100,
+                                336.0,
+                                1,
+                            ),
+                        ),
+                        false,
+                    );
+                    card.spawn((
+                        boxed(20.0, 348.0, 336.0, 156.0),
+                        children![(
+                            Slot(i),
+                            Ink {
+                                idle: Tone::CREAM_300,
+                                focus: Tone::BROWN_900,
+                            },
+                            fit_text(
+                                track.blurb,
+                                Size::BODY,
+                                Weight::Medium,
+                                Tone::CREAM_300,
+                                336.0,
+                                5
+                            )
+                        )],
+                    ));
+                });
+        }
+        caption(
+            stage,
+            (48.0, 672.0),
+            (400.0, 28.0),
+            fit_text(
+                format!("{LAPS} laps"),
+                Size::LABEL,
+                Weight::SemiBold,
+                Tone::CREAM_300,
+                400.0,
+                1,
+            ),
+            false,
+        );
+        hint_bar(
+            stage,
+            &[
+                (Action::Navigate, "Choose"),
+                (Action::Confirm, "Race"),
+                (Action::Back, "Back"),
+            ],
+        );
+    });
+}
+
+/// Which row the screen shows as focused.
+fn focus(
+    state: Res<State<GameState>>,
+    cursor: Res<Cursor>,
+    setup: Res<Setup>,
+    mut focus: ResMut<Focus>,
+) {
+    let at = match state.get() {
+        GameState::Menu | GameState::Options => Some(cursor.0),
+        GameState::PickRacer => setup.racers.first().copied(),
+        GameState::PickTrack => Some(setup.track),
+        _ => None,
+    };
+    if focus.0 != at {
+        focus.0 = at;
+    }
+}
+
+/// Fill the live parts of the current screen.
+fn bind(
+    setup: Res<Setup>,
+    options: Res<Options>,
+    seats: Res<Seats>,
+    ready: Res<Ready>,
+    mut texts: Query<(&Bind, &mut Fitted)>,
+    mut nodes: Query<(&Bind, &mut Node, &mut Fill), Without<Fitted>>,
+) {
+    let racer = &ROSTER[setup
+        .racers
+        .first()
+        .copied()
+        .unwrap_or(0)
+        .min(ROSTER.len() - 1)];
+    let stat = |i: usize| {
+        let v = match i {
+            0 => racer.stats.top_speed,
+            1 => racer.stats.accel,
+            _ => racer.stats.turn,
+        };
+        ((v - 0.7) / 0.6 * 200.0).round().clamp(20.0, 200.0)
+    };
+    for (bind, mut fitted) in &mut texts {
+        match *bind {
+            Bind::Value(opt) => fitted.set(opt.value(&options)),
+            Bind::Seat(slot) => fitted.set(seats.0.get(slot).map_or_else(
+                || format!("P{}  press A or Enter to join", slot + 1),
+                |device| format!("P{}  {}", slot + 1, device_name(*device)),
+            )),
+            Bind::LobbyHelp => fitted.set(if seats.0.is_empty() {
+                "Press A or Enter on a controller, the keyboard or a phone to take a seat. B or Esc goes back to the menu."
+            } else {
+                "Joined players press A or Enter again to start. B or Esc leaves your seat."
+            }),
+            Bind::RacerName => fitted.set(racer.name),
+            Bind::RacerBlurb => fitted.set(racer.blurb),
+            Bind::SeatPlayer => fitted.set(if setup.racers.len() > 1 {
+                format!("Players: {}", setup.racers.len())
+            } else {
+                "Player 1".to_string()
+            }),
+            Bind::SeatStrip => {
+                if setup.racers.len() > 1 {
+                    let mut lines = Vec::new();
+                    for (slot, pick) in setup.racers.iter().enumerate() {
+                        let done = if ready.0.get(slot).copied().unwrap_or(false) {
+                            "  READY"
+                        } else {
+                            ""
+                        };
+                        lines.push(format!("P{}  {}{done}", slot + 1, ROSTER[*pick].name));
+                    }
+                    fitted.set(lines.join("\n"));
+                } else {
+                    fitted.set(format!("{} racers", ROSTER.len()));
+                }
+            }
+            _ => {}
+        }
+    }
+    for (bind, mut node, mut fill) in &mut nodes {
+        match *bind {
+            Bind::Pip(opt, i) => {
+                let on = opt.level(&options).is_some_and(|level| i < level);
+                *fill = if on {
+                    Fill {
+                        idle: Tone::PUMPKIN,
+                        focus: Tone::BROWN_900,
+                    }
+                } else {
+                    Fill {
+                        idle: Tone::BROWN_700,
+                        focus: Tone::CREAM_100,
+                    }
+                };
+            }
+            Bind::Seat(slot) => {
+                let joined = seats.0.get(slot).is_some();
+                let c = if joined {
+                    Tone::CRANBERRY
+                } else {
+                    Tone::BROWN_800
+                };
+                *fill = Fill { idle: c, focus: c };
+            }
+            Bind::RacerStat(i) => node.width = px(stat(i)),
+            Bind::RacerRow(i) => {
+                // Taken by another seat: cranberry
+                let taken = setup
+                    .racers
+                    .iter()
+                    .enumerate()
+                    .skip(1)
+                    .any(|(s, r)| *r == i && ready.0.get(s).copied().unwrap_or(false));
+                fill.idle = if taken {
+                    Tone::CRANBERRY
+                } else {
+                    Tone::BROWN_800
+                };
+            }
+            _ => {}
+        }
+    }
+}
+
+/// Where the camera looks: the platter on the left of the title, centred for the racer pick.
+fn frame(
+    state: Res<State<GameState>>,
+    time: Res<Time>,
+    mut cameras: Query<&mut Transform, With<Camera3d>>,
+) {
+    let aim = match state.get() {
+        GameState::PickRacer => Vec3::new(0.0, 1.0, 0.0),
+        _ => Vec3::new(-1.6, 1.0, 0.0),
+    };
+    let from = match state.get() {
+        GameState::PickRacer => Vec3::new(0.0, 3.0, -7.5),
+        _ => Vec3::new(-3.2, 3.0, -6.5),
+    };
+    let k = (time.delta_secs() * 8.0).min(1.0);
+    for mut transform in &mut cameras {
+        let to = Transform::from_translation(from).looking_at(aim, Vec3::Y);
+        transform.translation = transform.translation.lerp(to.translation, k);
+        transform.rotation = transform.rotation.slerp(to.rotation, k);
     }
 }
 
@@ -249,152 +1307,6 @@ fn backdrop(
         Transform::from_xyz(0.0, 0.08, 0.0),
         scope,
     ));
-}
-
-fn screen(
-    mut commands: Commands,
-    state: Res<State<GameState>>,
-    setup: Res<Setup>,
-    options: Res<Options>,
-    seats: Res<Seats>,
-    ready: Res<Ready>,
-    mut cursor: ResMut<Cursor>,
-) {
-    let state = *state.get();
-    cursor.0 = 0;
-    let count = match state {
-        // Seats can join after the screen is built
-        GameState::Lobby => 5,
-        GameState::PickRacer => 4.max(rows(state, &setup, &options, &seats, &ready).len()),
-        _ => rows(state, &setup, &options, &seats, &ready).len(),
-    };
-    let big = matches!(state, GameState::Menu | GameState::Options);
-    commands
-        .spawn((
-            Node {
-                width: percent(100),
-                height: percent(100),
-                flex_direction: FlexDirection::Column,
-                justify_content: JustifyContent::SpaceBetween,
-                align_items: AlignItems::End,
-                padding: UiRect::all(px(Size::PAD * 1.5)),
-                ..default()
-            },
-            DespawnOnExit(state),
-        ))
-        .with_children(|root| {
-            let size = match state {
-                GameState::Menu => Size::TITLE,
-                _ => Size::HEADING,
-            };
-            root.spawn(label(header(state), size, Tone::GOLD));
-            root.spawn(Node {
-                flex_direction: FlexDirection::Column,
-                align_items: AlignItems::End,
-                row_gap: px(Size::GAP * 1.5),
-                max_width: percent(50),
-                ..default()
-            })
-            .with_children(|list| {
-                for i in 0..count {
-                    let size = match (i, big) {
-                        (0, _) | (_, true) => Size::HEADING,
-                        _ => Size::BODY,
-                    };
-                    list.spawn((
-                        Line(i),
-                        label("", size, Tone::CREAM),
-                        TextLayout::justify(Justify::Right),
-                    ));
-                }
-                if state == GameState::Options {
-                    list.spawn(panel()).with_children(|controls| {
-                        for (action, alternative, text) in CONTROLS {
-                            match alternative {
-                                Some(alternative) => {
-                                    controls.spawn(prompt_either(action, alternative, text));
-                                }
-                                None => {
-                                    controls.spawn(prompt(action, text));
-                                }
-                            }
-                        }
-                    });
-                }
-            });
-            root.spawn(Node {
-                column_gap: px(Size::PAD),
-                ..default()
-            })
-            .with_children(|hints| {
-                hints.spawn(prompt(Action::Navigate, "Choose"));
-                hints.spawn(prompt(Action::Confirm, "OK"));
-                hints.spawn(prompt(Action::Back, "Back"));
-            });
-        });
-}
-
-/// Marks the phone invite so it is spawned once per visit to the title menu.
-#[derive(Component, Copy, Clone, Debug)]
-struct Invite;
-
-/// The phone controller QR, bottom left of the title menu, once the server is up.
-fn invite(
-    mut commands: Commands,
-    join: Option<Res<JoinInfo>>,
-    shown: Query<(), With<Invite>>,
-) {
-    let Some(join) = join else {
-        return;
-    };
-    if !shown.is_empty() {
-        return;
-    }
-    let state = GameState::Menu;
-    // Phone controller invite, bottom left
-    commands
-        .spawn((
-            Node {
-                position_type: PositionType::Absolute,
-                left: px(Size::PAD * 1.5),
-                bottom: px(Size::PAD * 1.5),
-                column_gap: px(Size::GAP * 1.5),
-                align_items: AlignItems::Center,
-                ..default()
-            },
-            Invite,
-            DespawnOnExit(state),
-        ))
-        .with_children(|invite| {
-            invite.spawn((
-                ImageNode::new(join.qr.clone()),
-                Node {
-                    width: px(150),
-                    height: px(150),
-                    ..default()
-                },
-            ));
-            invite
-                .spawn(Node {
-                    flex_direction: FlexDirection::Column,
-                    row_gap: px(4),
-                    ..default()
-                })
-                .with_children(|text| {
-                    text.spawn(label("Phone controller", Size::BODY, Tone::GOLD));
-                    text.spawn(label(format!("PIN {}", join.pin), Size::BODY, Tone::CREAM));
-                    let shown = match &join.anywhere {
-                        Some(_) => format!("Any network, or same Wi-Fi: {}", join.url),
-                        None => join.url.clone(),
-                    };
-                    text.spawn(label(shown, Size::SMALL, Tone::DIM));
-                    text.spawn(label(
-                        "Accept the certificate warning once",
-                        Size::SMALL,
-                        Tone::DIM,
-                    ));
-                });
-        });
 }
 
 fn navigate(
@@ -469,33 +1381,6 @@ fn navigate(
             }
         }
         GameState::Race => {}
-    }
-}
-
-fn lines(
-    state: Res<State<GameState>>,
-    setup: Res<Setup>,
-    options: Res<Options>,
-    seats: Res<Seats>,
-    ready: Res<Ready>,
-    cursor: Res<Cursor>,
-    texts: Query<(&Line, &mut Text, &mut TextColor)>,
-) {
-    let state = *state.get();
-    let rows = rows(state, &setup, &options, &seats, &ready);
-    let pickable = selectable(state) > 1;
-    for (line, mut text, mut color) in texts {
-        let row = rows.get(line.0).cloned().unwrap_or_default();
-        let row = &row;
-        let on = line.0 == cursor.0 && (pickable || line.0 == 0);
-        let shown = match (on, pickable) {
-            (true, true) => format!("> {row}"),
-            _ => row.clone(),
-        };
-        if text.0 != shown {
-            text.0 = shown;
-        }
-        color.0 = if on { Tone::GOLD } else { Tone::CREAM };
     }
 }
 

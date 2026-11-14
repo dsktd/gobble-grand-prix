@@ -7,6 +7,8 @@ mod hud;
 mod input;
 mod items;
 mod kart;
+#[cfg(test)]
+mod layout_test;
 mod menu;
 mod music;
 mod phone;

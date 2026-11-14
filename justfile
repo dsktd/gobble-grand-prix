@@ -24,3 +24,7 @@ deck-build *args:
 lint:
     nix develop -c cargo fmt --all --check
     nix develop -c cargo clippy --all-targets --all-features --locked -- -D warnings
+
+# Headless layout tests: no text may overflow on any screen or HUD
+test:
+    nix develop -c cargo test --locked --lib
