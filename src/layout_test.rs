@@ -180,6 +180,9 @@ fn no_text_overflows() {
                 url: "https://192-168-100-200.example-very-long-host-name.local:7777/join".into(),
                 pin: "123456".into(),
                 qr: Handle::default(),
+                anywhere: Some(
+                    "https://example.github.io/pad/#endpoint-with-a-very-long-ticket".into(),
+                ),
             });
             for (name, state) in [
                 ("title", GameState::Menu),
