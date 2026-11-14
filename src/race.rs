@@ -20,7 +20,12 @@ pub(super) fn plugin(app: &mut App) {
     app.add_systems(OnEnter(GameState::Race), spawn.after(spawn_track));
     app.add_systems(
         Update,
-        (clock, progress, places, finish, leave)
+        (
+            clock,
+            progress,
+            places,
+            (finish, leave).chain().run_if(in_state(GameState::Race)),
+        )
             .chain()
             .in_set(KartSet::Race),
     );
@@ -72,7 +77,7 @@ pub struct Finished {
     pub place: usize,
 }
 
-fn spawn(
+pub(super) fn spawn(
     mut commands: Commands,
     setup: Res<Setup>,
     seats: Res<Seats>,

@@ -17,7 +17,7 @@ pub(super) fn plugin(app: &mut App) {
             .chain()
             .after(KartSet::Physics)
             .before(KartSet::Race)
-            .run_if(in_state(GameState::Race)),
+            .run_if(on_track),
     );
 }
 
@@ -89,7 +89,7 @@ struct Looks {
     slick: Handle<StandardMaterial>,
 }
 
-fn spawn(
+pub(super) fn spawn(
     mut commands: Commands,
     track: Res<Track>,
     mut meshes: ResMut<Assets<Mesh>>,

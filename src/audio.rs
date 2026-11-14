@@ -199,6 +199,7 @@ fn play(
     sounds: Res<Sounds>,
     setup: Res<Setup>,
     state: Res<State<GameState>>,
+    attract: Option<Res<Attract>>,
     mut messages: MessageReader<Sfx>,
 ) {
     // A crying cat in P1's seat wails at the start, when hit, and when using items
@@ -213,7 +214,13 @@ fn play(
         let Some((_, handle)) = sounds.clips.iter().find(|(s, _)| s == sfx) else {
             continue;
         };
-        commands.spawn((AudioPlayer(handle.clone()), PlaybackSettings::DESPAWN));
+        // The race behind the menus stays in the background
+        let settings = if attract.is_some() && *sfx != Sfx::Click {
+            PlaybackSettings::DESPAWN.with_volume(Volume::Linear(Attract::DUCK))
+        } else {
+            PlaybackSettings::DESPAWN
+        };
+        commands.spawn((AudioPlayer(handle.clone()), settings));
     }
     if wail && let Some((_, handle)) = sounds.clips.iter().find(|(s, _)| *s == Sfx::Wail) {
         commands.spawn((AudioPlayer(handle.clone()), PlaybackSettings::DESPAWN));

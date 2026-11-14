@@ -5,6 +5,7 @@ Add yours under the heading below, at the top.
 
 ## Unreleased
 
+- The menus play a live CPU race behind them, filmed with TV-style camera cuts.
 - Racer select: every player picks with up and down on their own cursor, A locks in, B unlocks; phones tap a racer on their screen.
 - The lobby shows the phone join QR code too.
 - Karts slide along walls instead of stopping dead.

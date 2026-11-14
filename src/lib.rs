@@ -1,5 +1,6 @@
 #![allow(clippy::type_complexity)]
 
+mod attract;
 mod audio;
 mod camera;
 mod cpu;
@@ -28,6 +29,7 @@ pub(crate) mod prelude {
     pub use super::GameState;
     pub use super::Options;
     pub use super::Setup;
+    pub use super::attract::prelude::*;
     pub use super::audio::prelude::*;
     pub use super::camera::prelude::*;
     pub use super::cpu::prelude::*;
@@ -107,6 +109,7 @@ pub fn plugin(app: &mut App) {
     app.init_resource::<Setup>();
     app.init_resource::<Options>();
     app.add_plugins((
+        attract::plugin,
         audio::plugin,
         camera::plugin,
         cpu::plugin,

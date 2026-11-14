@@ -11,7 +11,7 @@ pub(super) mod prelude {
 
 pub(super) fn plugin(app: &mut App) {
     app.add_systems(OnEnter(GameState::Race), spawn.after(spawn_track));
-    app.add_systems(Update, fall.run_if(in_state(GameState::Race)));
+    app.add_systems(Update, fall.run_if(on_track));
 }
 
 #[derive(Component, Clone, Debug)]
@@ -55,7 +55,7 @@ fn put(
     ));
 }
 
-fn spawn(
+pub(super) fn spawn(
     mut commands: Commands,
     track: Res<Track>,
     options: Res<Options>,

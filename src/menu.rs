@@ -5,6 +5,7 @@ use bevy::prelude::*;
 use crate::prelude::*;
 
 pub(super) mod prelude {
+    pub use super::InMenus;
     pub use super::Whats;
 }
 
@@ -169,6 +170,13 @@ struct Preview(usize);
 #[derive(Component, Copy, Clone, Debug)]
 struct Platter;
 
+/// Films the platter over the attract race, on racer select only.
+#[derive(Component, Copy, Clone, Debug)]
+struct PlatterCam;
+
+/// The platter stands far off the track so the race camera never sees it.
+const PODIUM: Vec3 = Vec3::new(5000.0, 0.0, 0.0);
+
 /// Something on a menu screen that shows live data.
 #[derive(Component, Copy, Clone, Debug, Eq, PartialEq)]
 enum Bind {
@@ -287,8 +295,11 @@ fn stage(
     commands: &mut Commands,
     state: GameState,
 ) -> Entity {
-    // Screens without a 3D preview hide the platter behind a solid backdrop
-    let solid = !matches!(state, GameState::Menu | GameState::PickRacer);
+    // A vignette over the race behind; busier screens dim it more
+    let (inner, outer) = match state {
+        GameState::Menu | GameState::PickRacer => (0.15, 0.7),
+        _ => (0.5, 0.8),
+    };
     commands
         .spawn((
             Node {
@@ -298,7 +309,14 @@ fn stage(
                 align_items: AlignItems::Center,
                 ..default()
             },
-            BackgroundColor(if solid { Tone::BROWN_900 } else { Color::NONE }),
+            BackgroundGradient::from(RadialGradient::new(
+                UiPosition::CENTER,
+                RadialGradientShape::FarthestCorner,
+                vec![
+                    ColorStop::percent(Tone::BROWN_900.with_alpha(inner), 30.0),
+                    ColorStop::percent(Tone::BROWN_900.with_alpha(outer), 100.0),
+                ],
+            )),
             DespawnOnExit(state),
         ))
         .id()
@@ -1300,25 +1318,13 @@ fn bind(
     }
 }
 
-/// Where the camera looks: the platter on the left of the title, centred for the racer pick.
+/// The platter only shows on racer select; the attract race fills every other screen.
 fn frame(
     state: Res<State<GameState>>,
-    time: Res<Time>,
-    mut cameras: Query<&mut Transform, With<Camera3d>>,
+    mut cameras: Query<&mut Camera, With<PlatterCam>>,
 ) {
-    let aim = match state.get() {
-        GameState::PickRacer => Vec3::new(0.0, 1.0, 0.0),
-        _ => Vec3::new(-1.6, 1.0, 0.0),
-    };
-    let from = match state.get() {
-        GameState::PickRacer => Vec3::new(0.0, 3.0, -7.5),
-        _ => Vec3::new(-3.2, 3.0, -6.5),
-    };
-    let k = (time.delta_secs() * 8.0).min(1.0);
-    for mut transform in &mut cameras {
-        let to = Transform::from_translation(from).looking_at(aim, Vec3::Y);
-        transform.translation = transform.translation.lerp(to.translation, k);
-        transform.rotation = transform.rotation.slerp(to.rotation, k);
+    for mut camera in &mut cameras {
+        camera.is_active = *state.get() == GameState::PickRacer;
     }
 }
 
@@ -1328,25 +1334,17 @@ fn backdrop(
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
     let scope = DespawnOnExit(InMenus);
-    commands.insert_resource(ClearColor(Tone::MENU_BG));
-    commands.insert_resource(GlobalAmbientLight {
-        color: Color::srgb(1.0, 0.8, 0.6),
-        brightness: 500.0,
-        ..default()
-    });
     commands.spawn((
+        PlatterCam,
         Camera3d::default(),
-        Transform::from_xyz(-3.2, 3.0, -6.5).looking_at(Vec3::new(-1.6, 1.0, 0.0), Vec3::Y),
-        scope.clone(),
-    ));
-    commands.spawn((
-        DirectionalLight {
-            color: Color::srgb(1.0, 0.8, 0.6),
-            illuminance: 8000.0,
-            shadow_maps_enabled: true,
+        Camera {
+            order: 1,
+            clear_color: ClearColorConfig::None,
+            is_active: false,
             ..default()
         },
-        Transform::default().looking_to(Vec3::new(0.5, -0.7, 0.6), Vec3::Y),
+        Transform::from_translation(PODIUM + Vec3::new(0.0, 3.0, -7.5))
+            .looking_at(PODIUM + Vec3::Y, Vec3::Y),
         scope.clone(),
     ));
     // A dinner plate to stand on
@@ -1358,7 +1356,7 @@ fn backdrop(
             perceptual_roughness: 0.3,
             ..default()
         })),
-        Transform::default(),
+        Transform::from_translation(PODIUM),
         scope.clone(),
     ));
     commands.spawn((
@@ -1369,7 +1367,7 @@ fn backdrop(
             perceptual_roughness: 0.3,
             ..default()
         })),
-        Transform::from_xyz(0.0, 0.08, 0.0),
+        Transform::from_translation(PODIUM + Vec3::Y * 0.08),
         scope,
     ));
 }
@@ -1466,7 +1464,7 @@ fn preview(
     let root = commands
         .spawn((
             Preview(racer),
-            Transform::from_xyz(0.0, 0.1, 0.0),
+            Transform::from_translation(PODIUM + Vec3::Y * 0.1),
             Visibility::default(),
             DespawnOnExit(InMenus),
         ))

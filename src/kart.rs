@@ -18,18 +18,13 @@ pub(super) fn plugin(app: &mut App) {
         Update,
         (KartSet::Input, KartSet::Physics, KartSet::Race)
             .chain()
-            .run_if(in_state(GameState::Race)),
+            .run_if(on_track),
     );
     app.add_systems(
         Update,
         (drive, bump, pose, sparks).chain().in_set(KartSet::Physics),
     );
-    app.add_systems(
-        Update,
-        tears
-            .after(KartSet::Physics)
-            .run_if(in_state(GameState::Race)),
-    );
+    app.add_systems(Update, tears.after(KartSet::Physics).run_if(on_track));
 }
 
 #[derive(SystemSet, Copy, Clone, Debug, Eq, PartialEq, Hash)]
