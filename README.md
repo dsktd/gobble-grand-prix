@@ -35,3 +35,9 @@ Hold drift while steering into a turn: sparks go white, then blue, then orange. 
 ## License
 
 Public domain, see UNLICENSE.
+
+## Steam Deck
+
+`just deck-build` makes the Deck binary. `deck/art.sh` turns the screenshot tour into library art, and
+`deck/shortcut.py` (run on the Deck as `deck`, with Steam stopped) adds the "Gobble Grand Prix" non-Steam shortcut
+with that art. On the Deck the game runs borderless fullscreen at 1280x800.
