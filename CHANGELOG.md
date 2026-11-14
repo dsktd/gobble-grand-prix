@@ -16,5 +16,5 @@ Add yours under the heading below, at the top.
 - Each phone is its own player with its own seat, colour and HUD badge.
 - 2-4 player split screen with a join lobby.
 - Calmer camera and gentler steering, with camera options.
-- Music: your own files or the built-in harvest-fair soundtrack.
+- Music: your own files or the built-in CC0 bluegrass soundtrack.
 - Wailing Whiskers joins the roster.

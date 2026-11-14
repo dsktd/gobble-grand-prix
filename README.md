@@ -55,8 +55,8 @@ with that art. On the Deck the game runs borderless fullscreen at 1280x800.
 
 ## Music
 
-The game plays its own synthesised harvest-fair soundtrack (menu loop, race loop, faster final lap). To use your
-own music, put files in `~/.local/share/gobble-gp/music/` (`$XDG_DATA_HOME/gobble-gp/music/`):
+The game ships a CC0 bluegrass soundtrack (see `CREDITS.md`): a menu loop and three race loops, one per race in
+turn, that speed up a touch on the final lap; cues crossfade. To use your own music, put files in `~/.local/share/gobble-gp/music/` (`$XDG_DATA_HOME/gobble-gp/music/`):
 
 - `menu.ogg` / `menu.mp3` / `menu.flac` plays on the menus, `race.*` during races;
 - with neither name present, every other file there becomes the race playlist.

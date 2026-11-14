@@ -1,5 +1,5 @@
-//! Music: the player's own files from the music folder, else an original synthesised
-//! harvest-fair soundtrack (fiddle, banjo, bouncy bass, snare shuffle).
+//! Music: the player's own files from the music folder, else the bundled bluegrass
+//! soundtrack (see CREDITS.md). Cues crossfade; the final lap speeds the race tune up.
 
 use bevy::audio::AudioSinkPlayback;
 use bevy::audio::Volume;
@@ -13,30 +13,77 @@ pub(super) mod prelude {
 
 pub(super) fn plugin(app: &mut App) {
     app.add_systems(Startup, setup);
-    app.add_systems(Update, (choose, advance, level));
+    app.add_systems(Update, (choose, advance, mix).chain());
 }
+
+/// Seconds a cue takes to fade in or out.
+const FADE: f32 = 1.5;
+/// Playback speed on the final lap: about a semitone up and 6% faster.
+const FINAL_LAP_SPEED: f32 = 1.06;
+/// Seconds the final-lap lift takes to ramp in.
+const LIFT: f32 = 2.0;
+
+const MENU: &[u8] = include_bytes!("../assets/music/menu.ogg");
+const RACE: [&[u8]; 3] = [
+    include_bytes!("../assets/music/race-gone-fishin.ogg"),
+    include_bytes!("../assets/music/race-banjo-something.ogg"),
+    include_bytes!("../assets/music/race-backfoot.ogg"),
+];
 
 /// Which piece fits the moment.
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 enum Cue {
     Menu,
     Race,
-    FinalLap,
 }
 
 #[derive(Resource, Clone, Debug)]
 struct Library {
     menu: Vec<Handle<AudioSource>>,
     race: Vec<Handle<AudioSource>>,
-    final_lap: Vec<Handle<AudioSource>>,
-    /// Played from the player's folder, so a list rather than one loop.
+    /// Played from the player's folder, so a list played through rather than one loop.
     playlist: bool,
+    /// Bundled race tune for the next race; each race gets the next one.
+    next_race: usize,
+}
+
+impl Library {
+    fn list(
+        &self,
+        cue: Cue,
+    ) -> &[Handle<AudioSource>] {
+        match cue {
+            Cue::Menu => &self.menu,
+            Cue::Race => &self.race,
+        }
+    }
 }
 
 #[derive(Component, Copy, Clone, Debug)]
 struct Track {
     cue: Cue,
     index: usize,
+    /// Current fade gain, 0 to 1.
+    gain: f32,
+    /// Fading out, despawned once silent.
+    leaving: bool,
+    speed: f32,
+}
+
+impl Track {
+    const fn new(
+        cue: Cue,
+        index: usize,
+        gain: f32,
+    ) -> Self {
+        Self {
+            cue,
+            index,
+            gain,
+            leaving: false,
+            speed: 1.0,
+        }
+    }
 }
 
 /// `$XDG_DATA_HOME/gobble-gp/music`, usually `~/.local/share/gobble-gp/music`.
@@ -93,84 +140,81 @@ fn setup(
     }
     let playlist = !race.is_empty();
 
-    let mut synth = |song: Song| {
+    let mut bundled = |bytes: &'static [u8]| {
         sources.add(AudioSource {
-            bytes: wav(&song.render()).into(),
+            bytes: bytes.into(),
         })
     };
     if menu.is_empty() {
-        menu.push(synth(Song::MENU));
+        menu.push(bundled(MENU));
     }
-    let final_lap = if race.is_empty() {
-        vec![synth(Song::FINAL_LAP)]
-    } else {
-        race.clone()
-    };
     if race.is_empty() {
-        race.push(synth(Song::RACE));
+        race = RACE.into_iter().map(&mut bundled).collect();
     }
     commands.insert_resource(Library {
         menu,
         race,
-        final_lap,
         playlist,
+        next_race: 0,
     });
 }
 
-fn wanted(
-    state: &GameState,
-    karts: &Query<(&Progress, &Human)>,
-) -> Cue {
-    if *state != GameState::Race {
-        return Cue::Menu;
+fn wanted(state: &GameState) -> Cue {
+    if *state == GameState::Race {
+        Cue::Race
+    } else {
+        Cue::Menu
     }
-    let last = karts
+}
+
+fn on_final_lap(karts: &Query<(&Progress, &Human)>) -> bool {
+    karts
         .iter()
         .find(|(_, human)| human.0 == 0)
-        .is_some_and(|(progress, _)| progress.lap == LAPS);
-    if last { Cue::FinalLap } else { Cue::Race }
+        .is_some_and(|(progress, _)| progress.lap == LAPS)
 }
 
-fn volume(options: &Options) -> Volume {
-    Volume::Linear(f32::from(options.music) / 10.0 * f32::from(options.volume) / 10.0 * 0.6)
+fn volume(
+    options: &Options,
+    gain: f32,
+) -> Volume {
+    Volume::Linear(f32::from(options.music) / 10.0 * f32::from(options.volume) / 10.0 * 0.7 * gain)
 }
 
-/// Swap the playing piece when the cue changes.
+/// Start the right piece when the cue changes, fading the old one out.
 fn choose(
     mut commands: Commands,
-    library: Res<Library>,
+    mut library: ResMut<Library>,
     options: Res<Options>,
     state: Res<State<GameState>>,
-    karts: Query<(&Progress, &Human)>,
-    playing: Query<(Entity, &Track)>,
+    mut playing: Query<&mut Track>,
 ) {
-    let cue = wanted(state.get(), &karts);
-    // Your own race playlist plays through the final lap too
-    let cue = match (cue, library.playlist) {
-        (Cue::FinalLap, true) => Cue::Race,
-        _ => cue,
-    };
-    if playing.iter().any(|(_, track)| track.cue == cue) {
+    let cue = wanted(state.get());
+    if playing
+        .iter()
+        .any(|track| track.cue == cue && !track.leaving)
+    {
         return;
     }
-    for (id, _) in &playing {
-        commands.entity(id).despawn();
+    for mut track in &mut playing {
+        track.leaving = true;
     }
-    let list = match cue {
-        Cue::Menu => &library.menu,
-        Cue::Race => &library.race,
-        Cue::FinalLap => &library.final_lap,
-    };
-    let looped = list.len() == 1;
-    let settings = if looped {
-        PlaybackSettings::LOOP
+    let (index, settings) = if library.playlist && cue == Cue::Race {
+        (0, PlaybackSettings::REMOVE)
     } else {
-        PlaybackSettings::REMOVE
+        let index = match cue {
+            Cue::Menu => 0,
+            Cue::Race => library.next_race % library.race.len(),
+        };
+        (index, PlaybackSettings::LOOP)
     };
+    if cue == Cue::Race {
+        library.next_race += 1;
+    }
     commands.spawn((
-        Track { cue, index: 0 },
-        AudioPlayer(list[0].clone()),
-        settings.with_volume(volume(&options)),
+        Track::new(cue, index, 0.0),
+        AudioPlayer(library.list(cue)[index].clone()),
+        settings.with_volume(volume(&options, 0.0)),
     ));
 }
 
@@ -182,197 +226,78 @@ fn advance(
     tracks: Query<(Entity, &Track), Without<AudioPlayer>>,
 ) {
     for (id, track) in &tracks {
-        let list = match track.cue {
-            Cue::Menu => &library.menu,
-            Cue::Race => &library.race,
-            Cue::FinalLap => &library.final_lap,
-        };
-        let index = (track.index + 1) % list.len();
         commands.entity(id).despawn();
+        if track.leaving {
+            continue;
+        }
+        let list = library.list(track.cue);
+        let index = (track.index + 1) % list.len();
         commands.spawn((
-            Track {
-                cue: track.cue,
-                index,
-            },
+            Track::new(track.cue, index, 1.0),
             AudioPlayer(list[index].clone()),
-            PlaybackSettings::REMOVE.with_volume(volume(&options)),
+            PlaybackSettings::REMOVE.with_volume(volume(&options, 1.0)),
         ));
     }
 }
 
-fn level(
+/// Fades, the final-lap lift and the volume options.
+fn mix(
+    mut commands: Commands,
+    time: Res<Time>,
     options: Res<Options>,
-    sinks: Query<&mut AudioSink, With<Track>>,
+    karts: Query<(&Progress, &Human)>,
+    mut tracks: Query<(Entity, &mut Track, Option<&mut AudioSink>)>,
 ) {
-    if !options.is_changed() {
-        return;
-    }
-    for mut sink in sinks {
-        sink.set_volume(volume(&options));
-    }
-}
-
-/// A synthesised piece: tempo, key shift and the parts it plays.
-#[derive(Copy, Clone, Debug)]
-struct Song {
-    bpm: f32,
-    /// Semitones above G.
-    key: i32,
-    /// Bars of the progression to play, as scale-degree roots (0 = I).
-    chords: &'static [i32],
-    /// Melody as scale degrees per eighth note; 99 is a rest.
-    tune: &'static [i32],
-    banjo: bool,
-}
-
-const REST: i32 = 99;
-
-impl Song {
-    const MENU: Self = Self {
-        bpm: 104.0,
-        key: 0,
-        chords: &[0, 3, 4, 0, 5, 3, 4, 4],
-        tune: &[
-            4, REST, 2, 4, 5, 4, 2, 0, //
-            3, REST, 5, 3, 7, 5, 3, REST, //
-            4, 5, 6, 4, 8, 6, 4, 2, //
-            2, REST, 4, 2, 0, REST, REST, REST, //
-            5, 7, 9, 7, 5, 4, 2, 4, //
-            3, 5, 7, 5, 3, 2, 0, 2, //
-            1, 3, 4, 6, 8, 6, 4, 3, //
-            4, REST, 1, REST, 4, 3, 1, REST,
-        ],
-        banjo: false,
-    };
-    const RACE: Self = Self {
-        bpm: 138.0,
-        key: 0,
-        chords: &[0, 0, 3, 3, 4, 4, 0, 4],
-        tune: &[
-            0, 2, 4, 7, 6, 4, 2, 4, //
-            7, 6, 7, 9, 7, 4, 2, 0, //
-            3, 5, 7, 8, 7, 5, 3, 5, //
-            8, 7, 5, 3, 5, 3, 1, 3, //
-            4, 6, 8, 6, 4, 6, 8, 11, //
-            8, 6, 4, 3, 1, 3, 4, 6, //
-            7, 4, 2, 4, 7, 9, 7, 4, //
-            1, 3, 4, 6, 4, 3, 1, REST,
-        ],
-        banjo: true,
-    };
-    /// The race tune, 10% faster and lifted a whole step.
-    const FINAL_LAP: Self = Self {
-        bpm: 138.0 * 1.1,
-        key: 2,
-        ..Self::RACE
-    };
-
-    fn render(&self) -> Vec<f32> {
-        let rate = RATE as f32;
-        let beat = 60.0 / self.bpm;
-        let bars = self.chords.len();
-        let length = (bars as f32 * 4.0 * beat * rate) as usize;
-        let mut out = vec![0.0f32; length];
-        let major = [0, 2, 4, 5, 7, 9, 11];
-        // Scale degree to frequency, G3 = 196 Hz as degree 0
-        let freq = |degree: i32, octave: i32| {
-            let semis = major[degree.rem_euclid(7) as usize]
-                + 12 * (degree.div_euclid(7) + octave)
-                + self.key;
-            196.0 * 2f32.powf(semis as f32 / 12.0)
-        };
-        let mut add = |start: f32, dur: f32, voice: &dyn Fn(f32, f32) -> f32| {
-            let s0 = (start * rate) as usize;
-            let n = (dur * rate) as usize;
-            for i in 0..n {
-                let at = (s0 + i) % length;
-                let t = i as f32 / rate;
-                out[at] += voice(t, i as f32 / n as f32);
-            }
-        };
-
-        for (bar, root) in self.chords.iter().enumerate() {
-            let t0 = bar as f32 * 4.0 * beat;
-            for q in 0..4 {
-                let tq = t0 + q as f32 * beat;
-                // Bouncy bass: root, fifth, with a short octave pop
-                let degree = match q % 2 {
-                    0 => *root,
-                    _ => *root + 4,
-                };
-                let f = freq(degree, -1);
-                add(tq, beat * 0.7, &|t, p| {
-                    let env = (1.0 - p).powf(1.5);
-                    ((t * f).fract() * 2.0 - 1.0).signum() * 0.10 * env
-                        + (t * f * std::f32::consts::TAU).sin() * 0.16 * env
-                });
-                // Kick on 1 and 3, snare on 2 and 4
-                match q % 2 {
-                    0 => add(tq, 0.18, &|t, p| {
-                        (t * (110.0 - 70.0 * p) * std::f32::consts::TAU).sin() * 0.30 * (1.0 - p)
-                    }),
-                    _ => add(tq, 0.16, &|t, p| noise(t) * 0.16 * (1.0 - p).powi(2)),
-                }
-                // Shuffled ghost snare on the swung off-beat
-                add(tq + beat * 0.66, 0.06, &|t, p| {
-                    noise(t * 3.1) * 0.05 * (1.0 - p)
-                });
-            }
-            // Banjo rolls: plucked chord tones in sixteenths
-            if self.banjo {
-                let tones = [*root, *root + 2, *root + 4, *root + 7];
-                for s in 0..16 {
-                    let f = freq(tones[(s * 3 + bar) % 4], 1);
-                    add(t0 + s as f32 * beat / 4.0, beat * 0.5, &|t, p| {
-                        pluck(t, f) * 0.07 * (1.0 - p).powi(3)
-                    });
-                }
-            } else {
-                // Gentle strum on the menu
-                for (k, d) in [*root, *root + 2, *root + 4].iter().enumerate() {
-                    let f = freq(*d, 0);
-                    add(t0 + k as f32 * 0.03, beat * 3.5, &|t, p| {
-                        pluck(t, f) * 0.06 * (1.0 - p).powi(2)
-                    });
-                }
-            }
+    let dt = time.delta_secs();
+    let lift = on_final_lap(&karts);
+    for (id, mut track, sink) in &mut tracks {
+        let target = if track.leaving { 0.0 } else { 1.0 };
+        track.gain = step(track.gain, target, dt / FADE);
+        if track.leaving && track.gain == 0.0 {
+            commands.entity(id).despawn();
+            continue;
         }
-        // Fiddle melody: bowed saw with vibrato and a soft attack
-        for (i, degree) in self.tune.iter().enumerate() {
-            if *degree == REST {
-                continue;
-            }
-            let f = freq(*degree, 1);
-            let start = i as f32 * beat / 2.0;
-            add(start, beat * 0.48, &|t, p| {
-                let vib =
-                    1.0 + 0.006 * (t * 5.5 * std::f32::consts::TAU).sin() * (t * 4.0).min(1.0);
-                let phase = (t * f * vib).fract();
-                let saw = phase * 2.0 - 1.0;
-                let body = saw * 0.6 + (phase * std::f32::consts::TAU * 2.0).sin() * 0.3;
-                let env = (p * 12.0).min(1.0) * (1.0 - p).powf(0.5);
-                body * 0.09 * env
-            });
+        let speed = if lift && track.cue == Cue::Race {
+            FINAL_LAP_SPEED
+        } else {
+            1.0
+        };
+        track.speed = step(track.speed, speed, dt * (FINAL_LAP_SPEED - 1.0) / LIFT);
+        if let Some(mut sink) = sink {
+            sink.set_volume(volume(&options, track.gain));
+            sink.set_speed(track.speed);
         }
-        let peak = out.iter().fold(0.0f32, |m, s| m.max(s.abs())).max(0.001);
-        out.iter().map(|s| s / peak * 0.8).collect()
     }
 }
 
-/// A banjo-ish pluck: bright partials that decay fast.
-fn pluck(
-    t: f32,
-    f: f32,
+/// Move `from` towards `to` by at most `by`.
+fn step(
+    from: f32,
+    to: f32,
+    by: f32,
 ) -> f32 {
-    let tau = std::f32::consts::TAU;
-    ((t * f * tau).sin()
-        + (t * f * 2.0 * tau).sin() * 0.5 * (-t * 18.0).exp()
-        + (t * f * 3.0 * tau).sin() * 0.3 * (-t * 30.0).exp())
-        * (-t * 6.0).exp()
+    if from < to {
+        (from + by).min(to)
+    } else {
+        (from - by).max(to)
+    }
 }
 
-/// Cheap deterministic noise.
-fn noise(t: f32) -> f32 {
-    let x = (t * 12_345.679).sin() * 43_758.547;
-    x.fract() * 2.0 - 1.0
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn step_reaches_without_overshoot() {
+        assert_eq!(step(0.0, 1.0, 0.4), 0.4);
+        assert_eq!(step(0.9, 1.0, 0.4), 1.0);
+        assert_eq!(step(0.3, 0.0, 0.4), 0.0);
+    }
+
+    #[test]
+    fn bundled_music_is_ogg() {
+        for bytes in RACE.into_iter().chain([MENU]) {
+            assert_eq!(&bytes[..4], b"OggS");
+        }
+    }
 }
