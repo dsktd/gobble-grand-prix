@@ -92,6 +92,8 @@ pub struct Kart {
     pub frozen: bool,
     pub offroad: bool,
     pub item: Option<Item>,
+    /// Steering after the input ramp, -1..1.
+    pub steer: f32,
     /// Boost the last release earned, read by sound and HUD.
     pub fired: u8,
     /// Knocked into a spin this frame.
@@ -100,7 +102,13 @@ pub struct Kart {
 impl Kart {
     pub const TOP_SPEED: f32 = 34.0;
     pub const ACCEL: f32 = 20.0;
-    pub const TURN: f32 = 2.1;
+    /// Base steering rate in rad/s. 1.68 is 20% under the first 2.1, after Cal found
+    /// turning too quick.
+    pub const TURN: f32 = 1.68;
+    /// Seconds for the steering input to ramp from centre to full lock.
+    pub const STEER_RAMP: f32 = 0.15;
+    /// Share of steering lost at top speed, so fast karts turn gentler.
+    pub const HIGH_SPEED_CUT: f32 = 0.3;
     /// Scales the drift's turn rate and visual slide. 1.15 since Cal found the drift
     /// angle about 15% too small; mini-turbo charge times do not depend on it.
     pub const DRIFT_ANGLE: f32 = 1.15;
@@ -126,6 +134,7 @@ impl Kart {
             frozen: true,
             offroad: false,
             item: None,
+            steer: 0.0,
             fired: 0,
             struck: false,
         }
@@ -234,15 +243,21 @@ fn drive(
                 kart.hop = 0.25;
             }
 
-            let grip = (kart.speed.abs() / 8.0).min(1.0) * kart.speed.signum();
+            // Ease the stick so taps do not jerk the kart
+            kart.steer = approach(kart.steer, input.steer, dt / Kart::STEER_RAMP);
+            let steer = kart.steer;
+            let fast = (kart.speed.abs() / (Kart::TOP_SPEED * stats.top_speed)).min(1.0);
+            let grip = (kart.speed.abs() / 8.0).min(1.0)
+                * kart.speed.signum()
+                * (1.0 - Kart::HIGH_SPEED_CUT * fast);
             let turn = Kart::TURN * stats.turn;
             let rate = match kart.drift.as_mut() {
                 Some(drift) => {
-                    let lean = input.steer * drift.dir;
+                    let lean = steer * drift.dir;
                     drift.charge += dt * (0.7 + 0.6 * lean.max(0.0));
                     drift.dir * turn * (0.85 + 0.45 * lean) * Kart::DRIFT_ANGLE
                 }
-                None => input.steer * turn * grip,
+                None => steer * turn * grip,
             };
             kart.yaw += rate * dt;
 
