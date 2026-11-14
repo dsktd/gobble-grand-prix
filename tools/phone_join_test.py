@@ -81,6 +81,7 @@ async def main(host, pin):
     print(f"only B drives: acks A={a.acks} B={b.acks}")
     if a.acks or not b.acks:
         failures.append("B's input reached A's kart, or did not reach B's")
+    await asyncio.sleep(0.3)  # let B's last ack arrive before counting
     a.acks = b.acks = 0
     await a.drive(2.0)
     print(f"only A drives: acks A={a.acks} B={b.acks}")
