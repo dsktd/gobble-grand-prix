@@ -26,7 +26,7 @@ env:
   CARGO_TERM_COLOR: always
   CARGO_INCREMENTAL: 0
   ALL: >-
-    [{"os":"ubuntu-latest","asset":"gobble-grand-prix-steamdeck-linux-x86_64.tar.gz","only":"deck","cpu":"znver2"},
+    [{"os":"ubuntu-22.04","asset":"gobble-grand-prix-steamdeck-linux-x86_64.tar.gz","only":"deck","cpu":"znver2"},
      {"os":"windows-latest","asset":"gobble-grand-prix-windows-x86_64.zip","only":"windows","cpu":""}]
 
 jobs:
@@ -65,7 +65,8 @@ jobs:
         run: |
           pip install ziglang
           cargo install cargo-zigbuild --locked
-      # Same recipe as deck-build.sh: glibc 2.35 floor via zig, CPU-specific codegen.
+      # Same recipe as deck-build.sh: glibc 2.35 floor via zig, Zen 2 codegen. Runs on 22.04 so the
+      # system alsa/udev libs it links are themselves built for glibc 2.35.
       - name: build (linux)
         if: runner.os == 'Linux'
         env:
