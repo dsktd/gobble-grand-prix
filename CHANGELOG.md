@@ -5,6 +5,7 @@ Add yours under the heading below, at the top.
 
 ## Unreleased
 
+- Phone pad: controls stay clear of the iPhone notch and home bar; a stale QR says so after 10 s.
 - Every player shows a name: your phone name, your Steam name, or the pad's name.
 - Karts now handle like real (arcade) cars: they roll where the wheels point, slide on tyre grip, and drift by letting the rear go.
 - A minimap in every corner of the race, north up, with crates, hazards and the start line.
