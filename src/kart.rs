@@ -101,9 +101,9 @@ impl Kart {
     pub const TOP_SPEED: f32 = 34.0;
     pub const ACCEL: f32 = 20.0;
     pub const TURN: f32 = 2.1;
-    /// Scales the drift's turn rate and visual slide. 0.85 since Cal found drifts
-    /// about 15% too sharp; mini-turbo charge times do not depend on it.
-    pub const DRIFT_ANGLE: f32 = 0.85;
+    /// Scales the drift's turn rate and visual slide. 1.15 since Cal found the drift
+    /// angle about 15% too small; mini-turbo charge times do not depend on it.
+    pub const DRIFT_ANGLE: f32 = 1.15;
 
     pub fn new(
         racer: usize,
