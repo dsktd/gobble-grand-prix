@@ -1,0 +1,117 @@
+name: Release
+
+# Every push to main that touches the game rebuilds "Latest build" (tag `latest`, moved each run).
+# Tags v* make normal releases. By hand: gh workflow run release.yml -f platforms=deck
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+    paths: ["src/**", "assets/**", "Cargo.*", "ci/**", "README.md", "CREDITS.md", ".github/workflows/release.yml"]
+  workflow_dispatch:
+    inputs:
+      platforms:
+        description: Which builds to make
+        type: choice
+        default: all
+        options: [all, deck, linux, windows]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: 0
+  ALL: >-
+    [{"os":"ubuntu-latest","asset":"gobble-grand-prix-steamdeck-linux-x86_64.tar.gz","only":"deck","cpu":"znver2"},
+     {"os":"ubuntu-latest","asset":"gobble-grand-prix-linux-x86_64-v2.tar.gz","only":"linux","cpu":"x86-64-v2"},
+     {"os":"windows-latest","asset":"gobble-grand-prix-windows-x86_64.zip","only":"windows","cpu":""}]
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    outputs:
+      include: ${{ steps.pick.outputs.include }}
+    steps:
+      - id: pick
+        env:
+          WANT: ${{ inputs.platforms || 'all' }}
+        run: |
+          echo "include=$(echo "$ALL" | jq -c --arg w "$WANT" 'map(select($w == "all" or .only == $w))')" >> "$GITHUB_OUTPUT"
+
+  build:
+    needs: [plan]
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.plan.outputs.include) }}
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ runner.os == 'Linux' && 'x86_64-unknown-linux-gnu' || '' }}
+      - name: Linux deps
+        if: runner.os == 'Linux'
+        run: ci/linux-deps.sh
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: release-${{ matrix.only }}
+          save-if: ${{ github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/') }}
+      - name: zig + cargo-zigbuild
+        if: runner.os == 'Linux'
+        run: |
+          pip install ziglang
+          cargo install cargo-zigbuild --locked
+      # Same recipe as deck-build.sh: glibc 2.35 floor via zig, CPU-specific codegen.
+      - name: build (linux)
+        if: runner.os == 'Linux'
+        env:
+          RUSTFLAGS: -C target-cpu=${{ matrix.cpu }}
+        run: cargo zigbuild --release --locked --target x86_64-unknown-linux-gnu.2.35
+      - name: build (windows)
+        if: runner.os == 'Windows'
+        run: cargo build --release --locked
+      - name: package (linux)
+        if: runner.os == 'Linux'
+        run: ci/package.sh target/x86_64-unknown-linux-gnu/release/gobble "${{ matrix.asset }}" tar
+      - name: package (windows)
+        if: runner.os == 'Windows'
+        shell: bash
+        run: ci/package.sh target/release/gobble.exe "${{ matrix.asset }}" zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.asset }}
+          path: ${{ matrix.asset }}
+
+  publish:
+    needs: [build]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          pattern: gobble-grand-prix-*
+          merge-multiple: true
+      - name: publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          WANT: ${{ inputs.platforms || 'all' }}
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            gh release create "$GITHUB_REF_NAME" dist/* --title "$GITHUB_REF_NAME" --generate-notes
+            exit 0
+          fi
+          notes="Built from ${GITHUB_SHA}. Steam Deck: the steamdeck tarball (Zen 2, glibc 2.35+). Other Linux: the x86-64-v2 tarball. Unsigned: on Windows click 'More info, Run anyway'."
+          if [ "$WANT" != all ] && gh release view latest >/dev/null 2>&1; then
+            gh release upload latest dist/* --clobber
+            gh release edit latest --notes "$notes ($WANT build only.)"
+          else
+            gh release delete latest --yes --cleanup-tag || true
+            gh release create latest dist/* --title "Latest build" --notes "$notes" \
+              --target "$GITHUB_SHA" --prerelease
+          fi

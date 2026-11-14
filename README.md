@@ -36,6 +36,12 @@ Hold drift while steering into a turn: sparks go white, then blue, then orange. 
 
 Public domain, see UNLICENSE.
 
+## CI and downloads
+
+CI (`.github/workflows/ci.yml`) runs fmt, clippy and tests. Every push to main that changes the game rebuilds the
+"Latest build" pre-release (Steam Deck tarball, generic x86-64-v2 Linux tarball, Windows zip); `v*` tags make
+normal releases. `ci/` holds the helper scripts.
+
 ## Steam Deck
 
 `just deck-build` makes the Deck binary. `deck/art.sh` turns the screenshot tour into library art, and
