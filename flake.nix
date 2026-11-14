@@ -30,6 +30,8 @@
         packages = with pkgs; [
           toolchain
           pkg-config
+          clang
+          mold
           just
         ];
         buildInputs = runtimeLibs;
