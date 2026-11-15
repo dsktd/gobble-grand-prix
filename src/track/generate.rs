@@ -336,15 +336,7 @@ fn hills(
         .map(|s| {
             let raw: f32 = bumps
                 .iter()
-                .map(|(centre, half, height)| {
-                    let d = (s - centre).abs();
-                    let d = d.min(length - d);
-                    if d < *half {
-                        height * 0.5 * (1.0 + (std::f32::consts::PI * d / half).cos())
-                    } else {
-                        0.0
-                    }
-                })
+                .map(|(centre, half, height)| bump(*s, length, *centre, *half, *height))
                 .sum();
             // Level ground for the grid and the start line
             let d = s.min(length - s);
@@ -365,9 +357,27 @@ fn hills(
     heights
 }
 
+/// Height at `s` metres along a lap of `length` of a smooth hill (or dip) of `height`,
+/// centred `centre` metres along and reaching `half` metres either side.
+pub(super) fn bump(
+    s: f32,
+    length: f32,
+    centre: f32,
+    half: f32,
+    height: f32,
+) -> f32 {
+    let d = (s - centre).abs();
+    let d = d.min(length - d);
+    if d < half {
+        height * 0.5 * (1.0 + (std::f32::consts::PI * d / half).cos())
+    } else {
+        0.0
+    }
+}
+
 /// Cross-slopes that lean tight corners in towards their inside, `lean` scaling how
 /// much, eased in and out along the road.
-fn banks(
+pub(super) fn banks(
     points: &[Vec2],
     lean: f32,
 ) -> Vec<f32> {
@@ -398,12 +408,8 @@ fn jumps(
     track: &mut Track,
     zone: &[bool],
 ) {
-    const UP: f32 = 8.0;
-    const LIP: f32 = 1.6;
-    const GAP: f32 = 6.0;
-    const DOWN: f32 = 10.0;
     let n = track.points.len();
-    let p = &track.points;
+    let p = track.points.clone();
     let straight = |i: usize| bend(p[(i + n - 16) % n], p[i], p[(i + 16) % n]);
     let boxes: Vec<f32> = track.boxes.iter().map(|f| f * track.length).collect();
     let mut sites: Vec<f32> = Vec::new();
@@ -431,25 +437,38 @@ fn jumps(
             break;
         }
         sites.push(site);
-        let gap = dice.unit() < 0.45;
-        let land = site + UP + if gap { GAP } else { 0.0 };
-        let end = if gap { land + DOWN } else { site + UP };
-        for (i, s) in track.dists.iter().enumerate() {
-            let ahead = (s - site).rem_euclid(track.length);
-            let into = ahead - UP;
-            if ahead < UP {
-                track.heights[i] += LIP * ahead / UP;
-            } else if gap && into < GAP {
-                track.heights[i] += LIP;
-            } else if gap && into - GAP < DOWN {
-                track.heights[i] += LIP * 0.75 * (1.0 - (into - GAP) / DOWN);
-            }
+        kicker(track, site, dice.unit() < 0.45);
+    }
+}
+
+/// A kicker whose lip is at `site` metres along the lap, or, with `gap`, a ramp over a
+/// short pit to a landing ramp.
+pub(super) fn kicker(
+    track: &mut Track,
+    site: f32,
+    gap: bool,
+) {
+    const UP: f32 = 8.0;
+    const LIP: f32 = 1.6;
+    const GAP: f32 = 6.0;
+    const DOWN: f32 = 10.0;
+    let land = site + UP + if gap { GAP } else { 0.0 };
+    let end = if gap { land + DOWN } else { site + UP };
+    for (i, s) in track.dists.iter().enumerate() {
+        let ahead = (s - site).rem_euclid(track.length);
+        let into = ahead - UP;
+        if ahead < UP {
+            track.heights[i] += LIP * ahead / UP;
+        } else if gap && into < GAP {
+            track.heights[i] += LIP;
+        } else if gap && into - GAP < DOWN {
+            track.heights[i] += LIP * 0.75 * (1.0 - (into - GAP) / DOWN);
         }
-        track.ramps.push((site, site + UP));
-        if gap {
-            track.gaps.push((site + UP, land));
-            track.ramps.push((land, end));
-        }
+    }
+    track.ramps.push((site, site + UP));
+    if gap {
+        track.gaps.push((site + UP, land));
+        track.ramps.push((land, end));
     }
 }
 
@@ -491,19 +510,28 @@ fn pipes(
     runs.retain(|(a, b)| b - a >= least);
     runs.sort_by_key(|(a, b)| std::cmp::Reverse(b - a));
     let mut pipes = vec![0.0; n];
-    let ease = 15.0 / Track::STEP;
     for (a, b) in runs.into_iter().take(2) {
-        for (i, pipe) in pipes.iter_mut().enumerate().take(b).skip(a) {
-            *pipe = ((i - a) as f32 / ease)
-                .min((b - 1 - i) as f32 / ease)
-                .min(1.0);
-        }
+        curl(&mut pipes, a, b);
     }
     pipes
 }
 
+/// Curl samples `from..to` into a half-pipe, eased in and out over 15 m.
+pub(super) fn curl(
+    pipes: &mut [f32],
+    from: usize,
+    to: usize,
+) {
+    let ease = 15.0 / Track::STEP;
+    for (i, pipe) in pipes.iter_mut().enumerate().take(to).skip(from) {
+        *pipe = ((i - from) as f32 / ease)
+            .min((to - 1 - i) as f32 / ease)
+            .min(1.0);
+    }
+}
+
 /// Legs of road near each other sit at about the same height.
-fn level(
+pub(super) fn level(
     track: &Track,
     zone: &[bool],
 ) -> bool {
