@@ -1,4 +1,4 @@
-//! Embeds the build's version line, e.g. `v0.1.0-23 · 93dbd4e · Nov 14 15:02`, as `GOBBLE_VERSION`.
+//! Embeds the build's version line, e.g. `v0.1.0-23 · 93dbd4e · Nov 14 15:02`, as `SLOP_VERSION`.
 
 use std::process::Command;
 
@@ -28,7 +28,7 @@ fn main() {
     } else {
         format!("{version} \u{b7} {when}")
     };
-    println!("cargo:rustc-env=GOBBLE_VERSION={line}");
+    println!("cargo:rustc-env=SLOP_VERSION={line}");
     println!("cargo:rerun-if-changed=.git/HEAD");
     println!("cargo:rerun-if-changed=.git/refs");
     println!("cargo:rerun-if-changed=build.rs");

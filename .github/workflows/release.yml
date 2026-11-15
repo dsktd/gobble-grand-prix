@@ -26,8 +26,8 @@ env:
   CARGO_TERM_COLOR: always
   CARGO_INCREMENTAL: 0
   ALL: >-
-    [{"os":"ubuntu-22.04","asset":"gobble-grand-prix-steamdeck-linux-x86_64.tar.gz","only":"deck","cpu":"znver2"},
-     {"os":"windows-latest","asset":"gobble-grand-prix-windows-x86_64.zip","only":"windows","cpu":""}]
+    [{"os":"ubuntu-22.04","asset":"super-slop-kart-steamdeck-linux-x86_64.tar.gz","only":"deck","cpu":"znver2"},
+     {"os":"windows-latest","asset":"super-slop-kart-windows-x86_64.zip","only":"windows","cpu":""}]
 
 jobs:
   plan:
@@ -80,7 +80,7 @@ jobs:
       - name: package (windows)
         if: runner.os == 'Windows'
         shell: bash
-        run: ci/package.sh target/release/gobble.exe "${{ matrix.asset }}" zip
+        run: ci/package.sh target/release/super-slop-kart.exe "${{ matrix.asset }}" zip
       - uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.asset }}
@@ -93,7 +93,7 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           path: dist
-          pattern: gobble-grand-prix-*
+          pattern: super-slop-kart-*
           merge-multiple: true
       - name: publish
         env:

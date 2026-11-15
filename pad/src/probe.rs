@@ -19,7 +19,7 @@ async fn run() {
     let seconds: f64 = args.get(3).and_then(|s| s.parse().ok()).unwrap_or(10.0);
     let relay_only = !args.iter().any(|a| a == "--direct");
     let start = Instant::now();
-    let link = gobble_pad::connect(id, relay_only, |task| {
+    let link = slop_pad::connect(id, relay_only, |task| {
         tokio::task::spawn_local(task);
     })
     .await

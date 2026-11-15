@@ -1,9 +1,9 @@
 [package]
-name = "gobble"
+name = "super-slop-kart"
 version = "0.1.0"
 edition = "2024"
 license = "Unlicense"
-description = "Gobble Grand Prix: a harvest-fair kart racer made with Bevy"
+description = "Super Slop Kart: a pool-hall kart racer made with Bevy"
 repository = "https://github.com/dsktd/gobble-grand-prix"
 keywords = ["game", "racing", "bevy"]
 categories = ["games"]

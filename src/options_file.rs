@@ -8,8 +8,20 @@ use crate::Options;
 
 const DEBOUNCE: Duration = Duration::from_secs(1);
 
+/// The game's folder in the user data dir. A folder left by the game's old name is moved over
+/// once, so options, music and the last-seen build survive the rename.
+pub fn data_dir() -> Option<PathBuf> {
+    let base = dirs::data_dir()?;
+    let dir = base.join("super-slop-kart");
+    let old = base.join("gobble-gp");
+    if !cfg!(test) && !dir.exists() && old.is_dir() {
+        let _ = fs::rename(old, &dir);
+    }
+    Some(dir)
+}
+
 fn path() -> Option<PathBuf> {
-    Some(dirs::data_dir()?.join("gobble-gp").join("options.json"))
+    Some(data_dir()?.join("options.json"))
 }
 
 fn parse(text: &str) -> Options {

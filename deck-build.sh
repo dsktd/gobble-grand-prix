@@ -3,7 +3,7 @@
 # flags never invalidate the desktop cache. deck/deploy.sh wraps it with progress reporting.
 #   ./deck-build.sh            iterative test build (deck-dev profile)
 #   ./deck-build.sh --release  tagged release build (release profile)
-# Binary: target/deck/x86_64-unknown-linux-gnu/<profile>/gobble
+# Binary: target/deck/x86_64-unknown-linux-gnu/<profile>/super-slop-kart
 set -euo pipefail
 cd "$(dirname "$0")"
 profile=deck-dev

@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # Headless-ish tuning check on the desktop: run the screenshot tour on each track with every kart
 # CPU-driven and print finish times and wall contacts per racer.
-#   tools/laps.sh [binary] [tracks...]   (default target/release/gobble, tracks 0 1 2;
+#   tools/laps.sh [binary] [tracks...]   (default target/release/super-slop-kart, tracks 0 1 2;
 #   r<seed> races a generated track; `cargo test test_generated_tracks_lap` covers 50 seeds)
 set -euo pipefail
 cd "$(dirname "$0")/.."
-bin=${1:-target/release/gobble}
+bin=${1:-target/release/super-slop-kart}
 shift || true
 tracks=${*:-0 1 2}
 mesa=$(nix build --no-link --print-out-paths nixpkgs#mesa)

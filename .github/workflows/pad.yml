@@ -41,7 +41,7 @@ jobs:
         run: |
           cargo +stable build --release --locked --bin pad-host
           CC_wasm32_unknown_unknown=clang cargo +stable build --release --locked --lib --target wasm32-unknown-unknown
-          wasm-bindgen --target web --no-typescript --out-dir pkg target/wasm32-unknown-unknown/release/gobble_pad.wasm
+          wasm-bindgen --target web --no-typescript --out-dir pkg target/wasm32-unknown-unknown/release/slop_pad.wasm
           ./site.sh ../site
       - name: Playwright
         run: |

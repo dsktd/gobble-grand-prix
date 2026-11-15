@@ -11,4 +11,4 @@ for glyph in $(grep -o 'glyphs/[a-z0-9_]*\.png' "$root/assets/phone/index.html" 
   cp "$root/assets/prompts/steamdeck/${glyph#glyphs/}" "$out/glyphs/"
 done
 cp "$root/assets/prompts/License.txt" "$out/glyphs/"
-cp "$root"/pad/pkg/gobble_pad.js "$root"/pad/pkg/gobble_pad_bg.wasm "$out/pkg/"
+cp "$root"/pad/pkg/slop_pad.js "$root"/pad/pkg/slop_pad_bg.wasm "$out/pkg/"

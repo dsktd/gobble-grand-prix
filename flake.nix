@@ -1,5 +1,5 @@
 {
-  description = "Gobble Grand Prix: a Thanksgiving kart racer";
+  description = "Super Slop Kart: a pool-hall kart racer";
 
   inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
   inputs.rust-overlay = {

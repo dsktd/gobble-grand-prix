@@ -17,7 +17,7 @@ fn main() {
         .add_plugins((
             DefaultPlugins.set(WindowPlugin {
                 primary_window: Some(Window {
-                    title: "Gobble Grand Prix".to_string(),
+                    title: "Super Slop Kart".to_string(),
                     resolution: if fullscreen {
                         WindowResolution::new(1280, 800).with_scale_factor_override(1.0)
                     } else {
@@ -29,7 +29,7 @@ fn main() {
                 }),
                 ..default()
             }),
-            gobble::plugin,
+            super_slop_kart::plugin,
         ))
         .run();
 }

@@ -13,7 +13,7 @@ pub(super) mod prelude {
 }
 
 /// The build's version line, from build.rs.
-pub const VERSION: &str = env!("GOBBLE_VERSION");
+pub const VERSION: &str = env!("SLOP_VERSION");
 
 /// CHANGELOG.md, embedded.
 const CHANGELOG: &str = include_str!("../CHANGELOG.md");
@@ -42,7 +42,7 @@ struct NewsBox;
 /// A new build opens the box on its first launch; the build line is stored to tell.
 #[cfg(not(test))]
 fn first_launch(mut whats: ResMut<Whats>) {
-    let Some(path) = dirs::data_dir().map(|d| d.join("gobble-gp").join("last-seen")) else {
+    let Some(path) = crate::options_file::data_dir().map(|d| d.join("last-seen")) else {
         return;
     };
     // The build time changes on every compile; the tag, count and sha say what it is

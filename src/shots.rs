@@ -1,4 +1,4 @@
-//! Screenshots: F12 any time, plus a scripted tour for `gobble shots <track>`.
+//! Screenshots: F12 any time, plus a scripted tour for `super-slop-kart shots <track>`.
 
 use bevy::prelude::*;
 use bevy::render::view::screenshot::Screenshot;

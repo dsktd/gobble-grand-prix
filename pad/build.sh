@@ -12,5 +12,5 @@ exec nix shell nixpkgs#rustup nixpkgs#gcc nixpkgs#clang nixpkgs#mold nixpkgs#was
   cargo +stable build --release --bin pad-probe -j${JOBS:-32}
   CC_wasm32_unknown_unknown=$clang_unwrapped/bin/clang AR_wasm32_unknown_unknown=$llvm/bin/llvm-ar \
     cargo +stable build --release --lib --target wasm32-unknown-unknown -j${JOBS:-32}
-  wasm-bindgen --target web --no-typescript --out-dir pkg target/wasm32-unknown-unknown/release/gobble_pad.wasm
+  wasm-bindgen --target web --no-typescript --out-dir pkg target/wasm32-unknown-unknown/release/slop_pad.wasm
 "

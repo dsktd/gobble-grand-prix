@@ -884,7 +884,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "gobble-pad"
+name = "slop-pad"
 version = "0.1.0"
 dependencies = [
  "async-channel",

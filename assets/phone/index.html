@@ -330,7 +330,7 @@ async function connect() {
       if (mine === attempt && !fallback()) cover("notfound", "Game not found, scan the QR code again.");
     }, 10000);
     try {
-      const pad = await import("./pkg/gobble_pad.js");
+      const pad = await import("./pkg/slop_pad.js");
       await pad.default();
       const link = await pad.connect(game, (line) => receive(line), closed);
       clearTimeout(timer);
