@@ -11,6 +11,7 @@ use std::time::Duration;
 use std::time::Instant;
 
 use axum::Router;
+use axum::extract::ConnectInfo;
 use axum::extract::Query as UrlQuery;
 use axum::extract::State as AxumState;
 use axum::extract::ws::Message as WsMessage;
@@ -20,6 +21,11 @@ use axum::http::StatusCode;
 use axum::response::Html;
 use axum::response::IntoResponse;
 use axum::routing::get;
+
+use crate::phone_guard::MAX_MESSAGE;
+use crate::phone_guard::PinGuard;
+use crate::phone_guard::Rate;
+use crate::phone_guard::Seats as TokenSeats;
 use axum_server::tls_rustls::RustlsConfig;
 use bevy::asset::RenderAssetUsages;
 use bevy::prelude::*;
@@ -293,7 +299,9 @@ struct Shared {
     out: broadcast::Sender<String>,
     next: std::sync::Arc<std::sync::atomic::AtomicU32>,
     /// Phone token to connection id, so a reload gets its old seat back.
-    ids: std::sync::Arc<std::sync::Mutex<std::collections::HashMap<String, u32>>>,
+    seats: std::sync::Arc<std::sync::Mutex<TokenSeats>>,
+    /// Wrong-PIN lockouts.
+    guard: std::sync::Arc<std::sync::Mutex<PinGuard>>,
 }
 
 /// The address phones reach us on: the interface of the default route. Nothing is sent.
@@ -393,7 +401,8 @@ fn start(
         tx,
         out: out.clone(),
         next: std::sync::Arc::default(),
-        ids: std::sync::Arc::default(),
+        seats: std::sync::Arc::default(),
+        guard: std::sync::Arc::new(std::sync::Mutex::new(PinGuard::new(Instant::now()))),
     };
     let addr = SocketAddr::new(ip, port);
     let (id_tx, id_rx) = mpsc::channel();
@@ -529,7 +538,10 @@ async fn lan_server(
     info!("Phone controller on https://{addr}");
     match axum_server::from_tcp_rustls(listener, config) {
         Ok(server) => {
-            if let Err(err) = server.serve(app.into_make_service()).await {
+            if let Err(err) = server
+                .serve(app.into_make_service_with_connect_info::<SocketAddr>())
+                .await
+            {
                 error!("Phone controller stopped: {err}");
             }
         }
@@ -554,15 +566,27 @@ struct Join {
 
 async fn socket(
     upgrade: WebSocketUpgrade,
+    ConnectInfo(peer): ConnectInfo<SocketAddr>,
     UrlQuery(join): UrlQuery<Join>,
     AxumState(shared): AxumState<Shared>,
 ) -> impl IntoResponse {
-    if join.pin != shared.pin {
-        return (StatusCode::FORBIDDEN, "Wrong PIN").into_response();
-    }
-    let id = claim(&shared, &join.token);
+    let id = match admit(&shared, Some(peer.ip()), &join.pin, &join.token) {
+        Ok(id) => id,
+        Err(Denied::Pin) => return (StatusCode::FORBIDDEN, "Wrong PIN").into_response(),
+        Err(Denied::Locked) => {
+            return (
+                StatusCode::TOO_MANY_REQUESTS,
+                "Too many wrong PINs, wait a bit",
+            )
+                .into_response();
+        }
+        Err(Denied::Full) => return (StatusCode::SERVICE_UNAVAILABLE, "Room full").into_response(),
+    };
     let name = Some(join.name);
-    upgrade.on_upgrade(move |ws| session(ws, shared, id, name))
+    upgrade
+        .max_message_size(MAX_MESSAGE)
+        .max_frame_size(MAX_MESSAGE)
+        .on_upgrade(move |ws| session(ws, shared, id, name))
 }
 
 async fn session(
@@ -574,6 +598,7 @@ async fn session(
     let _ = shared.tx.send(Inbound::Joined(id, name));
     let (mut sink, mut stream) = ws.split();
     let mut out = shared.out.subscribe();
+    let mut rate = Rate::new(Instant::now());
     let _ = sink
         .send(WsMessage::Text(
             format!(r#"{{"t":"hello","id":{id}}}"#).into(),
@@ -588,6 +613,9 @@ async fn session(
                 let WsMessage::Text(text) = message else {
                     continue;
                 };
+                if !rate.allow(Instant::now()) {
+                    break;
+                }
                 let Ok(wire) = serde_json::from_str::<Wire>(&text) else {
                     continue;
                 };
@@ -607,6 +635,7 @@ async fn session(
             }
         }
     }
+    shared.seats.lock().unwrap().release(id);
     let _ = shared.tx.send(Inbound::Left(id));
 }
 
@@ -620,24 +649,53 @@ fn for_phone(
         || text.contains(&format!(r#""id":{id}}}"#))
 }
 
+/// Phones kept in the seat table: twice the karts, so reloads find their seat.
+const SEAT_CAP: usize = 12;
+
+#[derive(Debug)]
+enum Denied {
+    Pin,
+    Locked,
+    Full,
+}
+
+/// Checks the PIN (counting failures) and gives the phone its seat: a token only counts after a right PIN.
+fn admit(
+    shared: &Shared,
+    addr: Option<IpAddr>,
+    pin: &str,
+    token: &str,
+) -> Result<u32, Denied> {
+    let now = Instant::now();
+    let mut guard = shared.guard.lock().expect("guard lock");
+    if !guard.allowed(addr, now) {
+        return Err(Denied::Locked);
+    }
+    if pin != shared.pin {
+        guard.failed(addr, now);
+        return Err(Denied::Pin);
+    }
+    guard.succeeded(addr);
+    drop(guard);
+    claim(shared, token).ok_or(Denied::Full)
+}
+
 /// The connection id for a phone token, the same one again after a reconnect.
 fn claim(
     shared: &Shared,
     token: &str,
-) -> u32 {
-    let mut ids = shared.ids.lock().unwrap();
+) -> Option<u32> {
     let fresh = || {
         shared
             .next
             .fetch_add(1, std::sync::atomic::Ordering::Relaxed)
             + 1
     };
-    if token.is_empty() {
-        fresh()
-    } else {
-        *ids.entry(token.chars().take(64).collect())
-            .or_insert_with(fresh)
-    }
+    shared
+        .seats
+        .lock()
+        .expect("seats lock")
+        .claim(token, SEAT_CAP, fresh)
 }
 
 /// n0's relays without the trailing dot iroh writes in their hostnames: `WebKit` (every iOS
@@ -698,8 +756,9 @@ async fn iroh_session(
     let mut buf: Vec<u8> = Vec::new();
     let mut chunk = vec![0u8; 4096];
     let mut id = None;
+    let mut rate = Rate::new(Instant::now());
     let mut out = shared.out.subscribe();
-    loop {
+    'session: loop {
         tokio::select! {
             read = recv.read(&mut chunk) => {
                 let Ok(Some(n)) = read else {
@@ -718,12 +777,11 @@ async fn iroh_session(
                             let Ok(hello) = serde_json::from_str::<Hello>(&text) else {
                                 return;
                             };
-                            if hello.pin != shared.pin {
+                            let Ok(phone) = admit(&shared, None, &hello.pin, &hello.token) else {
                                 let _ = send.write_all(b"{\"t\":\"denied\"}\n").await;
                                 let _ = send.finish();
                                 return;
-                            }
-                            let phone = claim(&shared, &hello.token);
+                            };
                             id = Some(phone);
                             let _ = shared.tx.send(Inbound::Joined(phone, Some(hello.name)));
                             let _ = send
@@ -731,11 +789,14 @@ async fn iroh_session(
                                 .await;
                         }
                         Some(phone) => {
+                            if !rate.allow(Instant::now()) {
+                                break 'session;
+                            }
                             let Ok(wire) = serde_json::from_str::<Wire>(&text) else {
                                 continue;
                             };
                             if shared.tx.send(Inbound::Wire(phone, wire)).is_err() {
-                                return;
+                                break 'session;
                             }
                         }
                     }
@@ -753,6 +814,7 @@ async fn iroh_session(
         }
     }
     if let Some(phone) = id {
+        shared.seats.lock().unwrap().release(phone);
         let _ = shared.tx.send(Inbound::Left(phone));
     }
 }
@@ -1026,9 +1088,90 @@ mod port_tests {
             tx,
             out: broadcast::channel(1).0,
             next: std::sync::Arc::default(),
-            ids: std::sync::Arc::default(),
+            seats: std::sync::Arc::default(),
+            guard: std::sync::Arc::new(std::sync::Mutex::new(PinGuard::new(Instant::now()))),
         };
         let addr = SocketAddr::from(([127, 0, 0, 1], 0));
         runtime.block_on(lan_server(None, vec![], vec![], addr, shared));
+    }
+
+    fn shared(pin: &str) -> Shared {
+        let (tx, _rx) = mpsc::channel();
+        Shared {
+            pin: pin.into(),
+            tx,
+            out: broadcast::channel(1).0,
+            next: std::sync::Arc::default(),
+            seats: std::sync::Arc::default(),
+            guard: std::sync::Arc::new(std::sync::Mutex::new(PinGuard::new(Instant::now()))),
+        }
+    }
+
+    #[test]
+    fn five_wrong_pins_lock_out_even_the_right_one() {
+        let shared = shared("123456");
+        let ip: Option<IpAddr> = Some([10, 0, 0, 9].into());
+        for _ in 0..5 {
+            assert!(matches!(
+                admit(&shared, ip, "000000", "t"),
+                Err(Denied::Pin)
+            ));
+        }
+        assert!(matches!(
+            admit(&shared, ip, "123456", "t"),
+            Err(Denied::Locked)
+        ));
+        let other: Option<IpAddr> = Some([10, 0, 0, 10].into());
+        assert!(admit(&shared, other, "123456", "t").is_ok());
+    }
+
+    #[test]
+    fn tokens_are_capped_and_never_stored_for_wrong_pins() {
+        let shared = shared("123456");
+        for n in 0..SEAT_CAP * 3 {
+            let who: Option<IpAddr> = Some(IpAddr::from([10, 0, 1, u8::try_from(n).unwrap()]));
+            let id = admit(&shared, who, "123456", &format!("tok{n}")).unwrap();
+            shared.seats.lock().unwrap().release(id);
+        }
+        assert!(shared.seats.lock().unwrap().len() <= SEAT_CAP);
+        let before = shared.seats.lock().unwrap().len();
+        assert!(admit(&shared, None, "bad", "junk").is_err());
+        assert_eq!(shared.seats.lock().unwrap().len(), before);
+    }
+
+    /// A raw websocket client: handshake, then one masked text frame over the limit.
+    #[test]
+    fn an_oversized_websocket_message_closes_the_connection_without_a_panic() {
+        use tokio::io::AsyncReadExt;
+        use tokio::io::AsyncWriteExt;
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+        runtime.block_on(async {
+            let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+            let addr = listener.local_addr().unwrap();
+            let app = Router::new().route("/ws", get(socket)).with_state(shared("123456"));
+            tokio::spawn(async move {
+                let _ = axum::serve(listener, app.into_make_service_with_connect_info::<SocketAddr>()).await;
+            });
+            let mut stream = tokio::net::TcpStream::connect(addr).await.unwrap();
+            let request = format!(
+                "GET /ws?pin=123456&token=x HTTP/1.1\r\nHost: {addr}\r\nConnection: Upgrade\r\nUpgrade: websocket\r\nSec-WebSocket-Version: 13\r\nSec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n\r\n"
+            );
+            stream.write_all(request.as_bytes()).await.unwrap();
+            let mut head = [0u8; 512];
+            let n = stream.read(&mut head).await.unwrap();
+            assert!(String::from_utf8_lossy(&head[..n]).contains("101"));
+            let len = crate::phone_guard::MAX_MESSAGE + 1;
+            let mut frame = vec![0x81, 127];
+            frame.extend_from_slice(&(len as u64).to_be_bytes());
+            frame.extend_from_slice(&[0; 4]);
+            frame.extend(std::iter::repeat_n(b'a', len));
+            let _ = stream.write_all(&frame).await;
+            let mut sink = Vec::new();
+            let closed = tokio::time::timeout(std::time::Duration::from_secs(5), stream.read_to_end(&mut sink)).await;
+            assert!(closed.is_ok());
+        });
     }
 }
