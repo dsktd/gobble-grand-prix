@@ -49,6 +49,8 @@ macro_rules! glyph {
 }
 
 pub const PORT: u16 = 7777;
+/// Ports tried after `PORT` when it is taken, before asking the OS for any free one.
+const FALLBACKS: u16 = 10;
 /// How long a silent phone keeps its kart before the CPU takes over.
 const TAKEOVER: Duration = Duration::from_secs(3);
 /// How long a disconnected phone keeps its seat.
@@ -370,8 +372,19 @@ fn start(
             return;
         }
     };
+    let listener = match bind_lan(ip) {
+        Ok(listener) => Some(listener),
+        Err(err) => {
+            error!("Phone controller: no LAN port on {ip}: {err}");
+            None
+        }
+    };
+    let port = listener
+        .as_ref()
+        .and_then(|l| l.local_addr().ok())
+        .map_or(PORT, |a| a.port());
     let pin = format!("{:04}", rand::random_range(0..10_000));
-    let url = format!("https://{ip}:{PORT}/?pin={pin}");
+    let url = join_url(ip, port, &pin);
     info!("Phone join {url}");
     let (tx, rx) = mpsc::channel();
     let (out, _) = broadcast::channel(256);
@@ -382,22 +395,24 @@ fn start(
         next: std::sync::Arc::default(),
         ids: std::sync::Arc::default(),
     };
-    let addr = SocketAddr::new(ip, PORT);
+    let addr = SocketAddr::new(ip, port);
     let (id_tx, id_rx) = mpsc::channel();
     commands.insert_resource(Anywhere {
         rx: std::sync::Mutex::new(id_rx),
         pin: pin.clone(),
         lan: addr,
     });
-    let _handle = std::thread::spawn(move || {
+    let (stop, mut stopped) = tokio::sync::oneshot::channel::<()>();
+    let thread = std::thread::spawn(move || {
         let runtime = tokio::runtime::Builder::new_multi_thread()
             .worker_threads(2)
             .enable_all()
             .build()
             .unwrap();
         runtime.block_on(async move {
-            // Anywhere: iroh through n0's relays, found by endpoint id
-            match iroh::Endpoint::builder(iroh::endpoint::presets::N0)
+            // Anywhere: iroh through n0's relays, found by endpoint id. It lives until the
+            // game exits, whatever happens to the LAN server below.
+            let endpoint = match iroh::Endpoint::builder(iroh::endpoint::presets::N0)
                 .relay_mode(relays())
                 .alpns(vec![ALPN.to_vec()])
                 .bind()
@@ -406,35 +421,28 @@ fn start(
                 Ok(endpoint) => {
                     let _ = id_tx.send(endpoint.id().to_string());
                     info!("Phone controller over iroh as {}", endpoint.id());
-                    tokio::spawn(iroh_accept(endpoint, shared.clone()));
+                    tokio::spawn(iroh_accept(endpoint.clone(), shared.clone()));
+                    Some(endpoint)
                 }
-                Err(err) => warn!("No iroh, phones need the LAN: {err}"),
-            }
-            let config = match RustlsConfig::from_pem(cert, key).await {
-                Ok(config) => config,
                 Err(err) => {
-                    error!("Phone controller TLS: {err}");
-                    return;
+                    warn!("No iroh, phones need the LAN: {err}");
+                    None
                 }
             };
-            let mut app = Router::new().route("/", get(page));
-            for &(path, kind, bytes) in FILES {
-                app = app.route(
-                    path,
-                    get(move || async move { ([(axum::http::header::CONTENT_TYPE, kind)], bytes) }),
-                );
+            tokio::select! {
+                () = lan_server(listener, cert, key, addr, shared) => {
+                    warn!("Phone controller: LAN server is off, iroh stays up");
+                    let _ = (&mut stopped).await;
+                }
+                _ = &mut stopped => {}
             }
-            let app = app.route("/ws", get(socket)).with_state(shared);
-            info!("Phone controller on https://{addr}");
-            if let Err(err) = axum_server::bind_rustls(addr, config)
-                .serve(app.into_make_service())
-                .await
-            {
-                error!("Phone controller stopped: {err}");
+            if let Some(endpoint) = endpoint {
+                endpoint.close().await;
             }
         });
     });
 
+    commands.insert_resource(Shutdown(Some((stop, thread))));
     phones.rx = Some(std::sync::Mutex::new(rx));
     phones.tx = Some(out);
     if let Some(image) = qr_image(&url) {
@@ -444,6 +452,88 @@ fn start(
             pin,
             qr: images.add(image),
         });
+    }
+}
+
+/// Stops the phone thread and closes the iroh endpoint gracefully when the game exits.
+#[derive(Resource)]
+struct Shutdown(
+    Option<(
+        tokio::sync::oneshot::Sender<()>,
+        std::thread::JoinHandle<()>,
+    )>,
+);
+
+impl Drop for Shutdown {
+    fn drop(&mut self) {
+        if let Some((stop, thread)) = self.0.take() {
+            let _ = stop.send(());
+            let _ = thread.join();
+        }
+    }
+}
+
+fn join_url(
+    ip: IpAddr,
+    port: u16,
+    pin: &str,
+) -> String {
+    format!("https://{ip}:{port}/?pin={pin}")
+}
+
+/// Claims the LAN port: `PORT`, the next few, then any free one. Another running instance
+/// keeps its own port and its phones.
+fn bind_lan(ip: IpAddr) -> std::io::Result<std::net::TcpListener> {
+    let ports = (PORT..=PORT + FALLBACKS).chain([0]);
+    let mut last = None;
+    for port in ports {
+        match std::net::TcpListener::bind(SocketAddr::new(ip, port)) {
+            Ok(listener) => {
+                listener.set_nonblocking(true)?;
+                if port != PORT {
+                    warn!("Port {PORT} is taken (another instance running?), using {port}");
+                }
+                return Ok(listener);
+            }
+            Err(err) if err.kind() == std::io::ErrorKind::AddrInUse => last = Some(err),
+            Err(err) => return Err(err),
+        }
+    }
+    Err(last.unwrap())
+}
+
+/// The HTTPS page and websocket; returns when it fails or has no port, never the endpoint's concern.
+async fn lan_server(
+    listener: Option<std::net::TcpListener>,
+    cert: Vec<u8>,
+    key: Vec<u8>,
+    addr: SocketAddr,
+    shared: Shared,
+) {
+    let Some(listener) = listener else { return };
+    let config = match RustlsConfig::from_pem(cert, key).await {
+        Ok(config) => config,
+        Err(err) => {
+            error!("Phone controller TLS: {err}");
+            return;
+        }
+    };
+    let mut app = Router::new().route("/", get(page));
+    for &(path, kind, bytes) in FILES {
+        app = app.route(
+            path,
+            get(move || async move { ([(axum::http::header::CONTENT_TYPE, kind)], bytes) }),
+        );
+    }
+    let app = app.route("/ws", get(socket)).with_state(shared);
+    info!("Phone controller on https://{addr}");
+    match axum_server::from_tcp_rustls(listener, config) {
+        Ok(server) => {
+            if let Err(err) = server.serve(app.into_make_service()).await {
+                error!("Phone controller stopped: {err}");
+            }
+        }
+        Err(err) => error!("Phone controller stopped: {err}"),
     }
 }
 
@@ -906,5 +996,39 @@ fn takeover(
                 .remove::<(Takeover, Cpu)>()
                 .insert(Driver::Local(human.0));
         }
+    }
+}
+
+#[cfg(test)]
+mod port_tests {
+    use super::*;
+
+    #[test]
+    fn falls_back_when_the_port_is_taken() {
+        let ip: IpAddr = [127, 0, 0, 1].into();
+        // Hold the default port ourselves (or find it already held).
+        let _held = std::net::TcpListener::bind((ip, PORT));
+        let got = bind_lan(ip).unwrap();
+        let port = got.local_addr().unwrap().port();
+        assert_ne!(port, PORT);
+        assert!(join_url(ip, port, "1234").contains(&format!(":{port}/")));
+    }
+
+    #[test]
+    fn lan_failure_leaves_the_runtime_alive() {
+        // With no LAN port the server returns at once; the caller keeps iroh up afterwards.
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .build()
+            .unwrap();
+        let (tx, _rx) = mpsc::channel();
+        let shared = Shared {
+            pin: String::new(),
+            tx,
+            out: broadcast::channel(1).0,
+            next: std::sync::Arc::default(),
+            ids: std::sync::Arc::default(),
+        };
+        let addr = SocketAddr::from(([127, 0, 0, 1], 0));
+        runtime.block_on(lan_server(None, vec![], vec![], addr, shared));
     }
 }
