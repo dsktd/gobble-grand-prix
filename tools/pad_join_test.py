@@ -79,18 +79,18 @@ def msgs(*messages):
 STATES = [
     ("01-join", ""),
     ("02-connecting", "cover('connecting', 'Connecting through the internet...')"),
-    ("03-lan", "cover('connecting', 'Still connecting through the internet.'); showLan()"),
-    ("04-notfound", "cover('notfound', 'Game not found, scan the QR code again.'); showLan()"),
+    ("03-lan", "cover('connecting', 'Connecting...')"),
+    ("04-notfound", "cover('notfound', 'Game not found, scan the QR code again.')"),
     ("05-disconnected", "closed()"),
     ("06-full", "cover(null);" + msgs({"t": "full"})),
-    ("07-lobby", "cover(null); setNet('lan', 18)"),
-    ("08-seated", "cover(null); setNet('lan', 18);" + msgs(SEAT)),
+    ("07-lobby", "cover(null); setNet('online', 18)"),
+    ("08-seated", "cover(null); setNet('online', 18);" + msgs(SEAT)),
     ("09-pick", "cover(null); setNet('online', 64);" + msgs(LONG_SEAT, PICK)),
     ("10-locked", "cover(null);" + msgs(SEAT, {**PICK, "locked": True})),
     ("11-race", "cover(null); setNet('online', 64);" + msgs(LONG_SEAT, PICK, {"t": "racers", "list": None})),
     (
         "12-tilt",
-        "cover(null); setNet('lan', 18);"
+        "cover(null); setNet('online', 18);"
         + msgs(SEAT, {"t": "screen", "race": True})
         + "$('gyro').click(); $('gas').classList.add('on')",
     ),
