@@ -24,7 +24,12 @@ fn main() {
                         (1280, 800).into()
                     },
                     mode,
-                    present_mode: PresentMode::AutoVsync,
+                    // Benchmarks run uncapped so frame times show the real cost
+                    present_mode: if std::env::var_os("SLOP_BENCH").is_some() {
+                        PresentMode::AutoNoVsync
+                    } else {
+                        PresentMode::AutoVsync
+                    },
                     ..default()
                 }),
                 ..default()
