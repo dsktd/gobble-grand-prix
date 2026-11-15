@@ -1,4 +1,4 @@
-//! Frame-time benchmark: `SLOP_BENCH=<file> gobble shots ...` runs the screenshot tour without
+//! Frame-time benchmark: `SLOP_BENCH=<file> super-slop-kart shots ...` runs the screenshot tour without
 //! screenshots or fast-forward and writes frame-time stats per game state to `<file>` at exit.
 //! `SLOP_BENCH_SECS=<secs>` ends the run early.
 //! `SLOP_BENCH_HOLD=<secs>` stays on the title screen (attract race) that much longer.

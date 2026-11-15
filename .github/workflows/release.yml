@@ -76,7 +76,7 @@ jobs:
         run: cargo build --release --locked
       - name: package (linux)
         if: runner.os == 'Linux'
-        run: ci/package.sh target/x86_64-unknown-linux-gnu/release/gobble "${{ matrix.asset }}" tar
+        run: ci/package.sh target/x86_64-unknown-linux-gnu/release/super-slop-kart "${{ matrix.asset }}" tar
       - name: package (windows)
         if: runner.os == 'Windows'
         shell: bash
