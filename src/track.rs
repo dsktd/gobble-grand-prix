@@ -118,7 +118,7 @@ pub const TRACKS: [TrackDef; 3] = [
         ],
         half_width: 8.0,
         shortcuts: &[((48.0, 55.0), (-48.0, 55.0), 6.0)],
-        boxes: &[0.2, 0.48, 0.8],
+        boxes: &[0.22, 0.48, 0.8],
         scenery: Scenery::Table,
         landmark: (0.0, -18.0),
         theme: Theme {
