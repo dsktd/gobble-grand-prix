@@ -1,4 +1,4 @@
-//! Props along each track and falling autumn leaves.
+//! Props along each track and drifting chalk dust.
 
 use bevy::prelude::*;
 use rand::Rng;
@@ -15,7 +15,7 @@ pub(super) fn plugin(app: &mut App) {
 }
 
 #[derive(Component, Clone, Debug)]
-struct Leaf {
+struct Dust {
     vel: Vec3,
     spin: Vec3,
 }
@@ -79,18 +79,18 @@ pub(super) fn spawn(
     };
 
     match track.scenery {
-        Scenery::Farm => {
+        Scenery::Bar => {
             let post = kit(
                 m,
                 mt,
                 Cuboid::new(0.3, 1.4, 0.3),
-                Color::srgb(0.45, 0.30, 0.18),
+                Color::srgb(0.85, 0.65, 0.20),
             );
             let rail = kit(
                 m,
                 mt,
                 Cuboid::new(0.15, 0.15, 4.0),
-                Color::srgb(0.55, 0.38, 0.22),
+                Color::srgb(0.40, 0.20, 0.08),
             );
             let trunk = kit(
                 m,
@@ -99,22 +99,22 @@ pub(super) fn spawn(
                 Color::srgb(0.35, 0.22, 0.12),
             );
             let crowns = [
-                kit(m, mt, Sphere::new(3.5), Color::srgb(0.90, 0.45, 0.10)),
-                kit(m, mt, Sphere::new(3.5), Color::srgb(0.80, 0.20, 0.08)),
-                kit(m, mt, Sphere::new(3.5), Color::srgb(0.95, 0.70, 0.15)),
+                kit(m, mt, Sphere::new(3.5), Color::srgb(0.95, 0.80, 0.10)),
+                kit(m, mt, Sphere::new(3.5), Color::srgb(0.80, 0.10, 0.10)),
+                kit(m, mt, Sphere::new(3.5), Color::srgb(0.15, 0.30, 0.80)),
             ];
-            let hay = kit(
+            let stool = kit(
                 m,
                 mt,
                 Cylinder::new(1.2, 1.8),
-                Color::srgb(0.88, 0.75, 0.40),
+                Color::srgb(0.70, 0.12, 0.12),
             );
-            let pumpkin = kit(m, mt, Sphere::new(0.9), Color::srgb(0.95, 0.50, 0.08));
-            let barn = kit(
+            let ball = kit(m, mt, Sphere::new(0.9), Color::srgb(0.95, 0.50, 0.08));
+            let jukebox = kit(
                 m,
                 mt,
                 Cuboid::new(16.0, 10.0, 22.0),
-                Color::srgb(0.62, 0.12, 0.08),
+                Color::srgb(0.55, 0.08, 0.30),
             );
             let roof = kit(
                 m,
@@ -123,7 +123,7 @@ pub(super) fn spawn(
                 Color::srgb(0.25, 0.20, 0.18),
             );
 
-            // Fences both sides
+            // Brass rail posts both sides
             let mut along = 0.0;
             while along < lap {
                 for side in [-1.0, 1.0] {
@@ -147,7 +147,7 @@ pub(super) fn spawn(
                 }
                 along += 4.0;
             }
-            // Orchard
+            // Cues stood on end, each with a giant ball on top
             let trees = if options.high_quality { 140 } else { 60 };
             for i in 0..trees {
                 let along = rng.random_range(0.0..lap);
@@ -189,7 +189,7 @@ pub(super) fn spawn(
                     put(
                         &mut commands,
                         &track,
-                        &hay,
+                        &stool,
                         Transform::from_translation(flat(p, 1.2))
                             .with_rotation(Quat::from_rotation_z(std::f32::consts::FRAC_PI_2)),
                     );
@@ -197,7 +197,7 @@ pub(super) fn spawn(
                     put(
                         &mut commands,
                         &track,
-                        &pumpkin,
+                        &ball,
                         Transform::from_translation(flat(p, 0.7))
                             .with_scale(Vec3::new(1.2, 0.8, 1.2)),
                     );
@@ -207,7 +207,7 @@ pub(super) fn spawn(
                 put(
                     &mut commands,
                     &track,
-                    &barn,
+                    &jukebox,
                     Transform::from_translation(flat(at, 5.0)),
                 );
                 for side in [-1.0f32, 1.0] {
@@ -221,20 +221,20 @@ pub(super) fn spawn(
                 }
             }
         }
-        Scenery::Table => {
+        Scenery::Tournament => {
             let plate = kit(
                 m,
                 mt,
                 Cylinder::new(9.0, 0.4),
-                Color::srgb(0.97, 0.96, 0.92),
+                Color::srgb(0.90, 0.94, 1.0),
             );
             let rim = kit(m, mt, Torus::new(8.0, 9.4), Color::srgb(0.85, 0.70, 0.30));
-            let roast = kit(m, mt, Sphere::new(14.0), Color::srgb(0.60, 0.33, 0.12));
+            let roast = kit(m, mt, Sphere::new(14.0), Color::srgb(0.03, 0.03, 0.04));
             let drum = kit(
                 m,
                 mt,
                 Capsule3d::new(3.5, 10.0),
-                Color::srgb(0.65, 0.36, 0.14),
+                Color::srgb(0.75, 0.50, 0.25),
             );
             let candle = kit(
                 m,
@@ -250,10 +250,10 @@ pub(super) fn spawn(
                     ..default()
                 }),
             };
-            let pea = kit(m, mt, Sphere::new(0.8), Color::srgb(0.35, 0.65, 0.20));
-            let roll = kit(m, mt, Sphere::new(1.8), Color::srgb(0.85, 0.60, 0.30));
+            let pea = kit(m, mt, Sphere::new(0.8), Color::srgb(0.95, 0.85, 0.15));
+            let roll = kit(m, mt, Sphere::new(1.8), Color::srgb(0.80, 0.12, 0.12));
 
-            // The roast sits in the middle of the table
+            // The 8-ball sits in the middle of the table
             if let Some(at) = track.landmark {
                 put(
                     &mut commands,
@@ -275,7 +275,7 @@ pub(super) fn spawn(
                     );
                 }
             }
-            // Dishes stand wherever the layout leaves them room
+            // Chalk circles lie wherever the layout motes them room
             let open = |x: f32, z: f32, r: f32| {
                 track.locate(Vec2::new(x, z)).lateral.abs() > track.barrier() + r
             };
@@ -322,7 +322,7 @@ pub(super) fn spawn(
                     Transform::from_xyz(x, 12.8, z).with_scale(Vec3::new(1.0, 1.8, 1.0)),
                 );
             }
-            // Peas and rolls spilled along the runner
+            // Balls spilled along the rail
             let mut along = 0.0;
             while along < lap {
                 for side in [-1.0, 1.0] {
@@ -346,20 +346,21 @@ pub(super) fn spawn(
                 along += 6.0;
             }
         }
-        Scenery::Maze => {
-            let stalk = kit(
-                m,
-                mt,
-                Cylinder::new(0.18, 5.5),
-                Color::srgb(0.55, 0.60, 0.20),
-            );
-            let cob = kit(
-                m,
-                mt,
-                Capsule3d::new(0.25, 0.7),
-                Color::srgb(0.95, 0.80, 0.25),
-            );
-            let tassel = kit(m, mt, Cone::new(0.5, 1.2), Color::srgb(0.85, 0.70, 0.35));
+        Scenery::Neon => {
+            let glow = |m: &mut Assets<Mesh>,
+                        mt: &mut Assets<StandardMaterial>,
+                        mesh: Mesh,
+                        color: Color| Kit {
+                mesh: m.add(mesh),
+                material: mt.add(StandardMaterial {
+                    base_color: color,
+                    emissive: color.to_linear() * 6.0,
+                    ..default()
+                }),
+            };
+            let stalk = glow(m, mt, Cylinder::new(0.18, 5.5).into(), Color::srgb(0.15, 0.95, 0.90));
+            let cob = kit(m, mt, Sphere::new(0.4), Color::srgb(0.95, 0.80, 0.25));
+            let tassel = glow(m, mt, Cone::new(0.5, 1.2).into(), Color::srgb(0.95, 0.15, 0.70));
             let pole = kit(
                 m,
                 mt,
@@ -375,7 +376,7 @@ pub(super) fn spawn(
             let head = kit(m, mt, Sphere::new(0.7), Color::srgb(0.90, 0.75, 0.45));
             let hat = kit(m, mt, Cone::new(1.1, 1.0), Color::srgb(0.55, 0.40, 0.20));
 
-            // Dense rows of corn hem the road in
+            // Dense rows of glowing neon tubes hem the road in
             let rows = if options.high_quality { 4 } else { 2 };
             let mut along = 0.0;
             while along < lap {
@@ -413,7 +414,7 @@ pub(super) fn spawn(
                 }
                 along += 1.4;
             }
-            // Scarecrows keep watch
+            // Pool-hall regulars keep watch
             for frac in [0.1, 0.35, 0.6, 0.85] {
                 let p = track.offset(lap * frac, -(hw + 3.5));
                 put(
@@ -444,15 +445,15 @@ pub(super) fn spawn(
         }
     }
 
-    // Falling leaves around the camera
-    let leaf_mesh = m.add(Rectangle::new(0.5, 0.35));
+    // Chalk dust around the camera
+    let dust_mesh = m.add(Rectangle::new(0.25, 0.25));
     let colors = [
-        Color::srgb(0.92, 0.45, 0.08),
-        Color::srgb(0.80, 0.18, 0.08),
-        Color::srgb(0.95, 0.72, 0.15),
-        Color::srgb(0.60, 0.30, 0.10),
+        Color::srgb(0.95, 0.96, 1.0),
+        Color::srgb(0.55, 0.72, 0.98),
+        Color::srgb(0.85, 0.90, 0.98),
+        Color::srgb(0.35, 0.55, 0.90),
     ];
-    let leaf_mats: Vec<_> = colors
+    let dust_mats: Vec<_> = colors
         .iter()
         .map(|c| {
             mt.add(StandardMaterial {
@@ -466,7 +467,7 @@ pub(super) fn spawn(
     let count = if options.high_quality { 260 } else { 90 };
     for i in 0..count {
         commands.spawn((
-            Leaf {
+            Dust {
                 vel: Vec3::new(
                     rng.random_range(-1.0..1.0),
                     -rng.random_range(1.0..2.5),
@@ -478,8 +479,8 @@ pub(super) fn spawn(
                     0.0,
                 ),
             },
-            Mesh3d(leaf_mesh.clone()),
-            MeshMaterial3d(leaf_mats[i % leaf_mats.len()].clone()),
+            Mesh3d(dust_mesh.clone()),
+            MeshMaterial3d(dust_mats[i % dust_mats.len()].clone()),
             Transform::from_xyz(
                 rng.random_range(-40.0..40.0),
                 rng.random_range(0.0..25.0),
@@ -490,11 +491,11 @@ pub(super) fn spawn(
     }
 }
 
-/// Leaves drift down and wrap around the first chase camera.
+/// Chalk dust drifts down and wrap around the first chase camera.
 fn fall(
     time: Res<Time>,
-    cameras: Query<(&ChaseCam, &Transform), Without<Leaf>>,
-    leaves: Query<(&Leaf, &mut Transform)>,
+    cameras: Query<(&ChaseCam, &Transform), Without<Dust>>,
+    motes: Query<(&Dust, &mut Transform)>,
 ) {
     let Some((_, camera)) = cameras.iter().find(|(c, _)| c.0 == 0) else {
         return;
@@ -502,15 +503,15 @@ fn fall(
     let dt = time.delta_secs();
     let t = time.elapsed_secs();
     let center = camera.translation;
-    for (leaf, mut transform) in leaves {
+    for (mote, mut transform) in motes {
         let sway = Vec3::new(
             (t * 1.3 + transform.translation.y).sin(),
             0.0,
             (t * 0.9).cos(),
         ) * 0.8;
-        transform.translation += (leaf.vel + sway) * dt;
-        transform.rotate_local_x(leaf.spin.x * dt);
-        transform.rotate_local_y(leaf.spin.y * dt);
+        transform.translation += (mote.vel + sway) * dt;
+        transform.rotate_local_x(mote.spin.x * dt);
+        transform.rotate_local_y(mote.spin.y * dt);
         let mut p = transform.translation - center;
         p.x = (p.x + 40.0).rem_euclid(80.0) - 40.0;
         p.z = (p.z + 40.0).rem_euclid(80.0) - 40.0;

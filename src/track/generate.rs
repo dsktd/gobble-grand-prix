@@ -654,16 +654,16 @@ fn name(
     scenery: Scenery,
 ) -> String {
     let (first, second): (&[&str], &[&str]) = match scenery {
-        Scenery::Farm => (
-            &["Hayride", "Orchard", "Pumpkin", "Haystack", "Cider"],
+        Scenery::Bar => (
+            &["Corner", "Rail", "Scratch", "Back Room", "Jukebox"],
             &["Bends", "Lane", "Loop", "Run", "Trail"],
         ),
-        Scenery::Table => (
-            &["Gravy", "Stuffing", "Cranberry", "Drumstick", "Butter"],
+        Scenery::Tournament => (
+            &["Eight Ball", "Nine Ball", "Bank Shot", "Masse", "Safety"],
             &["Dash", "Ring", "Sprint", "Spiral", "Circuit"],
         ),
-        Scenery::Maze => (
-            &["Cornrow", "Husk", "Kernel", "Scarecrow", "Silo"],
+        Scenery::Neon => (
+            &["Neon", "Midnight", "Glow", "Hustler", "Break"],
             &["Twist", "Tangle", "Rush", "Snake", "Wind"],
         ),
     };

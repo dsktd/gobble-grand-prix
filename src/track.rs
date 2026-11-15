@@ -25,9 +25,12 @@ pub(super) fn plugin(app: &mut App) {
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub enum Scenery {
-    Farm,
-    Table,
-    Maze,
+    /// Classic green felt in a corner bar.
+    Bar,
+    /// Blue tournament felt under big lamps.
+    Tournament,
+    /// A neon pool hall after midnight.
+    Neon,
 }
 
 #[derive(Copy, Clone, Debug)]
@@ -55,53 +58,53 @@ pub struct Look {
 
 pub const LOOKS: [Look; 3] = [
     Look {
-        scenery: Scenery::Farm,
+        scenery: Scenery::Bar,
         theme: Theme {
-            sky: Color::srgb(0.98, 0.62, 0.36),
-            ground: Color::srgb(0.47, 0.42, 0.18),
-            road: Color::srgb(0.55, 0.40, 0.26),
-            curb_a: Color::srgb(0.93, 0.85, 0.55),
-            curb_b: Color::srgb(0.75, 0.30, 0.10),
-            sun: Color::srgb(1.0, 0.72, 0.45),
+            sky: Color::srgb(0.55, 0.38, 0.22),
+            ground: Color::srgb(0.45, 0.12, 0.1),
+            road: Color::srgb(0.08, 0.45, 0.22),
+            curb_a: Color::srgb(0.95, 0.93, 0.85),
+            curb_b: Color::srgb(0.4, 0.2, 0.08),
+            sun: Color::srgb(1.0, 0.85, 0.55),
             sun_lux: 9000.0,
             sun_dir: Vec3::new(0.6, -0.35, 0.7),
-            ambient: Color::srgb(1.0, 0.75, 0.6),
+            ambient: Color::srgb(1.0, 0.85, 0.65),
             ambient_brightness: 600.0,
-            fog: Color::srgb(0.98, 0.66, 0.42),
+            fog: Color::srgb(0.55, 0.38, 0.22),
             fog_end: 320.0,
         },
     },
     Look {
-        scenery: Scenery::Table,
+        scenery: Scenery::Tournament,
         theme: Theme {
-            sky: Color::srgb(0.22, 0.08, 0.06),
-            ground: Color::srgb(0.45, 0.26, 0.14),
-            road: Color::srgb(0.90, 0.84, 0.70),
-            curb_a: Color::srgb(0.70, 0.12, 0.10),
-            curb_b: Color::srgb(0.95, 0.80, 0.35),
-            sun: Color::srgb(1.0, 0.85, 0.6),
+            sky: Color::srgb(0.04, 0.06, 0.14),
+            ground: Color::srgb(0.07, 0.07, 0.1),
+            road: Color::srgb(0.1, 0.28, 0.7),
+            curb_a: Color::srgb(0.95, 0.95, 0.95),
+            curb_b: Color::srgb(0.85, 0.7, 0.25),
+            sun: Color::srgb(0.85, 0.9, 1.0),
             sun_lux: 7000.0,
             sun_dir: Vec3::new(-0.3, -0.8, 0.4),
-            ambient: Color::srgb(1.0, 0.8, 0.6),
+            ambient: Color::srgb(0.75, 0.85, 1.0),
             ambient_brightness: 700.0,
-            fog: Color::srgb(0.22, 0.08, 0.06),
+            fog: Color::srgb(0.04, 0.06, 0.14),
             fog_end: 380.0,
         },
     },
     Look {
-        scenery: Scenery::Maze,
+        scenery: Scenery::Neon,
         theme: Theme {
-            sky: Color::srgb(0.36, 0.30, 0.52),
-            ground: Color::srgb(0.30, 0.26, 0.12),
-            road: Color::srgb(0.46, 0.34, 0.22),
-            curb_a: Color::srgb(0.85, 0.75, 0.35),
-            curb_b: Color::srgb(0.55, 0.20, 0.40),
-            sun: Color::srgb(0.95, 0.60, 0.65),
+            sky: Color::srgb(0.1, 0.04, 0.22),
+            ground: Color::srgb(0.06, 0.03, 0.1),
+            road: Color::srgb(0.12, 0.12, 0.16),
+            curb_a: Color::srgb(0.15, 0.95, 0.9),
+            curb_b: Color::srgb(0.95, 0.15, 0.7),
+            sun: Color::srgb(0.8, 0.45, 1.0),
             sun_lux: 5000.0,
             sun_dir: Vec3::new(-0.7, -0.3, -0.5),
-            ambient: Color::srgb(0.6, 0.6, 1.0),
+            ambient: Color::srgb(0.6, 0.45, 1.0),
             ambient_brightness: 700.0,
-            fog: Color::srgb(0.36, 0.30, 0.52),
+            fog: Color::srgb(0.1, 0.04, 0.22),
             fog_end: 220.0,
         },
     },
