@@ -598,7 +598,7 @@ async fn session(
     let _ = shared.tx.send(Inbound::Joined(id, name));
     let (mut sink, mut stream) = ws.split();
     let mut out = shared.out.subscribe();
-    let mut rate = Rate::new(Instant::now());
+    let mut rate = Rate::new(Instant::now(), RATE, BURST);
     let _ = sink
         .send(WsMessage::Text(
             format!(r#"{{"t":"hello","id":{id}}}"#).into(),
@@ -651,6 +651,10 @@ fn for_phone(
 
 /// Phones kept in the seat table: twice the karts, so reloads find their seat.
 const SEAT_CAP: usize = 12;
+
+/// Messages a phone may send: sustained per second, and at once. The pad sends input at 60 Hz plus taps and pings.
+const RATE: u32 = 240;
+const BURST: u32 = 120;
 
 #[derive(Debug)]
 enum Denied {
@@ -756,7 +760,7 @@ async fn iroh_session(
     let mut buf: Vec<u8> = Vec::new();
     let mut chunk = vec![0u8; 4096];
     let mut id = None;
-    let mut rate = Rate::new(Instant::now());
+    let mut rate = Rate::new(Instant::now(), RATE, BURST);
     let mut out = shared.out.subscribe();
     'session: loop {
         tokio::select! {
@@ -1173,5 +1177,19 @@ mod port_tests {
             let closed = tokio::time::timeout(std::time::Duration::from_secs(5), stream.read_to_end(&mut sink)).await;
             assert!(closed.is_ok());
         });
+    }
+
+    #[test]
+    fn a_racing_pad_is_never_dropped() {
+        // 60 Hz input, a tap every 200 ms and a ping every 5 s, for 10 s.
+        let t0 = Instant::now();
+        let mut rate = Rate::new(t0, RATE, BURST);
+        for ms in 0..10_000u64 {
+            let sends =
+                u32::from(ms % 17 == 0) + u32::from(ms % 200 == 0) + u32::from(ms % 5000 == 0);
+            for _ in 0..sends {
+                assert!(rate.allow(t0 + std::time::Duration::from_millis(ms)));
+            }
+        }
     }
 }
