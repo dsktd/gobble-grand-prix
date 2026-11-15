@@ -4,6 +4,7 @@ Newest first. One short line per change a player can see; the title screen shows
 Add yours under the heading below, at the top.
 
 ## Unreleased
+- The game is now Super Slop Kart, a pool-hall kart racer: billiard-ball racers, three looks (corner bar, blue tournament felt, neon pool hall), chalk boxes with a Cue Ball, Spilled Drink and Cue Kick. Your saved options carry over.
 - Every race is on a random track now; the three hand-made tracks are gone. Pick a track rolls a new one each time.
 - Phones can still join when port 7777 is taken by another copy of the game: it picks a free port and the QR follows.
 - Options (volume, music, quality, camera, split screen) are remembered between runs.

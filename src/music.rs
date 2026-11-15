@@ -1,4 +1,4 @@
-//! Music: the player's own files from the music folder, else the bundled bluegrass
+//! Music: the player's own files from the music folder, else the bundled acoustic
 //! soundtrack (see CREDITS.md). Cues crossfade; the final lap speeds the race tune up.
 
 use bevy::audio::AudioSinkPlayback;
