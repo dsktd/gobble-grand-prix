@@ -4,6 +4,7 @@ Newest first. One short line per change a player can see; the title screen shows
 Add yours under the heading below, at the top.
 
 ## Unreleased
+- Phones can still join when port 7777 is taken by another copy of the game: it picks a free port and the QR follows.
 - Options (volume, music, quality, camera, split screen) are remembered between runs.
 - Maize Maze dips through the corn, with banked turns and a half-pipe wall-ride corner.
 - Grand Feast Table has raised table tops, a gap to jump on the start straight and a half-pipe round the far plate.
