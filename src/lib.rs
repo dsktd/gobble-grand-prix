@@ -17,6 +17,7 @@ mod music;
 mod names;
 mod options_file;
 mod phone;
+mod phone_guard;
 mod prompts;
 mod race;
 mod roster;
