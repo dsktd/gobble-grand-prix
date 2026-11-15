@@ -337,8 +337,7 @@ async function connect() {
       if (gaveUp || mine !== attempt) return;
       link.send(JSON.stringify({ t: "join", pin, token, name: playerName() }));
       ws = { readyState: 1, send: (text) => link.send(text) };
-      setNet("online");
-      cover(null);
+      // In the game only once it answers with its hello (see receive): closing earlier can drop the join
     } catch (e) {
       clearTimeout(timer);
       if (mine !== attempt) return;
@@ -369,6 +368,7 @@ function view() {
 
 function receive(text) {
   const msg = JSON.parse(text);
+  if (msg.t === "hello") { if ($("cover").style.display !== "none") { setNet("online"); cover(null); } return; }
   if (msg.t === "denied") { cover("error", "Wrong PIN."); return; }
   if (msg.t === "buzz" && navigator.vibrate) navigator.vibrate(msg.ms);
   if (msg.t === "ack") setNet("online", Math.round(performance.now() - msg.ms));
