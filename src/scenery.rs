@@ -16,6 +16,7 @@ use crate::textures;
 
 mod bar;
 mod props;
+mod tournament;
 
 pub(super) mod prelude {
     //
@@ -537,7 +538,8 @@ pub(super) fn spawn(
     marks(&mut dress, &look);
     match track.scenery {
         Scenery::Bar => bar::dress(&mut dress),
-        Scenery::Tournament | Scenery::Neon => {}
+        Scenery::Tournament => tournament::dress(&mut dress),
+        Scenery::Neon => {}
     }
     dust(&mut dress);
 }
