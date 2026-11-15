@@ -10,8 +10,8 @@ use std::f32::consts::TAU;
 
 use bevy::prelude::*;
 
+use super::LOOKS;
 use super::Scenery;
-use super::TRACKS;
 use super::Track;
 use super::centerline;
 
@@ -107,7 +107,7 @@ fn attempt_track(
         return None;
     }
     let mut track = Track {
-        name: name(&mut dice, TRACKS[theme].scenery),
+        name: name(&mut dice, LOOKS[theme].scenery),
         points,
         dists,
         length,
@@ -120,8 +120,8 @@ fn attempt_track(
         pipes: Vec::new(),
         shortcuts: Vec::new(),
         boxes: Vec::new(),
-        scenery: TRACKS[theme].scenery,
-        theme: TRACKS[theme].theme,
+        scenery: LOOKS[theme].scenery,
+        theme: LOOKS[theme].theme,
         landmark: None,
     };
     track.heights = hills(&mut dice, &track.dists, length);

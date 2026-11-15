@@ -193,34 +193,6 @@ mod test {
         (lap_times, walls)
     }
 
-    /// Print lap times and wall contacts per hand-made track. Run with --ignored
-    /// --nocapture when tuning.
-    #[test]
-    #[ignore = "tuning aid: prints lap times, run with --ignored --nocapture"]
-    fn test_solo_laps() {
-        for index in 0..TRACKS.len() {
-            let track = Track::new(index);
-            let (laps, walls) = solo(&track, 3, 400.0);
-            println!("{}: laps {laps:?} walls {walls}", track.name);
-        }
-    }
-
-    /// A CPU kart gets round every hand-made track at a sane pace, hills and jumps included.
-    #[test]
-    fn test_handmade_tracks_lap() {
-        for index in 0..TRACKS.len() {
-            let track = Track::new(index);
-            let (laps, walls) = solo(&track, 2, 240.0);
-            assert_eq!(laps.len(), 2, "{}: stuck after {laps:?}", track.name);
-            let pace = track.length / laps[1];
-            assert!(
-                pace > Kart::TOP_SPEED / 3.0,
-                "{}: {pace:.1} m/s, {walls} wall hits",
-                track.name
-            );
-        }
-    }
-
     /// A CPU kart gets round every generated track at a sane pace: no corner it cannot
     /// make, no spot it gets stuck in.
     #[test]

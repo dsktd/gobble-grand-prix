@@ -401,15 +401,15 @@ mod tests {
     /// Every point of every track, edges of the road included, lands inside the map area.
     #[test]
     fn tracks_fit_the_map() {
-        for index in 0..TRACKS.len() {
-            let track = Track::new(index);
+        for seed in 0..50 {
+            let track = crate::track::generate::track(seed);
             let map = Map::new(&track);
             for p in &track.points {
                 for edge in [Vec2::X, Vec2::NEG_X, Vec2::Y, Vec2::NEG_Y] {
                     let at = map.at(*p + edge * track.half_width);
                     assert!(
                         at.x >= 0.0 && at.y >= 0.0 && at.x <= AREA.x && at.y <= AREA.y,
-                        "track {index}: {at:?} leaves the map area"
+                        "seed {seed}: {at:?} leaves the map area"
                     );
                 }
             }
@@ -419,7 +419,7 @@ mod tests {
     /// The texture is made once and holds road pixels.
     #[test]
     fn art_has_road() {
-        let track = Track::new(0);
+        let track = crate::track::generate::track(1);
         let image = art(&track, &Map::new(&track));
         let road = image
             .data

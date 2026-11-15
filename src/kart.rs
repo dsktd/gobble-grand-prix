@@ -936,10 +936,10 @@ mod test {
         assert!(kart.slide.abs() < 1e-3, "body slide {}", kart.slide);
     }
 
-    /// Drive at top boost speed into the left wall of Harvest Lane's first straight at
+    /// Drive at top boost speed into the left wall of the first straight of seed 1 at
     /// `angle` (rad from the wall line) and check the kart never passes the wall.
     fn into_wall(angle: f32) -> (Kart, f32) {
-        let track = Track::new(0);
+        let track = crate::track::generate::track(1);
         let stats = ROSTER[0].stats;
         let along = 20.0;
         let (_, dir) = track.sample(along);
@@ -972,7 +972,7 @@ mod test {
     #[test]
     fn test_wall_shallow_slides() {
         let (kart, tangential) = into_wall(0.25);
-        let track = Track::new(0);
+        let track = crate::track::generate::track(1);
         let (_, dir) = track.sample(track.locate(kart.pos).along);
         assert!(
             kart.vel.dot(dir) > tangential * 0.6,
@@ -992,8 +992,8 @@ mod test {
         // A drift held at racing speed must be able to follow a typical corner of every
         // track: tighter than the median curve of the bends
         let drift = radius(Kart::TOP_SPEED * 0.8, &held(1.0, true));
-        for (index, def) in TRACKS.iter().enumerate() {
-            let track = Track::new(index);
+        for seed in 0..50 {
+            let track = crate::track::generate::track(seed);
             let n = track.points.len();
             let mut bends: Vec<f32> = (0..n)
                 .filter_map(|i| {
@@ -1008,9 +1008,9 @@ mod test {
             bends.sort_by(f32::total_cmp);
             let typical = bends[bends.len() / 2];
             assert!(
-                drift < typical + def.half_width,
-                "{}: drift radius {drift}, typical bend {typical}",
-                def.name
+                drift < typical + track.half_width,
+                "seed {seed} ({}): drift radius {drift}, typical bend {typical}",
+                track.name
             );
         }
     }

@@ -37,7 +37,6 @@ pub(super) fn plugin(app: &mut App) {
 /// Present while the menus show a race behind them.
 #[derive(Resource, Copy, Clone, Debug)]
 pub struct Attract {
-    track: usize,
     /// Seconds on this track.
     time: f32,
 }
@@ -64,14 +63,13 @@ struct Load;
 
 fn start(world: &mut World) {
     let setup = world.resource::<Setup>();
-    let (track, seed) = (setup.track, setup.seed);
-    load(world, track, seed);
+    let seed = setup.seed;
+    load(world, seed);
 }
 
-/// Swap the race behind the menus for a fresh all-CPU race on `track`, already rolling.
+/// Swap the race behind the menus for a fresh all-CPU race on the track for `seed`, already rolling.
 fn load(
     world: &mut World,
-    track: usize,
     seed: u32,
 ) {
     let old: Vec<Entity> = world
@@ -89,7 +87,6 @@ fn load(
     let saved = world.resource::<Setup>().clone();
     *world.resource_mut::<Setup>() = Setup {
         racers: Vec::new(),
-        track,
         seed,
         last_seed: seed,
     };
@@ -103,7 +100,7 @@ fn load(
     for mut kart in world.query::<&mut Kart>().iter_mut(world) {
         kart.frozen = false;
     }
-    world.insert_resource(Attract { track, time: 0.0 });
+    world.insert_resource(Attract { time: 0.0 });
 }
 
 fn stop(world: &mut World) {
@@ -124,7 +121,7 @@ fn rotate(world: &mut World) {
     let dt = world.resource::<Time>().delta_secs();
     let mut attract = world.resource_mut::<Attract>();
     attract.time += dt;
-    let (track, time) = (attract.track, attract.time);
+    let time = attract.time;
     let laps = world
         .query::<&Progress>()
         .iter(world)
@@ -132,8 +129,7 @@ fn rotate(world: &mut World) {
         .max()
         .unwrap_or(0);
     if laps > Attract::LAPS || time > Attract::STAY {
-        // Generated tracks take their turn too, a new one each time
-        load(world, (track + 1) % (TRACKS.len() + 1), rand::random());
+        load(world, rand::random());
         for mut director in world.query::<&mut Director>().iter_mut(world) {
             director.left = 0.0;
         }

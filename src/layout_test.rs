@@ -57,7 +57,7 @@ fn app(
         time: 0.0,
         after: 0.0,
     });
-    app.insert_resource(Track::new(0));
+    app.insert_resource(crate::track::generate::track(1));
     app.add_plugins((
         crate::style::plugin,
         crate::prompts::plugin,
@@ -291,7 +291,7 @@ fn results(app: &mut App) {
         .collect();
     let world = app.world_mut();
     let mut commands = world.commands();
-    crate::hud::spawn_results(&mut commands, board, "Harvest Lane of Wwwwwwwwwwww", &rows);
+    crate::hud::spawn_results(&mut commands, board, "Hayride Bends of Wwwwwwwwwwww", &rows);
     world.flush();
     *world.get_mut::<Visibility>(board).expect("visibility") = Visibility::Inherited;
 }

@@ -1187,16 +1187,11 @@ fn racers(
 fn tracks(commands: &mut Commands) {
     page(commands, GameState::PickTrack, |stage| {
         heading(stage, "Pick a track", 800.0);
-        // The hand-made tracks, then the generated one
-        let cards: Vec<(&str, &str, Theme)> = TRACKS
-            .iter()
-            .map(|t| (t.name, t.blurb, t.theme))
-            .chain([(
-                "Random",
-                "A new track every race. Up replays the last seed, down rolls another.",
-                TRACKS[0].theme,
-            )])
-            .collect();
+        let cards: Vec<(&str, &str, Theme)> = vec![(
+            "Random",
+            "A new track every race. Up replays the last seed, down rolls another.",
+            LOOKS[0].theme,
+        )];
         let (w, gap) = (284.0, 16.0);
         for (i, (name, blurb, theme)) in cards.into_iter().enumerate() {
             stage
@@ -1268,7 +1263,7 @@ fn tracks(commands: &mut Commands) {
                             )
                         )],
                     ));
-                    if i == TRACKS.len() {
+                    {
                         card.spawn((
                             boxed(20.0, 474.0, w - 48.0, 28.0),
                             children![(
@@ -1343,7 +1338,7 @@ fn focus(
         GameState::Menu | GameState::Options => Some(cursor.0),
         // Several seats show their cursors as tags and fills instead
         GameState::PickRacer if setup.racers.len() == 1 => setup.racers.first().copied(),
-        GameState::PickTrack => Some(setup.track),
+        GameState::PickTrack => Some(0),
         _ => None,
     };
     if focus.0 != at {
@@ -1623,19 +1618,13 @@ fn navigate(
         }
         GameState::Lobby | GameState::PickRacer => {}
         GameState::PickTrack => {
-            if step != 0 {
-                let n = TRACKS.len() as i32 + 1;
-                setup.track = (setup.track as i32 + step).rem_euclid(n) as usize;
+            if input.up {
+                let seed = setup.seed;
+                setup.seed = setup.last_seed;
+                setup.last_seed = seed;
             }
-            if setup.track == TRACKS.len() {
-                if input.up {
-                    let seed = setup.seed;
-                    setup.seed = setup.last_seed;
-                    setup.last_seed = seed;
-                }
-                if input.down {
-                    setup.seed = rand::random();
-                }
+            if input.down {
+                setup.seed = rand::random();
             }
             if input.confirm {
                 next.set(GameState::Race);
