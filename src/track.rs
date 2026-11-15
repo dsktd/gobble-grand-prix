@@ -208,6 +208,9 @@ pub struct Track {
     pub ramps: Vec<(f32, f32)>,
     /// Stretches with no road, only a pit, (from, to) along the lap.
     pub gaps: Vec<(f32, f32)>,
+    /// How far the road's sides curl up into a half-pipe at each centerline point, 0..1.
+    /// Empty when the track has none.
+    pub pipes: Vec<f32>,
     /// Centerline points carried by a bridge over another leg of road. Empty when the
     /// track never crosses itself.
     pub decks: Vec<usize>,
@@ -222,6 +225,8 @@ impl Track {
     pub const STEP: f32 = 1.5;
     /// Width of the slope from the road shelf down to the flat.
     pub const FALL: f32 = 30.0;
+    /// Height of a half-pipe's lip above the road.
+    pub const PIPE: f32 = 4.5;
     /// Height a bridge deck clears the road under it by.
     pub const CLEAR: f32 = 6.5;
     /// Depth of a gap's pit below the road.
@@ -250,6 +255,7 @@ impl Track {
             ramps: Vec::new(),
             gaps: Vec::new(),
             decks: Vec::new(),
+            pipes: Vec::new(),
             boxes: def.boxes.to_vec(),
             scenery: def.scenery,
             theme: def.theme,
@@ -376,7 +382,36 @@ impl Track {
         lateral: f32,
     ) -> f32 {
         let lateral = lateral.clamp(-self.barrier(), self.barrier());
-        self.height(along) + lateral * self.bank(along)
+        self.height(along) + lateral * self.bank(along) + self.curl(along, lateral)
+    }
+
+    /// Half-pipe rise at a spot: flat down the middle, curving up to the lip at the road's
+    /// edges and level with it on the shoulders.
+    fn curl(
+        &self,
+        along: f32,
+        lateral: f32,
+    ) -> f32 {
+        if self.pipes.is_empty() {
+            return 0.0;
+        }
+        let (i, j, t) = self.segment(along);
+        let pipe = self.pipes[i] + (self.pipes[j] - self.pipes[i]) * t;
+        if pipe == 0.0 {
+            return 0.0;
+        }
+        let flat = self.half_width * 0.4;
+        let u = ((lateral.abs() - flat) / (self.half_width - flat)).clamp(0.0, 1.0);
+        pipe * u * u * Self::PIPE
+    }
+
+    /// Rise per metre to the left across the road surface at a spot.
+    pub fn tilt(
+        &self,
+        along: f32,
+        lateral: f32,
+    ) -> f32 {
+        self.surface(along, lateral + 0.25) - self.surface(along, lateral - 0.25)
     }
 
     /// Rise per metre of road, positive uphill in the racing direction.
@@ -389,7 +424,11 @@ impl Track {
 
     /// Whether the road ever leaves the flat.
     pub fn hilly(&self) -> bool {
-        self.heights.iter().chain(&self.banks).any(|h| *h != 0.0)
+        self.heights
+            .iter()
+            .chain(&self.banks)
+            .chain(&self.pipes)
+            .any(|h| *h != 0.0)
     }
 
     /// Ground height under a spot: the road's out to the walls, then easing down to
@@ -701,7 +740,14 @@ pub fn spawn_track(
     ));
 
     // Road, slightly darker down the middle for a worn racing line
-    let road = band(&track, -hw, hw, 0.0);
+    // A half-pipe needs strips across the road to curve; a flat road takes one
+    let strips = if track.pipes.is_empty() { 1 } else { 10 };
+    let road: Vec<[Vec3; 4]> = (0..strips)
+        .flat_map(|k| {
+            let lat = |k: usize| -hw + 2.0 * hw * k as f32 / strips as f32;
+            band(&track, lat(k), lat(k + 1), 0.0)
+        })
+        .collect();
     let colors: Vec<Color> = (0..road.len())
         .map(|i| {
             let wobble = ((i as f32 * 0.37).sin() * 0.03) + 1.0;

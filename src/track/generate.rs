@@ -117,6 +117,7 @@ fn attempt_track(
         ramps: Vec::new(),
         gaps: Vec::new(),
         decks: Vec::new(),
+        pipes: Vec::new(),
         shortcuts: Vec::new(),
         boxes: Vec::new(),
         scenery: TRACKS[theme].scenery,
@@ -136,6 +137,9 @@ fn attempt_track(
     track.landmark = landmark(&track, 22.0);
     track.banks = banks(&track.points, dice.range(0.6..1.0));
     jumps(&mut dice, &mut track, &zone);
+    if dice.unit() < 0.5 {
+        track.pipes = pipes(&track, &zone);
+    }
     level(&track, &zone).then_some(track)
 }
 
@@ -449,6 +453,55 @@ fn jumps(
     }
 }
 
+/// Half-pipes on up to two sweeping corners, clear of the start, bridges and jumps, eased
+/// in and out over 15 m. All zero when no corner fits.
+fn pipes(
+    track: &Track,
+    zone: &[bool],
+) -> Vec<f32> {
+    let n = track.points.len();
+    let p = &track.points;
+    let sweep = |i: usize| (25.0..70.0).contains(&bend(p[(i + n - 8) % n], p[i], p[(i + 8) % n]));
+    let free = |i: usize| {
+        let s = track.dists[i];
+        let start = s.min(track.length - s) > 60.0;
+        let jumps = track.ramps.iter().all(|(from, to)| {
+            let (a, b) = (
+                (s - from).rem_euclid(track.length),
+                (to - s).rem_euclid(track.length),
+            );
+            a.min(track.length - a) > 25.0 && b.min(track.length - b) > 25.0
+        });
+        start && jumps && !zone[i]
+    };
+    // Runs of at least 40 m of sweeping, free road
+    let mut runs: Vec<(usize, usize)> = Vec::new();
+    let mut from = None;
+    for i in 0..n {
+        match (sweep(i) && free(i), from) {
+            (true, None) => from = Some(i),
+            (false, Some(f)) => {
+                runs.push((f, i));
+                from = None;
+            }
+            _ => {}
+        }
+    }
+    let least = (40.0 / Track::STEP) as usize;
+    runs.retain(|(a, b)| b - a >= least);
+    runs.sort_by_key(|(a, b)| std::cmp::Reverse(b - a));
+    let mut pipes = vec![0.0; n];
+    let ease = 15.0 / Track::STEP;
+    for (a, b) in runs.into_iter().take(2) {
+        for (i, pipe) in pipes.iter_mut().enumerate().take(b).skip(a) {
+            *pipe = ((i - a) as f32 / ease)
+                .min((b - 1 - i) as f32 / ease)
+                .min(1.0);
+        }
+    }
+    pipes
+}
+
 /// Legs of road near each other sit at about the same height.
 fn level(
     track: &Track,
@@ -459,7 +512,9 @@ fn level(
     let p = &track.points;
     let h = &track.heights;
     // Banking lifts a road edge above its centre
-    let lift = |i: usize| track.banks[i].abs() * track.barrier();
+    let lift = |i: usize| {
+        track.banks[i].abs() * track.barrier() + track.pipes.get(i).unwrap_or(&0.0) * Track::PIPE
+    };
     // Samples this close along the lap are one leg climbing its own hill
     let same = (near * 2.0 / Track::STEP) as usize;
     (0..n).step_by(2).all(|i| {
@@ -659,6 +714,16 @@ mod test {
                 );
             }
         }
+    }
+
+    /// Some tracks curl the road up into half-pipes on sweeping corners.
+    #[test]
+    fn test_pipes() {
+        let piped = (0..30)
+            .map(track)
+            .filter(|t| t.pipes.iter().any(|p| *p > 0.99))
+            .count();
+        assert!(piped >= 5, "{piped} tracks with half-pipes");
     }
 
     /// Different seeds give different layouts, not one shape over and over.

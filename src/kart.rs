@@ -350,7 +350,7 @@ pub fn climb(
     let grade = track.grade(spot.along);
     // Off the road the bank no longer holds the kart
     let bank = if spot.lateral.abs() <= track.barrier() {
-        track.bank(spot.along)
+        track.tilt(spot.along, spot.lateral) * 2.0
     } else {
         0.0
     };
