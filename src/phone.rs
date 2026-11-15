@@ -318,15 +318,15 @@ fn lan_ip() -> Option<IpAddr> {
 
 /// A self-signed certificate for this IP, made once and kept beside the save data.
 fn certificate(ip: IpAddr) -> anyhow::Result<(Vec<u8>, Vec<u8>)> {
-    let dir = crate::options_file::data_dir().unwrap_or_else(|| std::env::temp_dir().join("super-slop-kart"));
+    let dir = crate::options_file::data_dir()
+        .unwrap_or_else(|| std::env::temp_dir().join("super-slop-kart"));
     let cert_path = dir.join(format!("cert-{ip}.pem"));
     let key_path = dir.join(format!("key-{ip}.pem"));
     if let (Ok(cert), Ok(key)) = (std::fs::read(&cert_path), std::fs::read(&key_path)) {
         return Ok((cert, key));
     }
     std::fs::create_dir_all(&dir)?;
-    let made =
-        rcgen::generate_simple_self_signed(vec![ip.to_string(), "slop.local".to_string()])?;
+    let made = rcgen::generate_simple_self_signed(vec![ip.to_string(), "slop.local".to_string()])?;
     let cert = made.cert.pem().into_bytes();
     let key = made.signing_key.serialize_pem().into_bytes();
     std::fs::write(&cert_path, &cert)?;

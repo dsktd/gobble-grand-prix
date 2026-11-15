@@ -222,12 +222,7 @@ pub(super) fn spawn(
             }
         }
         Scenery::Tournament => {
-            let plate = kit(
-                m,
-                mt,
-                Cylinder::new(9.0, 0.4),
-                Color::srgb(0.90, 0.94, 1.0),
-            );
+            let plate = kit(m, mt, Cylinder::new(9.0, 0.4), Color::srgb(0.90, 0.94, 1.0));
             let rim = kit(m, mt, Torus::new(8.0, 9.4), Color::srgb(0.85, 0.70, 0.30));
             let roast = kit(m, mt, Sphere::new(14.0), Color::srgb(0.03, 0.03, 0.04));
             let drum = kit(
@@ -358,9 +353,19 @@ pub(super) fn spawn(
                     ..default()
                 }),
             };
-            let stalk = glow(m, mt, Cylinder::new(0.18, 5.5).into(), Color::srgb(0.15, 0.95, 0.90));
+            let stalk = glow(
+                m,
+                mt,
+                Cylinder::new(0.18, 5.5).into(),
+                Color::srgb(0.15, 0.95, 0.90),
+            );
             let cob = kit(m, mt, Sphere::new(0.4), Color::srgb(0.95, 0.80, 0.25));
-            let tassel = glow(m, mt, Cone::new(0.5, 1.2).into(), Color::srgb(0.95, 0.15, 0.70));
+            let tassel = glow(
+                m,
+                mt,
+                Cone::new(0.5, 1.2).into(),
+                Color::srgb(0.95, 0.15, 0.70),
+            );
             let pole = kit(
                 m,
                 mt,

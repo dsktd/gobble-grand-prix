@@ -12,8 +12,8 @@ use bevy::render::render_resource::TextureFormat;
 use bevy::ui::UiTransform;
 use bevy::ui::Val2;
 
-use crate::items::CueBall;
 use crate::items::Crate;
+use crate::items::CueBall;
 use crate::items::Slick;
 use crate::prelude::*;
 

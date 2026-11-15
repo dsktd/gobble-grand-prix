@@ -273,7 +273,11 @@ pub fn spawn_model(
         Body::Striped => {
             // A striped ball riding a round pocket liner
             pieces.push(parts.part(Cylinder::new(1.05, 0.45), racer.accent, at(0.0, 0.75, 0.0)));
-            pieces.push(parts.part(Cylinder::new(0.92, 0.47), Color::srgb(0.08, 0.08, 0.08), at(0.0, 0.77, 0.0)));
+            pieces.push(parts.part(
+                Cylinder::new(0.92, 0.47),
+                Color::srgb(0.08, 0.08, 0.08),
+                at(0.0, 0.77, 0.0),
+            ));
             pieces.push(parts.part(Torus::new(0.9, 1.12), racer.accent, at(0.0, 1.0, 0.0)));
             pieces.push(parts.part(Sphere::new(0.8), racer.kart, at(0.0, 1.55, 0.05)));
             pieces.push(parts.part(
@@ -293,11 +297,7 @@ pub fn spawn_model(
             ));
             // A big cube of blue chalk with the worn dimple on top
             pieces.push(parts.part(Cuboid::new(1.3, 1.2, 1.3), racer.kart, at(0.0, 1.2, 0.1)));
-            pieces.push(parts.part(
-                Cylinder::new(0.45, 0.08),
-                racer.accent,
-                at(0.0, 1.8, 0.1),
-            ));
+            pieces.push(parts.part(Cylinder::new(0.45, 0.08), racer.accent, at(0.0, 1.8, 0.1)));
             for eye in [-0.25, 0.25] {
                 pieces.push(parts.part(Sphere::new(0.1), Color::WHITE, at(eye, 1.4, -0.58)));
                 pieces.push(parts.part(Sphere::new(0.05), Color::BLACK, at(eye, 1.4, -0.67)));
@@ -324,7 +324,11 @@ pub fn spawn_model(
                 }
             }
             // Wooden triangle frame, one bar per side of the rack
-            pieces.push(parts.part(Cuboid::new(2.2, 0.18, 0.12), racer.kart, at(0.0, 0.85, 1.05)));
+            pieces.push(parts.part(
+                Cuboid::new(2.2, 0.18, 0.12),
+                racer.kart,
+                at(0.0, 0.85, 1.05),
+            ));
             for side in [-1.0f32, 1.0] {
                 pieces.push(parts.part(
                     Cuboid::new(0.12, 0.18, 2.2),
@@ -358,7 +362,11 @@ pub fn spawn_model(
                 at(0.0, 2.0, 0.1),
             ));
             // Shades
-            pieces.push(parts.part(Cuboid::new(0.8, 0.14, 0.06), Color::BLACK, at(0.0, 1.5, -0.6)));
+            pieces.push(parts.part(
+                Cuboid::new(0.8, 0.14, 0.06),
+                Color::BLACK,
+                at(0.0, 1.5, -0.6),
+            ));
             // A cue over the shoulder
             pieces.push(parts.part(
                 Capsule3d::new(0.05, 2.4),
