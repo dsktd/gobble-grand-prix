@@ -329,14 +329,11 @@ async function connect() {
       gaveUp = true;
       if (mine === attempt && !fallback()) cover("notfound", "Game not found, scan the QR code again.");
     }, 10000);
-    // If the first way in is slow, switch to the other one on its own
-    const lanTimer = lan && setTimeout(() => { if (mine === attempt) fallback(); }, 5000);
     try {
       const pad = await import("./pkg/gobble_pad.js");
       await pad.default();
       const link = await pad.connect(game, (line) => receive(line), closed);
       clearTimeout(timer);
-      clearTimeout(lanTimer);
       if (gaveUp || mine !== attempt) return;
       link.send(JSON.stringify({ t: "join", pin, token, name: playerName() }));
       ws = { readyState: 1, send: (text) => link.send(text) };
@@ -344,7 +341,6 @@ async function connect() {
       cover(null);
     } catch (e) {
       clearTimeout(timer);
-      clearTimeout(lanTimer);
       if (mine !== attempt) return;
       if (!fallback()) cover("notfound", "Game not found, scan the QR code again.");
     }
