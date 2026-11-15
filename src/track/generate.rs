@@ -94,10 +94,16 @@ fn attempt_track(
     let mut dice = Dice(u64::from(seed) << 20 ^ attempt);
     let theme = dice.pick(&[0, 1, 2]);
     let half_width = dice.range(7.5..9.0);
-    let control = layout(&mut dice);
+    // The seed alone picks the kind, so a figure eight keeps trying as one
+    let eight = Dice(u64::from(seed)).unit() < 0.3;
+    let control = if eight {
+        figure_eight(&mut dice)
+    } else {
+        layout(&mut dice)
+    };
     let (points, dists, length) = centerline(&control);
     let barrier = half_width + 5.0;
-    if !LENGTH.contains(&length) || !smooth(&points) || !clear(&points, barrier) {
+    if !LENGTH.contains(&length) || !smooth(&points) || (!eight && !clear(&points, &[], barrier)) {
         return None;
     }
     let mut track = Track {
@@ -110,18 +116,109 @@ fn attempt_track(
         banks: Vec::new(),
         ramps: Vec::new(),
         gaps: Vec::new(),
+        decks: Vec::new(),
         shortcuts: Vec::new(),
         boxes: Vec::new(),
         scenery: TRACKS[theme].scenery,
         theme: TRACKS[theme].theme,
         landmark: None,
     };
-    track.boxes = boxes(&track);
-    track.landmark = landmark(&track, 22.0);
     track.heights = hills(&mut dice, &track.dists, length);
+    if eight {
+        bridge(&mut track)?;
+        track.decks = decks(&track);
+        if track.decks.is_empty() || !clear(&track.points, &track.heights, barrier) {
+            return None;
+        }
+    }
+    let zone = zone(&track);
+    track.boxes = boxes(&track, &zone);
+    track.landmark = landmark(&track, 22.0);
     track.banks = banks(&track.points, dice.range(0.6..1.0));
-    jumps(&mut dice, &mut track);
-    level(&track).then_some(track)
+    jumps(&mut dice, &mut track, &zone);
+    level(&track, &zone).then_some(track)
+}
+
+/// Control points of a figure eight, its lobes squashed and wobbled at random. Its two
+/// legs cross in the middle; [`bridge`] lifts one over the other.
+fn figure_eight(dice: &mut Dice) -> Vec<Vec2> {
+    let n = dice.range(18.0..26.0) as usize;
+    let a = dice.range(140.0..190.0);
+    let points: Vec<Vec2> = (0..n)
+        .map(|k| {
+            let t = (k as f32 + dice.range(-0.1..0.1)) * TAU / n as f32;
+            let (s, c) = t.sin_cos();
+            let p = Vec2::new(a * c, a * s * c) / (1.0 + s * s);
+            // Wobble each point about its lobe's centre, leaving the crossing alone
+            let centre = Vec2::new(a * 0.6 * c.signum(), 0.0);
+            let wobble = 1.0 + dice.range(-0.12..0.12) * (p.x.abs() / a).min(1.0);
+            centre + (p - centre) * wobble
+        })
+        .collect();
+    let stretch = Vec2::new(1.0, dice.range(0.9..1.5));
+    let turn = Vec2::from_angle(dice.range(0.0..TAU));
+    let points: Vec<Vec2> = points.iter().map(|p| turn.rotate(*p * stretch)).collect();
+    start_on_straight(&points)
+}
+
+/// Lift the road over the crossing of a figure eight high enough to clear the other leg.
+fn bridge(track: &mut Track) -> Option<()> {
+    const HALF: f32 = 80.0;
+    let n = track.points.len();
+    let p = &track.points;
+    // The crossing: the closest pair of samples a quarter lap or more apart
+    let (i, j) = (0..n)
+        .flat_map(|i| (i + n / 4..n.min(i + 3 * n / 4)).map(move |j| (i, j)))
+        .min_by(|a, b| {
+            p[a.0]
+                .distance_squared(p[a.1])
+                .total_cmp(&p[b.0].distance_squared(p[b.1]))
+        })?;
+    let top = Track::CLEAR + 1.5;
+    let at = track.dists[i];
+    for (k, s) in track.dists.iter().enumerate() {
+        let d = (s - at).abs();
+        let d = d.min(track.length - d);
+        if d < HALF {
+            track.heights[k] += top * 0.5 * (1.0 + (std::f32::consts::PI * d / HALF).cos());
+        }
+    }
+    let h = &track.heights;
+    let steepest = (0..n)
+        .map(|k| (h[(k + 1) % n] - h[k]).abs() / Track::STEP)
+        .fold(0.0, f32::max);
+    (h[i] - h[j] >= Track::CLEAR + 0.5 && steepest <= MAX_GRADE * 1.3).then_some(())
+}
+
+/// Samples of road lifted over another leg close enough that their walls overlap.
+fn decks(track: &Track) -> Vec<usize> {
+    let n = track.points.len();
+    let near = 2.0 * track.barrier() + GAP;
+    let same = (near * 2.5 / Track::STEP) as usize;
+    let (p, h) = (&track.points, &track.heights);
+    (0..n)
+        .filter(|&i| {
+            (0..n).any(|j| {
+                let apart = i.abs_diff(j);
+                apart.min(n - apart) >= same
+                    && h[i] - h[j] >= Track::CLEAR - 0.5
+                    && p[i].distance_squared(p[j]) < near * near
+            })
+        })
+        .collect()
+}
+
+/// Samples near a bridge, kept free of crates and jumps and allowed steep ground.
+fn zone(track: &Track) -> Vec<bool> {
+    let n = track.points.len();
+    let reach = (90.0 / Track::STEP) as usize;
+    let mut zone = vec![false; n];
+    for &d in &track.decks {
+        for k in 0..=2 * reach {
+            zone[(d + n + k - reach) % n] = true;
+        }
+    }
+    zone
 }
 
 /// Control points of one candidate loop.
@@ -192,7 +289,12 @@ fn layout(dice: &mut Dice) -> Vec<Vec2> {
         points[i + 1] = a.lerp(b, 1.0 / 3.0);
         points[i + 2] = a.lerp(b, 2.0 / 3.0);
     }
-    // The start line wants a straight run, so begin halfway along the longest leg
+    start_on_straight(&points)
+}
+
+/// The same loop starting halfway along its longest leg, so the grid has a straight.
+fn start_on_straight(points: &[Vec2]) -> Vec<Vec2> {
+    let n = points.len();
     let start = (0..n)
         .max_by(|a, b| {
             let len = |i: &usize| points[*i].distance(points[(*i + 1) % n]);
@@ -290,6 +392,7 @@ fn banks(
 fn jumps(
     dice: &mut Dice,
     track: &mut Track,
+    zone: &[bool],
 ) {
     const UP: f32 = 8.0;
     const LIP: f32 = 1.6;
@@ -303,6 +406,7 @@ fn jumps(
     for _ in 0..dice.range(1.0..3.0) as usize {
         let site = (0..n)
             .step_by(4)
+            .filter(|i| !zone[*i])
             .map(|i| track.dists[i])
             .filter(|s| {
                 let clear = |x: f32, room: f32| {
@@ -346,7 +450,10 @@ fn jumps(
 }
 
 /// Legs of road near each other sit at about the same height.
-fn level(track: &Track) -> bool {
+fn level(
+    track: &Track,
+    zone: &[bool],
+) -> bool {
     let n = track.points.len();
     let near = 2.0 * track.barrier() + 2.0 * Track::FALL;
     let p = &track.points;
@@ -359,6 +466,8 @@ fn level(track: &Track) -> bool {
         (0..n).step_by(2).all(|j| {
             let apart = i.abs_diff(j);
             apart.min(n - apart) < same
+                || zone[i]
+                || zone[j]
                 || (h[i] - h[j]).abs() + lift(i) + lift(j) <= STEP_DOWN + 2.0
                 || p[i].distance_squared(p[j]) > near * near
         })
@@ -382,10 +491,15 @@ fn smooth(points: &[Vec2]) -> bool {
 }
 
 /// Legs of road far apart along the lap also stay apart on the ground, walls included.
+/// Legs that pass over each other by at least [`Track::CLEAR`] are fine; `heights` may be
+/// empty for a flat track.
 fn clear(
     points: &[Vec2],
+    heights: &[f32],
     barrier: f32,
 ) -> bool {
+    let over =
+        |i: usize, j: usize| !heights.is_empty() && (heights[i] - heights[j]).abs() >= Track::CLEAR;
     let n = points.len();
     let near = 2.0 * barrier + GAP;
     // Samples closer than this along the lap belong to the same leg
@@ -393,12 +507,15 @@ fn clear(
     (0..n).all(|i| {
         (i + same..n)
             .filter(|j| n - j + i >= same)
-            .all(|j| points[i].distance_squared(points[j]) > near * near)
+            .all(|j| over(i, j) || points[i].distance_squared(points[j]) > near * near)
     })
 }
 
 /// Three rows of item crates, each on the straightest road of its third of the lap.
-fn boxes(track: &Track) -> Vec<f32> {
+fn boxes(
+    track: &Track,
+    zone: &[bool],
+) -> Vec<f32> {
     let n = track.points.len();
     let p = &track.points;
     (0..3)
@@ -406,6 +523,7 @@ fn boxes(track: &Track) -> Vec<f32> {
             let from = n * (2 * third + 1) / 8;
             let to = n * (2 * third + 3) / 8;
             let best = (from..to)
+                .filter(|i| !zone[*i])
                 .max_by(|a, b| {
                     let r = |i: &usize| bend(p[(*i + n - 6) % n], p[*i], p[(*i + 6) % n]);
                     r(a).total_cmp(&r(b))
@@ -490,9 +608,9 @@ mod test {
                 t.length
             );
             assert!(smooth(&t.points), "seed {seed}");
-            assert!(clear(&t.points, t.barrier()), "seed {seed}");
+            assert!(clear(&t.points, &t.heights, t.barrier()), "seed {seed}");
             assert_eq!(t.boxes.len(), 3);
-            assert!(level(&t), "seed {seed}");
+            assert!(level(&t, &zone(&t)), "seed {seed}");
             assert!(t.hilly(), "seed {seed}: flat");
         }
     }
@@ -519,6 +637,26 @@ mod test {
             for (from, to) in &t.gaps {
                 assert!(t.ramps.iter().any(|r| r.1 == *from));
                 assert!(t.ramps.iter().any(|r| r.0 == *to));
+            }
+        }
+    }
+
+    /// Some tracks are figure eights with a bridge high over the road it crosses.
+    #[test]
+    fn test_bridges() {
+        let tracks: Vec<Track> = (0..30).map(track).collect();
+        let bridged: Vec<&Track> = tracks.iter().filter(|t| !t.decks.is_empty()).collect();
+        assert!(bridged.len() >= 4, "{} bridges", bridged.len());
+        for t in bridged {
+            // A kart on the road, deck or under it, is found on its own leg
+            for (i, p) in t.points.iter().enumerate() {
+                let along = t.find(*p, t.heights[i]).along;
+                let off = (along - t.dists[i]).abs();
+                assert!(
+                    off.min(t.length - off) < 2.0,
+                    "{}: {i} found at {along}",
+                    t.name
+                );
             }
         }
     }

@@ -88,10 +88,10 @@ pub fn art(
     map: &Map,
 ) -> Image {
     let (w, h) = ((AREA.x * DETAIL) as usize, (AREA.y * DETAIL) as usize);
-    // 0 off-road, 1 road, 2 shortcut
+    // 0 off-road, 1 road, 2 shortcut, 3 bridge edge, 4 bridge deck
     let mut mask = vec![0u8; w * h];
-    let radius = track.half_width * map.scale * DETAIL;
-    let mut stamp = |at: Vec2, value: u8| {
+    let road_radius = track.half_width * map.scale * DETAIL;
+    let mut stamp = |at: Vec2, value: u8, radius: f32| {
         let c = map.at(at) * DETAIL;
         let (x0, x1) = (
             (c.x - radius).floor().max(0.0) as usize,
@@ -114,11 +114,18 @@ pub fn art(
     for (a, b, r) in &track.shortcuts {
         let steps = ((*b - *a).length() / (r.max(0.5))).ceil().max(1.0) as usize;
         for i in 0..=steps {
-            stamp(a.lerp(*b, i as f32 / steps as f32), 2);
+            stamp(a.lerp(*b, i as f32 / steps as f32), 2, road_radius);
         }
     }
     for p in &track.points {
-        stamp(*p, 1);
+        stamp(*p, 1, road_radius);
+    }
+    // Bridges drawn over the road they cross, with a dark edge
+    for &i in &track.decks {
+        stamp(track.points[i], 3, road_radius * 1.5);
+    }
+    for &i in &track.decks {
+        stamp(track.points[i], 4, road_radius);
     }
 
     let shade = |c: Color, a: f32| {
@@ -134,12 +141,16 @@ pub fn art(
     let void_b = shade(Tone::BROWN_900, 0.45);
     let road = shade(Tone::CREAM_300, 0.95);
     let cut = shade(Tone::CREAM_300, 0.45);
+    let edge = shade(Tone::BROWN_900, 1.0);
+    let deck = shade(Tone::CREAM_100, 1.0);
     let mut data = vec![0u8; w * h * 4];
     for y in 0..h {
         for x in 0..w {
             let px = match mask[y * w + x] {
                 1 => road,
                 2 => cut,
+                3 => edge,
+                4 => deck,
                 // Fixed diagonal hatch over the voids
                 _ if ((x + y) / 6) % 2 == 0 => void_a,
                 _ => void_b,

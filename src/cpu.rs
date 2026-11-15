@@ -167,10 +167,10 @@ mod test {
                 drift: false,
                 item: false,
             };
-            let spot = track.locate(kart.pos);
+            let spot = track.find(kart.pos, kart.y);
             crate::kart::climb(&mut kart, track, spot);
             crate::kart::step(&mut kart, &input, stats, top, Kart::STEP);
-            let spot = track.locate(kart.pos);
+            let spot = track.find(kart.pos, kart.y);
             if spot.lateral.abs() > track.barrier() {
                 kart.pos = track.offset(spot.along, track.barrier() * spot.lateral.signum());
                 kart.speed *= 0.6;

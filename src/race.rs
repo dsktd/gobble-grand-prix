@@ -191,7 +191,7 @@ fn progress(
 ) {
     let len = track.length;
     for (kart, mut progress) in karts {
-        let along = track.locate(kart.pos).along;
+        let along = track.find(kart.pos, kart.y).along;
         let delta = along - progress.along;
         if delta < -len / 2.0 && progress.halfway {
             // Crossed the line going forward

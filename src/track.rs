@@ -208,6 +208,9 @@ pub struct Track {
     pub ramps: Vec<(f32, f32)>,
     /// Stretches with no road, only a pit, (from, to) along the lap.
     pub gaps: Vec<(f32, f32)>,
+    /// Centerline points carried by a bridge over another leg of road. Empty when the
+    /// track never crosses itself.
+    pub decks: Vec<usize>,
     /// Item box rows as fractions of a lap.
     pub boxes: Vec<f32>,
     pub scenery: Scenery,
@@ -219,6 +222,8 @@ impl Track {
     pub const STEP: f32 = 1.5;
     /// Width of the slope from the road shelf down to the flat.
     pub const FALL: f32 = 30.0;
+    /// Height a bridge deck clears the road under it by.
+    pub const CLEAR: f32 = 6.5;
     /// Depth of a gap's pit below the road.
     pub const PIT: f32 = 7.0;
 
@@ -244,6 +249,7 @@ impl Track {
                 .collect(),
             ramps: Vec::new(),
             gaps: Vec::new(),
+            decks: Vec::new(),
             boxes: def.boxes.to_vec(),
             scenery: def.scenery,
             theme: def.theme,
@@ -265,9 +271,40 @@ impl Track {
         self.half_width + 5.0
     }
 
+    /// The nearest road to a track-plane point, where legs that cross count the same.
     pub fn locate(
         &self,
         p: Vec2,
+    ) -> Spot {
+        self.nearest(p, |_| 0.0)
+    }
+
+    /// The nearest road to a point at height `y`: where one leg crosses over another,
+    /// the one at the point's level.
+    pub fn find(
+        &self,
+        p: Vec2,
+        y: f32,
+    ) -> Spot {
+        if self.decks.is_empty() {
+            return self.locate(p);
+        }
+        let level = Self::CLEAR / 2.0;
+        self.nearest(p, |i| {
+            if (self.heights[i] - y).abs() > level {
+                1e6
+            } else {
+                0.0
+            }
+        })
+    }
+
+    /// The nearest road to `p` among segments, each costing `extra` on top of its
+    /// squared distance.
+    fn nearest(
+        &self,
+        p: Vec2,
+        extra: impl Fn(usize) -> f32,
     ) -> Spot {
         let n = self.points.len();
         let mut best = (f32::MAX, 0.0, 0.0);
@@ -277,7 +314,7 @@ impl Track {
             let ab = b - a;
             let t = ((p - a).dot(ab) / ab.length_squared()).clamp(0.0, 1.0);
             let proj = a + ab * t;
-            let d2 = p.distance_squared(proj);
+            let d2 = p.distance_squared(proj) + extra(i);
             if d2 < best.0 {
                 let lateral = ab.normalize().perp_dot(p - proj);
                 best = (d2, self.dists[i] + t * ab.length(), lateral);
@@ -393,15 +430,45 @@ impl Track {
             .any(|(from, to)| (*from..*to).contains(&along))
     }
 
-    /// Ground height under a track-plane point.
+    /// Ground height under a track-plane point: the earth, never a bridge deck.
     pub fn ground(
         &self,
         p: Vec2,
     ) -> f32 {
         if self.hilly() {
-            self.ground_at(self.locate(p))
+            self.ground_at(self.earth(p))
         } else {
             0.0
+        }
+    }
+
+    /// The nearest road on the ground to a track-plane point, ignoring bridge decks.
+    pub fn earth(
+        &self,
+        p: Vec2,
+    ) -> Spot {
+        if self.decks.is_empty() {
+            return self.locate(p);
+        }
+        self.nearest(p, |i| {
+            if self.decks.binary_search(&i).is_ok() {
+                1e6
+            } else {
+                0.0
+            }
+        })
+    }
+
+    /// Ground or deck height under a point at about height `y`.
+    pub fn ground_near(
+        &self,
+        p: Vec2,
+        y: f32,
+    ) -> f32 {
+        if self.decks.is_empty() {
+            self.ground(p)
+        } else {
+            self.ground_at(self.find(p, y))
         }
     }
 
@@ -674,6 +741,53 @@ pub fn spawn_track(
             MeshMaterial3d(painted.clone()),
             scope.clone(),
         ));
+    }
+
+    // Bridges: the deck's sides and pillars down to the ground
+    if !track.decks.is_empty() {
+        let mut sides = Vec::new();
+        for &i in &track.decks {
+            let a = track.dists[i];
+            let b = a + Track::STEP;
+            for lat in [-hw - 1.2, hw + 1.2] {
+                let top = |along: f32| flat(track.offset(along, lat), track.surface(along, lat));
+                let low = |along: f32| top(along) - Vec3::Y * 1.2;
+                sides.push([top(a), low(a), top(b), low(b)]);
+            }
+        }
+        let colors = vec![theme.curb_b; sides.len()];
+        commands.spawn((
+            Mesh3d(meshes.add(quads(&sides, &colors))),
+            MeshMaterial3d(painted.clone()),
+            scope.clone(),
+        ));
+        let pillar = meshes.add(Cuboid::new(1.4, 1.0, 1.4));
+        let stone = materials.add(StandardMaterial {
+            base_color: theme.curb_a,
+            perceptual_roughness: 0.9,
+            ..default()
+        });
+        for &i in track.decks.iter().step_by(8) {
+            let along = track.dists[i];
+            for lat in [-hw, hw] {
+                let p = track.offset(along, lat);
+                // Not in the middle of the road below
+                if track.earth(p).lateral.abs() < track.barrier() {
+                    continue;
+                }
+                let (top, foot) = (track.surface(along, lat) - 1.2, track.ground(p) - 0.5);
+                if top - foot < 1.0 {
+                    continue;
+                }
+                commands.spawn((
+                    Mesh3d(pillar.clone()),
+                    MeshMaterial3d(stone.clone()),
+                    Transform::from_translation(flat(p, f32::midpoint(top, foot)))
+                        .with_scale(Vec3::new(1.0, top - foot, 1.0)),
+                    scope.clone(),
+                ));
+            }
+        }
     }
 
     // Curbs

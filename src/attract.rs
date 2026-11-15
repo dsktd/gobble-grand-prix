@@ -322,7 +322,7 @@ fn framing(
         }
         Shot::Trackside => (director.spot, pos + Vec3::Y * 0.8),
         Shot::Dolly => {
-            let along = track.locate(kart.pos).along;
+            let along = track.find(kart.pos, kart.y).along;
             let rail = track.offset(along - 3.0, director.side * (track.barrier() + 2.5));
             (track.lift(rail, 2.2), pos + Vec3::Y * 0.8)
         }

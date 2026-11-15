@@ -116,7 +116,10 @@ pub(super) fn spawn(
                     Crate { pos, hidden: 0.0 },
                     Mesh3d(crate_mesh.clone()),
                     MeshMaterial3d(crate_mat.clone()),
-                    Transform::from_translation(track.lift(pos, 1.3)),
+                    Transform::from_translation(flat(
+                        pos,
+                        track.surface(along, lane * track.half_width) + 1.3,
+                    )),
                     DespawnOnExit(GameState::Race),
                 ))
                 .with_child((
@@ -250,6 +253,7 @@ fn roll(
     for (berry_id, mut berry, mut transform) in berries {
         berry.life -= dt;
         let pos = Vec2::new(transform.translation.x, transform.translation.z);
+        let y = transform.translation.y - 0.6;
 
         // Home in on the nearest kart in front
         let dir = berry.vel.normalize_or_zero();
@@ -268,13 +272,13 @@ fn roll(
             berry.vel = berry.vel.lerp(want, (dt * 3.0).min(1.0));
         } else {
             // Otherwise follow the road
-            let spot = track.locate(pos);
+            let spot = track.find(pos, y);
             let (_, road) = track.sample(spot.along + 4.0);
             let want = road * speed - road.perp() * spot.lateral * 0.5;
             berry.vel = berry.vel.lerp(want, (dt * 1.5).min(1.0));
         }
         let pos = pos + berry.vel * dt;
-        transform.translation = track.lift(pos, 0.6);
+        transform.translation = flat(pos, track.ground_near(pos, y) + 0.6);
         transform.rotate_local_x(-speed * dt / 0.6);
 
         let mut hit = false;
@@ -282,7 +286,8 @@ fn roll(
             if id == berry.owner && berry.life > 4.6 {
                 continue;
             }
-            if kart.pos.distance(pos) < 1.8 {
+            // Same level only: not through a bridge
+            if kart.pos.distance(pos) < 1.8 && (kart.y - y).abs() < 2.5 {
                 kart.hit(1.1);
                 hit = true;
                 if human {
@@ -309,7 +314,10 @@ fn slicks(
         let pos = Vec2::new(transform.translation.x, transform.translation.z);
         let mut hit = false;
         for (mut kart, human) in &mut karts {
-            if kart.pos.distance(pos) < 2.4 && kart.spin <= 0.0 {
+            if kart.pos.distance(pos) < 2.4
+                && (kart.y - transform.translation.y).abs() < 2.5
+                && kart.spin <= 0.0
+            {
                 kart.hit(0.9);
                 hit = true;
                 if human {

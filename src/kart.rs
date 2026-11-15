@@ -280,7 +280,7 @@ fn drive(
             if kart.frozen {
                 continue;
             }
-            let spot = track.locate(kart.pos);
+            let spot = track.find(kart.pos, kart.y);
             kart.offroad =
                 spot.lateral.abs() > track.half_width + 1.2 && !track.in_shortcut(kart.pos);
             let stats = kart.stats();
@@ -390,21 +390,21 @@ pub fn wall(
     before: Vec2,
 ) -> bool {
     let limit = track.barrier();
-    let spot = track.locate(kart.pos);
+    let spot = track.find(kart.pos, kart.y);
     if spot.lateral.abs() <= limit || track.in_shortcut(kart.pos) {
         return false;
     }
     let side = spot.lateral.signum();
     // Where along the step the wall line was crossed (the lateral offset is near linear
     // over one short step)
-    let start = track.locate(before);
+    let start = track.find(before, kart.y);
     let crossed = if start.lateral.abs() < limit && start.lateral.signum() == side {
         ((limit - start.lateral.abs()) / (spot.lateral.abs() - start.lateral.abs())).clamp(0.0, 1.0)
     } else {
         0.0
     };
     let contact = before.lerp(kart.pos, crossed);
-    let at = track.locate(contact).along;
+    let at = track.find(contact, kart.y).along;
     let (_, dir) = track.sample(at);
     // Outward normal: from the road toward this wall
     let normal = dir.perp() * side;
@@ -426,7 +426,7 @@ pub fn wall(
     kart.vel = along * (1.0 - impact) * drag + normal * bounce;
     // Back onto the wall line, a hair inside, then slide for the rest of the step
     kart.pos = track.offset(at, (limit - 0.01) * side) + kart.vel * Kart::STEP * (1.0 - crossed);
-    let settled = track.locate(kart.pos);
+    let settled = track.find(kart.pos, kart.y);
     if settled.lateral.abs() > limit {
         kart.pos = track.offset(settled.along, (limit - 0.01) * side);
     }
@@ -625,8 +625,9 @@ fn pose(
         let tilt = if hilly {
             let fwd = kart.forward();
             let left = fwd.perp();
-            let dx = track.ground(kart.pos + fwd) - track.ground(kart.pos - fwd);
-            let dz = track.ground(kart.pos + left) - track.ground(kart.pos - left);
+            let ground = |p: Vec2| track.ground_near(p, kart.y);
+            let dx = ground(kart.pos + fwd) - ground(kart.pos - fwd);
+            let dz = ground(kart.pos + left) - ground(kart.pos - left);
             let normal = (Vec3::Y * 2.0 - flat(fwd, 0.0) * dx - flat(left, 0.0) * dz).normalize();
             Quat::from_rotation_arc(Vec3::Y, normal)
         } else {

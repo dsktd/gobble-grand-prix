@@ -4,6 +4,7 @@ Newest first. One short line per change a player can see; the title screen shows
 Add yours under the heading below, at the top.
 
 ## Unreleased
+- Some random tracks are figure eights, one road bridging over the other; the minimap outlines the bridge.
 - Random tracks have ramps to fly off and gaps to jump; miss one and you are set back past it.
 - Random tracks bank their tight corners, so karts lean in and hold the line.
 - Random tracks roll over hills, dips and crests; karts tilt with the ground and slow on the climbs.
