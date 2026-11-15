@@ -865,12 +865,8 @@ fn invite(
                         w,
                         1,
                     ));
-                    let shown = match &join.anywhere {
-                        Some(_) => format!("Any network, or same Wi-Fi: {}", join.url),
-                        None => join.url.clone(),
-                    };
                     text.spawn(fit_text(
-                        shown,
+                        join.url.clone(),
                         Size::LABEL,
                         Weight::SemiBold,
                         Tone::CREAM_300,

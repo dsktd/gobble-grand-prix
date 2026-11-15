@@ -40,7 +40,7 @@
   .chip { display: inline-flex; align-items: center; gap: 8px; height: 40px; padding: 0 16px; border-radius: 999px;
     background: var(--panel); font-size: 20px; font-weight: 600; white-space: nowrap; }
   .chip .dot { width: 16px; height: 16px; border-radius: 50%; background: var(--pumpkin); flex: none; }
-  .chip.lan .dot, .chip.online .dot { background: var(--green); }
+  .chip.online .dot { background: var(--green); }
   .chip.offline .dot { background: var(--cran); }
 
   /* Join cover */
@@ -53,10 +53,6 @@
     box-shadow: inset 0 0 0 2px var(--pumpkin); background: var(--bg); color: var(--cream); text-align: center;
     -webkit-user-select: text; user-select: text; }
   #go { min-height: 72px; }
-  /* Short landscape screens: the LAN offer needs the logo's room */
-  @media (max-height: 440px) { #cover.lan .logo { display: none; } }
-  #lan { display: none; flex-direction: column; gap: 8px; }
-  #lanlink { min-height: 72px; }
   #full { z-index: 3; display: none; align-items: center; justify-content: center; background: rgba(42, 23, 14, .75); }
   .panel { background: var(--panel); border-radius: 20px; box-shadow: inset 0 0 0 2px var(--cream2); padding: 16px; }
   #full .panel { width: 100%; max-width: 440px; display: flex; flex-direction: column; gap: 16px; text-align: center; }
@@ -190,10 +186,6 @@
   <label id="namebox" class="label dim" style="display:flex;flex-direction:column;gap:8px">Your name
     <input id="name" maxlength="12" autocomplete="nickname"></label>
   <button id="go" class="primary">Tap to start</button>
-  <div id="lan">
-    <a id="lanlink" class="btn primary">On the same Wi-Fi? Tap here</a>
-    <div class="label dim">Your phone warns about the game's certificate once: choose Advanced / Show details, then continue.</div>
-  </div>
   <button id="cancel" class="ghost" hidden>Cancel</button>
 </div>
 <div id="full" class="safe">
@@ -269,7 +261,6 @@ const game = hash.get("g");
 const pin = hash.get("pin") || new URLSearchParams(location.search).get("pin") || prompt("Room PIN") || "";
 // The game's own page on the local network (ip:port), the way in when iroh cannot connect
 const lan = /^[0-9A-Fa-f.:\[\]]+$/.test(hash.get("lan") || "") ? hash.get("lan") : null;
-if (lan) $("lanlink").href = `https://${lan}/?pin=${encodeURIComponent(pin)}`;
 const store = (key, value) => { try { if (value === undefined) return localStorage.getItem(key); localStorage.setItem(key, value); } catch (e) {} return null; };
 // The player's name, asked once and remembered
 $("name").value = store("gobble-name") || "";
@@ -287,8 +278,8 @@ if (!token) {
 const state = { steer: 0, gas: false, brake: false, drift: false, item: false };
 let ws = null, seq = 0, gyro = false, tilt = 0, center = 0, invert = false, attempt = 0;
 
-// Connection chip: connecting, lan or online (with the ping), offline
-const NET = { connecting: "Connecting", lan: "LAN", online: "Online", offline: "Offline" };
+// Connection chip: connecting, connected (with the ping), offline
+const NET = { connecting: "Connecting", online: "Connected", offline: "Offline" };
 let net;
 function setNet(kind, ms) {
   net = kind;
@@ -314,13 +305,12 @@ function cover(kind, text) {
   $("go").textContent = kind === "join" ? "Tap to start" : kind === "notfound" ? "Try again" : "Tap to retry";
   $("go").style.minHeight = kind === "notfound" ? "var(--hit)" : "";
   $("cancel").hidden = !busy;
-  $("lan").style.display = "none";
-  $("cover").classList.remove("lan");
 }
-const showLan = () => {
-  if (!lan) return;
-  $("lan").style.display = "flex";
-  $("cover").classList.add("lan");
+// Silent fallback: the game's own page on the local network, same PIN
+const fallback = () => {
+  if (!lan) return false;
+  location.replace(`https://${lan}/?pin=${encodeURIComponent(pin)}`);
+  return true;
 };
 
 function closed() {
@@ -332,23 +322,18 @@ function closed() {
 async function connect() {
   const mine = ++attempt;
   if (game) {
-    cover("connecting", "Connecting through the internet...");
+    cover("connecting", "Connecting...");
     // A stale game id (game restarted, old QR) never answers: give up after 10 s
     let gaveUp = false;
     const timer = setTimeout(() => {
       gaveUp = true;
-      if (mine === attempt) { cover("notfound", "Game not found, scan the QR code again."); showLan(); }
+      if (mine === attempt && !fallback()) cover("notfound", "Game not found, scan the QR code again.");
     }, 10000);
-    // Same Wi-Fi as the game: offer its LAN page if iroh is slow
-    const lanTimer = lan && setTimeout(() => {
-      if (mine === attempt) { $("status").textContent = "Still connecting through the internet."; showLan(); }
-    }, 5000);
     try {
       const pad = await import("./pkg/gobble_pad.js");
       await pad.default();
       const link = await pad.connect(game, (line) => receive(line), closed);
       clearTimeout(timer);
-      clearTimeout(lanTimer);
       if (gaveUp || mine !== attempt) return;
       link.send(JSON.stringify({ t: "join", pin, token, name: playerName() }));
       ws = { readyState: 1, send: (text) => link.send(text) };
@@ -356,16 +341,14 @@ async function connect() {
       cover(null);
     } catch (e) {
       clearTimeout(timer);
-      clearTimeout(lanTimer);
       if (mine !== attempt) return;
-      cover("notfound", gaveUp ? "Game not found, scan the QR code again." : `Could not reach the game: ${e}`);
-      showLan();
+      if (!fallback()) cover("notfound", "Game not found, scan the QR code again.");
     }
     return;
   }
   cover("connecting", "Connecting...");
   ws = new WebSocket(`wss://${location.host}/ws?pin=${encodeURIComponent(pin)}&token=${token}&name=${encodeURIComponent(playerName())}`);
-  ws.onopen = () => { setNet("lan"); cover(null); };
+  ws.onopen = () => { setNet("online"); cover(null); };
   ws.onclose = closed;
   ws.onmessage = (event) => receive(event.data);
 }
@@ -388,7 +371,7 @@ function receive(text) {
   const msg = JSON.parse(text);
   if (msg.t === "denied") { cover("error", "Wrong PIN."); return; }
   if (msg.t === "buzz" && navigator.vibrate) navigator.vibrate(msg.ms);
-  if (msg.t === "ack") setNet(game ? "online" : "lan", Math.round(performance.now() - msg.ms));
+  if (msg.t === "ack") setNet("online", Math.round(performance.now() - msg.ms));
   if (msg.t === "seat") {
     seated = Boolean(msg.p);
     const seat = $("seat");
