@@ -208,7 +208,7 @@ fn fire(
                     },
                     Mesh3d(looks.berry_mesh.clone()),
                     MeshMaterial3d(looks.berry.clone()),
-                    Transform::from_translation(flat(pos, kart.ground + 0.6)),
+                    Transform::from_translation(flat(pos, kart.y + 0.6)),
                     DespawnOnExit(GameState::Race),
                 ));
                 if human {

@@ -108,6 +108,8 @@ fn attempt_track(
         half_width,
         heights: Vec::new(),
         banks: Vec::new(),
+        ramps: Vec::new(),
+        gaps: Vec::new(),
         shortcuts: Vec::new(),
         boxes: Vec::new(),
         scenery: TRACKS[theme].scenery,
@@ -118,6 +120,7 @@ fn attempt_track(
     track.landmark = landmark(&track, 22.0);
     track.heights = hills(&mut dice, &track.dists, length);
     track.banks = banks(&track.points, dice.range(0.6..1.0));
+    jumps(&mut dice, &mut track);
     level(&track).then_some(track)
 }
 
@@ -282,6 +285,66 @@ fn banks(
         .collect()
 }
 
+/// One or two jumps on straight road away from the start and the crates: a kicker that
+/// throws the kart off its lip, or a ramp over a short gap to a landing ramp.
+fn jumps(
+    dice: &mut Dice,
+    track: &mut Track,
+) {
+    const UP: f32 = 8.0;
+    const LIP: f32 = 1.6;
+    const GAP: f32 = 6.0;
+    const DOWN: f32 = 10.0;
+    let n = track.points.len();
+    let p = &track.points;
+    let straight = |i: usize| bend(p[(i + n - 16) % n], p[i], p[(i + 16) % n]);
+    let boxes: Vec<f32> = track.boxes.iter().map(|f| f * track.length).collect();
+    let mut sites: Vec<f32> = Vec::new();
+    for _ in 0..dice.range(1.0..3.0) as usize {
+        let site = (0..n)
+            .step_by(4)
+            .map(|i| track.dists[i])
+            .filter(|s| {
+                let clear = |x: f32, room: f32| {
+                    let d = (s - x).abs();
+                    d.min(track.length - d) > room
+                };
+                clear(0.0, 90.0)
+                    && boxes.iter().all(|b| clear(*b, 45.0))
+                    && sites.iter().all(|o| clear(*o, 150.0))
+            })
+            .max_by(|a, b| {
+                let r = |s: &f32| straight((*s / Track::STEP) as usize % n);
+                r(a).total_cmp(&r(b))
+            });
+        let Some(site) = site else { break };
+        // Only fairly straight road; a ramp mid-corner throws karts at the wall
+        if straight((site / Track::STEP) as usize % n) < 60.0 {
+            break;
+        }
+        sites.push(site);
+        let gap = dice.unit() < 0.45;
+        let land = site + UP + if gap { GAP } else { 0.0 };
+        let end = if gap { land + DOWN } else { site + UP };
+        for (i, s) in track.dists.iter().enumerate() {
+            let ahead = (s - site).rem_euclid(track.length);
+            let into = ahead - UP;
+            if ahead < UP {
+                track.heights[i] += LIP * ahead / UP;
+            } else if gap && into < GAP {
+                track.heights[i] += LIP;
+            } else if gap && into - GAP < DOWN {
+                track.heights[i] += LIP * 0.75 * (1.0 - (into - GAP) / DOWN);
+            }
+        }
+        track.ramps.push((site, site + UP));
+        if gap {
+            track.gaps.push((site + UP, land));
+            track.ramps.push((land, end));
+        }
+    }
+}
+
 /// Legs of road near each other sit at about the same height.
 fn level(track: &Track) -> bool {
     let n = track.points.len();
@@ -440,7 +503,24 @@ mod test {
         let steepest = (0..20)
             .flat_map(|seed| track(seed).banks)
             .fold(0.0f32, |m, b| m.max(b.abs()));
-        assert!(steepest > 0.08 && steepest <= MAX_BANK, "steepest bank {steepest}");
+        assert!(
+            steepest > 0.08 && steepest <= MAX_BANK,
+            "steepest bank {steepest}"
+        );
+    }
+
+    /// Jumps turn up: some tracks get a kicker, some a gap, each gap between ramps.
+    #[test]
+    fn test_jumps() {
+        let tracks: Vec<Track> = (0..30).map(track).collect();
+        assert!(tracks.iter().filter(|t| !t.ramps.is_empty()).count() >= 10);
+        assert!(tracks.iter().filter(|t| !t.gaps.is_empty()).count() >= 3);
+        for t in &tracks {
+            for (from, to) in &t.gaps {
+                assert!(t.ramps.iter().any(|r| r.1 == *from));
+                assert!(t.ramps.iter().any(|r| r.0 == *to));
+            }
+        }
     }
 
     /// Different seeds give different layouts, not one shape over and over.

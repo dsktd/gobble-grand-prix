@@ -76,6 +76,12 @@ pub struct Kart {
     pub pos: Vec2,
     /// Ground height under the kart, kept by the physics step.
     pub ground: f32,
+    /// Height of the kart's wheels: the ground's, or above it in the air.
+    pub y: f32,
+    /// Vertical speed, m/s up.
+    pub rise: f32,
+    /// Off the ground after a ramp or crest.
+    pub air: bool,
     pub yaw: f32,
     pub speed: f32,
     pub vel: Vec2,
@@ -108,6 +114,10 @@ impl Kart {
     pub const TOP_SPEED: f32 = 34.0;
     /// Pull of a slope along the road, m/s² per unit grade: arcade-light, not 9.8.
     pub const GRAVITY: f32 = 7.0;
+    /// Fall in the air: heavy, so jumps stay short and snappy.
+    pub const AIR_GRAVITY: f32 = 20.0;
+    /// Knock-out after dropping into a gap and being set back on the road.
+    const FELL: f32 = 0.6;
     pub const ACCEL: f32 = 20.0;
     /// Seconds for the steering input to ramp from centre to full lock.
     pub const STEER_RAMP: f32 = 0.15;
@@ -163,6 +173,19 @@ impl Kart {
     /// radius grows as the lean eases off).
     pub const DRIFT_MIN_RADIUS: f32 = 15.0;
 
+    /// A kart standing on the ground of `track`.
+    pub fn on(
+        racer: usize,
+        pos: Vec2,
+        yaw: f32,
+        track: &Track,
+    ) -> Self {
+        let mut kart = Self::new(racer, pos, yaw);
+        kart.ground = track.ground(pos);
+        kart.y = kart.ground;
+        kart
+    }
+
     pub const fn new(
         racer: usize,
         pos: Vec2,
@@ -172,6 +195,9 @@ impl Kart {
             racer,
             pos,
             ground: 0.0,
+            y: 0.0,
+            rise: 0.0,
+            air: false,
             yaw,
             speed: 0.0,
             vel: Vec2::ZERO,
@@ -283,15 +309,44 @@ fn drive(
     }
 }
 
-/// Gravity along the road: hills slow the climb and speed the run down, and banked
-/// corners hold the kart in. Also records the
+/// Gravity: hills slow the climb and speed the run down, banked corners hold the kart
+/// in, and where the ground drops away faster than the kart falls it flies until it
+/// lands. A kart that drops into a gap is set back on the road past it. Also records the
 /// ground height under the kart.
 pub fn climb(
     kart: &mut Kart,
     track: &Track,
     spot: Spot,
 ) {
-    kart.ground = track.ground_at(spot);
+    let dt = Kart::STEP;
+    let ground = track.ground_at(spot);
+    kart.ground = ground;
+    if kart.air {
+        kart.rise -= Kart::AIR_GRAVITY * dt;
+        kart.y += kart.rise * dt;
+        if kart.y > ground {
+            return;
+        }
+        kart.air = false;
+        kart.y = ground;
+        kart.rise = 0.0;
+        if let Some(end) = track.gap_at(spot) {
+            rescue(kart, track, end);
+            return;
+        }
+    } else {
+        let rise = ((ground - kart.y) / dt).clamp(-30.0, 30.0);
+        let falling = kart.rise - Kart::AIR_GRAVITY * dt;
+        if rise < falling - 1.2 && kart.speed > 4.0 {
+            kart.air = true;
+            kart.rise = falling;
+            kart.y += falling * dt;
+            return;
+        }
+        kart.y = ground;
+        kart.rise = rise;
+    }
+
     let grade = track.grade(spot.along);
     // Off the road the bank no longer holds the kart
     let bank = if spot.lateral.abs() <= track.barrier() {
@@ -304,6 +359,25 @@ pub fn climb(
         // Down the slope, so a banked corner pulls towards its inside
         kart.vel -= (dir * grade + dir.perp() * bank) * (Kart::GRAVITY * Kart::STEP);
     }
+}
+
+/// Put a kart that fell into a gap back on the road just past it, slowed and dazed.
+fn rescue(
+    kart: &mut Kart,
+    track: &Track,
+    end: f32,
+) {
+    let along = end + 4.0;
+    let (pos, dir) = track.sample(along);
+    kart.pos = pos;
+    kart.yaw = (-dir.x).atan2(-dir.y);
+    kart.vel = dir * Kart::TOP_SPEED * 0.3;
+    kart.speed = Kart::TOP_SPEED * 0.3;
+    kart.yaw_rate = 0.0;
+    kart.drift = None;
+    kart.spin = Kart::FELL;
+    kart.ground = track.height(along);
+    kart.y = kart.ground;
 }
 
 /// Swept wall contact for one step from `before` to the kart's new position. On a crossing
@@ -559,7 +633,12 @@ fn pose(
             Quat::IDENTITY
         };
         let y = transform.translation.y - hop - rumble;
-        let y = y + (kart.ground - y) * ride;
+        // Sprung on the ground, exact in the air
+        let y = if kart.air {
+            kart.y
+        } else {
+            y + (kart.y - y) * ride
+        };
         transform.translation = flat(kart.pos, y + hop + rumble);
         transform.rotation = tilt * Quat::from_rotation_y(yaw) * Quat::from_rotation_z(doze);
     }
@@ -655,7 +734,7 @@ fn tears(
                 0 => 1.0,
                 _ => -1.0,
             };
-            let head = flat(kart.pos, kart.ground + 1.85) + fwd * 0.6 + side * s * 0.25;
+            let head = flat(kart.pos, kart.y + 1.85) + fwd * 0.6 + side * s * 0.25;
             commands.spawn((
                 Tear {
                     vel: -fwd * kart.speed * 0.25 + side * s * 2.0 + Vec3::Y * 2.0,

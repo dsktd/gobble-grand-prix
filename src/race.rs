@@ -125,7 +125,7 @@ pub(super) fn spawn(
             ))
             .id();
         let mut kart = commands.spawn((
-            Kart::new(racer, pos, yaw),
+            Kart::on(racer, pos, yaw, &track),
             KartInput::default(),
             Progress {
                 lap: 0,
@@ -137,7 +137,7 @@ pub(super) fn spawn(
                 best_lap: None,
             },
             Sparks(spark),
-            Transform::from_translation(flat(pos, 0.0)),
+            Transform::from_translation(track.lift(pos, 0.0)),
             Visibility::default(),
             DespawnOnExit(GameState::Race),
         ));

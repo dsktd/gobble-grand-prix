@@ -204,6 +204,10 @@ pub struct Track {
     /// down towards their inside.
     pub banks: Vec<f32>,
     pub shortcuts: Vec<(Vec2, Vec2, f32)>,
+    /// Stretches of road painted as ramps, (from, to) along the lap.
+    pub ramps: Vec<(f32, f32)>,
+    /// Stretches with no road, only a pit, (from, to) along the lap.
+    pub gaps: Vec<(f32, f32)>,
     /// Item box rows as fractions of a lap.
     pub boxes: Vec<f32>,
     pub scenery: Scenery,
@@ -215,6 +219,8 @@ impl Track {
     pub const STEP: f32 = 1.5;
     /// Width of the slope from the road shelf down to the flat.
     pub const FALL: f32 = 30.0;
+    /// Depth of a gap's pit below the road.
+    pub const PIT: f32 = 7.0;
 
     /// A hand-made track from [`TRACKS`].
     pub fn new(index: usize) -> Self {
@@ -236,6 +242,8 @@ impl Track {
                 .iter()
                 .map(|(a, b, r)| (Vec2::new(a.0, a.1), Vec2::new(b.0, b.1), *r))
                 .collect(),
+            ramps: Vec::new(),
+            gaps: Vec::new(),
             boxes: def.boxes.to_vec(),
             scenery: def.scenery,
             theme: def.theme,
@@ -353,9 +361,36 @@ impl Track {
         &self,
         spot: Spot,
     ) -> f32 {
+        if self.gap_at(spot).is_some() {
+            return self.height(spot.along) - Self::PIT;
+        }
         let past = ((spot.lateral.abs() - self.barrier()) / Self::FALL).clamp(0.0, 1.0);
         let ease = past * past * (3.0 - 2.0 * past);
         self.surface(spot.along, spot.lateral) * (1.0 - ease)
+    }
+
+    /// Where the gap a spot is over ends, if it is over one.
+    pub fn gap_at(
+        &self,
+        spot: Spot,
+    ) -> Option<f32> {
+        if spot.lateral.abs() > self.barrier() {
+            return None;
+        }
+        self.gaps
+            .iter()
+            .find(|(from, to)| (*from..*to).contains(&spot.along))
+            .map(|(_, to)| *to)
+    }
+
+    /// Whether a distance along the lap is in one of `stretches`.
+    fn within(
+        stretches: &[(f32, f32)],
+        along: f32,
+    ) -> bool {
+        stretches
+            .iter()
+            .any(|(from, to)| (*from..*to).contains(&along))
     }
 
     /// Ground height under a track-plane point.
@@ -548,6 +583,7 @@ fn band(
 ) -> Vec<[Vec3; 4]> {
     let n = track.points.len();
     (0..n)
+        .filter(|i| !Track::within(&track.gaps, track.dists[*i] + Track::STEP / 2.0))
         .map(|i| {
             let a = track.dists[i];
             let b = a + Track::STEP;
@@ -611,6 +647,34 @@ pub fn spawn_track(
         MeshMaterial3d(painted.clone()),
         scope.clone(),
     ));
+
+    // Ramps striped like curbs so they read from afar
+    let mut stripes = Vec::new();
+    let mut colors = Vec::new();
+    for (from, to) in &track.ramps {
+        let mut a = *from;
+        let mut k = 0;
+        while a < *to {
+            let b = (a + 1.0).min(*to);
+            let at = |along: f32, lat: f32| {
+                flat(track.offset(along, lat), track.surface(along, lat) + 0.04)
+            };
+            stripes.push([at(a, -hw), at(a, hw), at(b, -hw), at(b, hw)]);
+            colors.push(match k % 2 {
+                0 => theme.curb_a,
+                _ => theme.curb_b,
+            });
+            a = b;
+            k += 1;
+        }
+    }
+    if !stripes.is_empty() {
+        commands.spawn((
+            Mesh3d(meshes.add(quads(&stripes, &colors))),
+            MeshMaterial3d(painted.clone()),
+            scope.clone(),
+        ));
+    }
 
     // Curbs
     let mut curbs = band(&track, hw, hw + 1.2, 0.03);

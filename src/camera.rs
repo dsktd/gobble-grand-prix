@@ -216,7 +216,7 @@ fn chase(
             *rig = Rig {
                 yaw: heading,
                 focus: kart.pos,
-                height: kart.ground,
+                height: kart.y,
                 fov: Tune::FOV,
                 ready: true,
                 ..default()
@@ -238,7 +238,7 @@ fn chase(
 
         // Follow the ground, not hops and bumps
         let mut hv = rig.height_vel;
-        rig.height = smooth_damp(rig.height, kart.ground, &mut hv, Tune::HEIGHT_LAG, 20.0, dt);
+        rig.height = smooth_damp(rig.height, kart.y, &mut hv, Tune::HEIGHT_LAG, 20.0, dt);
         rig.height_vel = hv;
 
         let dir = Vec2::new(-rig.yaw.sin(), -rig.yaw.cos());

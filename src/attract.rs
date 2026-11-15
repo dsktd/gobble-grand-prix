@@ -307,7 +307,7 @@ fn framing(
     kart: &Kart,
     track: &Track,
 ) -> (Vec3, Vec3) {
-    let pos = flat(kart.pos, kart.ground);
+    let pos = flat(kart.pos, kart.y);
     let fwd = flat(kart.forward(), 0.0);
     let side = Vec3::new(fwd.z, 0.0, -fwd.x) * director.side;
     match director.shot {
