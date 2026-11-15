@@ -1,4 +1,4 @@
-//! Harvest crates and what comes out of them.
+//! Chalk boxes on the track and what comes out of them.
 
 use bevy::prelude::*;
 use rand::Rng;
@@ -23,27 +23,27 @@ pub(super) fn plugin(app: &mut App) {
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub enum Item {
-    /// A rolling cranberry that homes in on the kart ahead.
-    Cranberry,
-    /// A puddle of gravy dropped behind, spins out whoever drives through.
-    Gravy,
-    /// A burst of stuffing-powered speed.
-    Stuffing,
+    /// A rolling cranball that homes in on the kart ahead.
+    CueBall,
+    /// A spilled drink left behind, spins out whoever drives through.
+    Spill,
+    /// A kick from a cue: a burst of speed.
+    Kick,
 }
 impl Item {
     pub const fn name(&self) -> &'static str {
         match self {
-            Self::Cranberry => "Cranberry",
-            Self::Gravy => "Gravy Slick",
-            Self::Stuffing => "Stuffing Boost",
+            Self::CueBall => "CueBall",
+            Self::Spill => "Spilled Drink",
+            Self::Kick => "Cue Kick",
         }
     }
 
     pub const fn color(&self) -> Color {
         match self {
-            Self::Cranberry => Color::srgb(0.75, 0.05, 0.15),
-            Self::Gravy => Color::srgb(0.50, 0.30, 0.12),
-            Self::Stuffing => Color::srgb(0.85, 0.65, 0.30),
+            Self::CueBall => Color::srgb(0.95, 0.95, 0.92),
+            Self::Spill => Color::srgb(0.85, 0.65, 0.15),
+            Self::Kick => Color::srgb(0.75, 0.50, 0.25),
         }
     }
 
@@ -53,11 +53,11 @@ impl Item {
         let back = (place as f32 - 1.0) / 5.0;
         let r: f32 = rng.random();
         if r < 0.15 + back * 0.45 {
-            Self::Stuffing
+            Self::Kick
         } else if r < 0.6 + back * 0.2 {
-            Self::Cranberry
+            Self::CueBall
         } else {
-            Self::Gravy
+            Self::Spill
         }
     }
 }
@@ -70,7 +70,7 @@ pub struct Crate {
 }
 
 #[derive(Component, Copy, Clone, Debug)]
-pub struct Cranberry {
+pub struct CueBall {
     pub vel: Vec2,
     pub owner: Entity,
     pub life: f32,
@@ -83,8 +83,8 @@ pub struct Slick {
 
 #[derive(Resource, Clone, Debug)]
 struct Looks {
-    berry_mesh: Handle<Mesh>,
-    berry: Handle<StandardMaterial>,
+    ball_mesh: Handle<Mesh>,
+    ball: Handle<StandardMaterial>,
     slick_mesh: Handle<Mesh>,
     slick: Handle<StandardMaterial>,
 }
@@ -97,14 +97,14 @@ pub(super) fn spawn(
 ) {
     let crate_mesh = meshes.add(Cuboid::new(1.6, 1.6, 1.6));
     let crate_mat = materials.add(StandardMaterial {
-        base_color: Color::srgba(0.95, 0.60, 0.15, 0.8),
-        emissive: LinearRgba::rgb(0.6, 0.25, 0.0),
+        base_color: Color::srgba(0.25, 0.50, 0.95, 0.8),
+        emissive: LinearRgba::rgb(0.1, 0.25, 0.6),
         alpha_mode: AlphaMode::Blend,
         ..default()
     });
     let band_mesh = meshes.add(Cuboid::new(1.7, 0.25, 1.7));
     let band_mat = materials.add(StandardMaterial {
-        base_color: Color::srgb(0.45, 0.25, 0.10),
+        base_color: Color::srgb(0.08, 0.14, 0.40),
         ..default()
     });
     for frac in &track.boxes {
@@ -131,15 +131,15 @@ pub(super) fn spawn(
     }
 
     commands.insert_resource(Looks {
-        berry_mesh: meshes.add(Sphere::new(0.6)),
-        berry: materials.add(StandardMaterial {
-            base_color: Color::srgb(0.7, 0.02, 0.12),
+        ball_mesh: meshes.add(Sphere::new(0.6)),
+        ball: materials.add(StandardMaterial {
+            base_color: Color::srgb(0.96, 0.96, 0.93),
             perceptual_roughness: 0.25,
             ..default()
         }),
         slick_mesh: meshes.add(Cylinder::new(1.8, 0.06)),
         slick: materials.add(StandardMaterial {
-            base_color: Color::srgb(0.45, 0.25, 0.08),
+            base_color: Color::srgb(0.80, 0.55, 0.10),
             perceptual_roughness: 0.1,
             reflectance: 0.8,
             ..default()
@@ -201,16 +201,16 @@ fn fire(
         };
         let fwd = kart.forward();
         match item {
-            Item::Cranberry => {
+            Item::CueBall => {
                 let pos = kart.pos + fwd * 2.5;
                 commands.spawn((
-                    Cranberry {
+                    CueBall {
                         vel: fwd * (kart.speed.max(0.0) + 30.0),
                         owner: id,
                         life: 5.0,
                     },
-                    Mesh3d(looks.berry_mesh.clone()),
-                    MeshMaterial3d(looks.berry.clone()),
+                    Mesh3d(looks.ball_mesh.clone()),
+                    MeshMaterial3d(looks.ball.clone()),
                     Transform::from_translation(flat(pos, kart.y + 0.6)),
                     DespawnOnExit(GameState::Race),
                 ));
@@ -218,7 +218,7 @@ fn fire(
                     sfx.write(Sfx::Throw);
                 }
             }
-            Item::Gravy => {
+            Item::Spill => {
                 let pos = kart.pos - fwd * 3.0;
                 commands.spawn((
                     Slick { life: 30.0 },
@@ -231,7 +231,7 @@ fn fire(
                     sfx.write(Sfx::Splat);
                 }
             }
-            Item::Stuffing => {
+            Item::Kick => {
                 kart.boost = kart.boost.max(1.6);
                 if human {
                     sfx.write(Sfx::Boost);
@@ -245,45 +245,45 @@ fn roll(
     mut commands: Commands,
     time: Res<Time>,
     track: Res<Track>,
-    berries: Query<(Entity, &mut Cranberry, &mut Transform)>,
+    balls: Query<(Entity, &mut CueBall, &mut Transform)>,
     mut karts: Query<(Entity, &mut Kart, Has<Human>)>,
     mut sfx: MessageWriter<Sfx>,
 ) {
     let dt = time.delta_secs();
-    for (berry_id, mut berry, mut transform) in berries {
-        berry.life -= dt;
+    for (ball_id, mut ball, mut transform) in balls {
+        ball.life -= dt;
         let pos = Vec2::new(transform.translation.x, transform.translation.z);
         let y = transform.translation.y - 0.6;
 
         // Home in on the nearest kart in front
-        let dir = berry.vel.normalize_or_zero();
+        let dir = ball.vel.normalize_or_zero();
         let target = karts
             .iter()
             .filter(|(id, kart, _)| {
-                *id != berry.owner
+                *id != ball.owner
                     && kart.pos.distance(pos) < 35.0
                     && (kart.pos - pos).normalize_or_zero().dot(dir) > 0.5
             })
             .min_by(|a, b| a.1.pos.distance(pos).total_cmp(&b.1.pos.distance(pos)))
             .map(|(_, kart, _)| kart.pos);
-        let speed = berry.vel.length();
+        let speed = ball.vel.length();
         if let Some(target) = target {
             let want = (target - pos).normalize_or_zero() * speed;
-            berry.vel = berry.vel.lerp(want, (dt * 3.0).min(1.0));
+            ball.vel = ball.vel.lerp(want, (dt * 3.0).min(1.0));
         } else {
             // Otherwise follow the road
             let spot = track.find(pos, y);
             let (_, road) = track.sample(spot.along + 4.0);
             let want = road * speed - road.perp() * spot.lateral * 0.5;
-            berry.vel = berry.vel.lerp(want, (dt * 1.5).min(1.0));
+            ball.vel = ball.vel.lerp(want, (dt * 1.5).min(1.0));
         }
-        let pos = pos + berry.vel * dt;
+        let pos = pos + ball.vel * dt;
         transform.translation = flat(pos, track.ground_near(pos, y) + 0.6);
         transform.rotate_local_x(-speed * dt / 0.6);
 
         let mut hit = false;
         for (id, mut kart, human) in &mut karts {
-            if id == berry.owner && berry.life > 4.6 {
+            if id == ball.owner && ball.life > 4.6 {
                 continue;
             }
             // Same level only: not through a bridge
@@ -296,8 +296,8 @@ fn roll(
                 break;
             }
         }
-        if hit || berry.life <= 0.0 {
-            commands.entity(berry_id).despawn();
+        if hit || ball.life <= 0.0 {
+            commands.entity(ball_id).despawn();
         }
     }
 }

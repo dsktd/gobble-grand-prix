@@ -768,7 +768,7 @@ pub fn spawn_track(
         scope.clone(),
     ));
 
-    // Gravy rivers
+    // Pocket tunnels
     for (a, b, r) in &track.shortcuts {
         let ab = *b - *a;
         let mid = (*a + *b) / 2.0;
@@ -776,7 +776,7 @@ pub fn spawn_track(
         commands.spawn((
             Mesh3d(meshes.add(Capsule2d::new(*r, ab.length()))),
             MeshMaterial3d(materials.add(StandardMaterial {
-                base_color: Color::srgb(0.48, 0.27, 0.10),
+                base_color: Color::srgb(0.03, 0.03, 0.04),
                 perceptual_roughness: 0.15,
                 reflectance: 0.7,
                 ..default()
