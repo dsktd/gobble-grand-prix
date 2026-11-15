@@ -700,9 +700,12 @@ fn claim(
 /// Our own relay alone (`own_only`, so it is the home relay) or with n0's relays as fallback, those without the trailing dot iroh writes in their hostnames: `WebKit` (every iOS
 /// browser) rejects the TLS certificate of `use1-1.relay.n0.iroh.link.`, and phones dial the
 /// home relay this endpoint publishes. Same map as the pad's (`pad/src/lib.rs`).
-fn relays(own_only: bool) -> iroh::RelayMode {
+fn relays(
+    own: &str,
+    own_only: bool,
+) -> iroh::RelayMode {
     use iroh::defaults::prod;
-    let own: iroh::RelayUrl = "https://relay.yak.dsktd.net".parse().expect("relay url");
+    let own: iroh::RelayUrl = own.parse().expect("relay url");
     let own = iroh::RelayConfig::from(own);
     let urls = [
         prod::NA_EAST_RELAY_HOSTNAME,
@@ -721,22 +724,38 @@ fn relays(own_only: bool) -> iroh::RelayMode {
     ))
 }
 
+/// Our own relay (home relay, found by phones through the endpoint id).
+const OWN_RELAY: &str = "https://relay.yak.dsktd.net";
+
 /// Our own relay is the home relay when it answers; otherwise n0's relays take over.
+///
+/// The endpoint id is only published after this returns, so the new key of the rebound
+/// endpoint never leaves a stale QR behind.
 async fn bind_iroh() -> Result<iroh::Endpoint, iroh::endpoint::BindError> {
+    bind_with(OWN_RELAY, std::time::Duration::from_secs(5))
+        .await
+        .map(|(endpoint, _)| endpoint)
+}
+
+/// Bind with `own` alone and wait up to `wait` for it; else rebind with n0's relays too.
+/// The flag tells whether our own relay answered.
+async fn bind_with(
+    own: &str,
+    wait: std::time::Duration,
+) -> Result<(iroh::Endpoint, bool), iroh::endpoint::BindError> {
     let bind = |own_only| {
         iroh::Endpoint::builder(iroh::endpoint::presets::N0)
-            .relay_mode(relays(own_only))
+            .relay_mode(relays(own, own_only))
             .alpns(vec![ALPN.to_vec()])
             .bind()
     };
     let endpoint = bind(true).await?;
-    let online = tokio::time::timeout(std::time::Duration::from_secs(5), endpoint.online());
-    if online.await.is_ok() {
-        return Ok(endpoint);
+    if tokio::time::timeout(wait, endpoint.online()).await.is_ok() {
+        return Ok((endpoint, true));
     }
     warn!("Own relay is not answering, using the fallback relays");
     endpoint.close().await;
-    bind(false).await
+    Ok((bind(false).await?, false))
 }
 
 /// First line on an iroh stream.
@@ -1208,5 +1227,19 @@ mod port_tests {
                 assert!(rate.allow(t0 + std::time::Duration::from_millis(ms)));
             }
         }
+    }
+
+    #[test]
+    fn unreachable_own_relay_falls_back() {
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+        runtime.block_on(async {
+            let wait = std::time::Duration::from_millis(300);
+            let (endpoint, own_ok) = bind_with("https://127.0.0.1:1", wait).await.unwrap();
+            assert!(!own_ok);
+            endpoint.close().await;
+        });
     }
 }
