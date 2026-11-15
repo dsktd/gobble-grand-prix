@@ -71,7 +71,7 @@ The title screen shows a QR code. Scan it with a phone, tap "Tap to start", then
 - **Any network (default):** the QR opens `https://dsktd.github.io/gobble-grand-prix/pad/#g=<game id>&pin=<PIN>&lan=<LAN IP>:7777`.
   The page runs iroh in WebAssembly and reaches the game through iroh's public relays, so the phone can be on
   mobile data. The game id and PIN sit in the URL fragment, so no web server sees them; the id changes every
-  time the game starts. If iroh has not connected after 5 s, the page offers the same-Wi-Fi page below.
+  time the game starts. If iroh has not connected after 5 s, the page switches on its own to the game's local page below.
 - **Same Wi-Fi:** `https://<LAN IP>:7777/?pin=<PIN>`, shown under the QR. It uses a self-signed certificate:
   accept the warning once.
 
