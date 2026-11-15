@@ -22,6 +22,8 @@ const GAP: f32 = 4.0;
 const LENGTH: std::ops::Range<f32> = 650.0..1300.0;
 /// Steepest grade of a hill.
 pub const MAX_GRADE: f32 = 0.16;
+/// Steepest cross-slope of a banked corner.
+pub const MAX_BANK: f32 = 0.22;
 /// Most two nearby legs of road may differ in height, so the ground between them stays
 /// a slope rather than a cliff.
 const STEP_DOWN: f32 = 2.0;
@@ -105,6 +107,7 @@ fn attempt_track(
         length,
         half_width,
         heights: Vec::new(),
+        banks: Vec::new(),
         shortcuts: Vec::new(),
         boxes: Vec::new(),
         scenery: TRACKS[theme].scenery,
@@ -114,6 +117,7 @@ fn attempt_track(
     track.boxes = boxes(&track);
     track.landmark = landmark(&track, 22.0);
     track.heights = hills(&mut dice, &track.dists, length);
+    track.banks = banks(&track.points, dice.range(0.6..1.0));
     level(&track).then_some(track)
 }
 
@@ -252,19 +256,47 @@ fn hills(
     heights
 }
 
+/// Cross-slopes that lean tight corners in towards their inside, `lean` scaling how
+/// much, eased in and out along the road.
+fn banks(
+    points: &[Vec2],
+    lean: f32,
+) -> Vec<f32> {
+    let n = points.len();
+    let raw: Vec<f32> = (0..n)
+        .map(|i| {
+            let (a, b, c) = (points[(i + n - 6) % n], points[i], points[(i + 6) % n]);
+            // Signed curvature, positive turning left
+            let k = (b - a).perp_dot(c - b).signum() / bend(a, b, c);
+            // Gentle curves stay flat; tight ones bank up to the cap
+            (-(k.abs() - 0.012).max(0.0) * 6.0 * lean).max(-MAX_BANK) * k.signum()
+        })
+        .collect();
+    // Ease over 20 m either side so the road twists smoothly
+    let reach = (20.0 / Track::STEP) as usize;
+    (0..n)
+        .map(|i| {
+            let sum: f32 = (0..=2 * reach).map(|k| raw[(i + n + k - reach) % n]).sum();
+            sum / (2 * reach + 1) as f32
+        })
+        .collect()
+}
+
 /// Legs of road near each other sit at about the same height.
 fn level(track: &Track) -> bool {
     let n = track.points.len();
     let near = 2.0 * track.barrier() + 2.0 * Track::FALL;
     let p = &track.points;
     let h = &track.heights;
+    // Banking lifts a road edge above its centre
+    let lift = |i: usize| track.banks[i].abs() * track.barrier();
     // Samples this close along the lap are one leg climbing its own hill
     let same = (near * 2.0 / Track::STEP) as usize;
     (0..n).step_by(2).all(|i| {
         (0..n).step_by(2).all(|j| {
             let apart = i.abs_diff(j);
             apart.min(n - apart) < same
-                || (h[i] - h[j]).abs() <= STEP_DOWN
+                || (h[i] - h[j]).abs() + lift(i) + lift(j) <= STEP_DOWN + 2.0
                 || p[i].distance_squared(p[j]) > near * near
         })
     })
@@ -400,6 +432,15 @@ mod test {
             assert!(level(&t), "seed {seed}");
             assert!(t.hilly(), "seed {seed}: flat");
         }
+    }
+
+    /// Tight corners bank, in towards their inside, and never past the cap.
+    #[test]
+    fn test_corners_bank() {
+        let steepest = (0..20)
+            .flat_map(|seed| track(seed).banks)
+            .fold(0.0f32, |m, b| m.max(b.abs()));
+        assert!(steepest > 0.08 && steepest <= MAX_BANK, "steepest bank {steepest}");
     }
 
     /// Different seeds give different layouts, not one shape over and over.

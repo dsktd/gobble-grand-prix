@@ -200,6 +200,9 @@ pub struct Track {
     pub half_width: f32,
     /// Road height at each centerline point.
     pub heights: Vec<f32>,
+    /// Road cross-slope at each centerline point: rise per metre to the left. Corners bank
+    /// down towards their inside.
+    pub banks: Vec<f32>,
     pub shortcuts: Vec<(Vec2, Vec2, f32)>,
     /// Item box rows as fractions of a lap.
     pub boxes: Vec<f32>,
@@ -219,11 +222,13 @@ impl Track {
         let control: Vec<Vec2> = def.points.iter().map(|(x, z)| Vec2::new(*x, *z)).collect();
         let (points, dists, length) = centerline(&control);
         let heights = vec![0.0; points.len()];
+        let banks = heights.clone();
         Self {
             name: def.name.to_string(),
             points,
             dists,
             heights,
+            banks,
             length,
             half_width: def.half_width,
             shortcuts: def
@@ -310,6 +315,25 @@ impl Track {
         self.heights[i] + (self.heights[j] - self.heights[i]) * t
     }
 
+    /// Cross-slope of the road at a distance along the lap.
+    pub fn bank(
+        &self,
+        along: f32,
+    ) -> f32 {
+        let (i, j, t) = self.segment(along);
+        self.banks[i] + (self.banks[j] - self.banks[i]) * t
+    }
+
+    /// Height of the road surface, banking included, out to the walls.
+    pub fn surface(
+        &self,
+        along: f32,
+        lateral: f32,
+    ) -> f32 {
+        let lateral = lateral.clamp(-self.barrier(), self.barrier());
+        self.height(along) + lateral * self.bank(along)
+    }
+
     /// Rise per metre of road, positive uphill in the racing direction.
     pub fn grade(
         &self,
@@ -320,7 +344,7 @@ impl Track {
 
     /// Whether the road ever leaves the flat.
     pub fn hilly(&self) -> bool {
-        self.heights.iter().any(|h| *h != 0.0)
+        self.heights.iter().chain(&self.banks).any(|h| *h != 0.0)
     }
 
     /// Ground height under a spot: the road's out to the walls, then easing down to
@@ -331,7 +355,7 @@ impl Track {
     ) -> f32 {
         let past = ((spot.lateral.abs() - self.barrier()) / Self::FALL).clamp(0.0, 1.0);
         let ease = past * past * (3.0 - 2.0 * past);
-        self.height(spot.along) * (1.0 - ease)
+        self.surface(spot.along, spot.lateral) * (1.0 - ease)
     }
 
     /// Ground height under a track-plane point.
@@ -527,12 +551,11 @@ fn band(
         .map(|i| {
             let a = track.dists[i];
             let b = a + Track::STEP;
-            let (ya, yb) = (track.height(a) + y, track.height(b) + y);
             [
-                flat(track.offset(a, inner), ya),
-                flat(track.offset(a, outer), ya),
-                flat(track.offset(b, inner), yb),
-                flat(track.offset(b, outer), yb),
+                flat(track.offset(a, inner), track.surface(a, inner) + y),
+                flat(track.offset(a, outer), track.surface(a, outer) + y),
+                flat(track.offset(b, inner), track.surface(b, inner) + y),
+                flat(track.offset(b, outer), track.surface(b, outer) + y),
             ]
         })
         .collect()
@@ -614,13 +637,10 @@ pub fn spawn_track(
             let lat1 = lat0 + 2.0 * hw / cells as f32;
             let a = row as f32 * 1.2;
             let b = a + 1.2;
-            let (ya, yb) = (track.height(a) + 0.05, track.height(b) + 0.05);
-            checks.push([
-                flat(track.offset(a, lat0), ya),
-                flat(track.offset(a, lat1), ya),
-                flat(track.offset(b, lat0), yb),
-                flat(track.offset(b, lat1), yb),
-            ]);
+            let at = |along: f32, lat: f32| {
+                flat(track.offset(along, lat), track.surface(along, lat) + 0.05)
+            };
+            checks.push([at(a, lat0), at(a, lat1), at(b, lat0), at(b, lat1)]);
             colors.push(match (row + col) % 2 {
                 0 => Color::WHITE,
                 _ => Color::srgb(0.1, 0.1, 0.1),

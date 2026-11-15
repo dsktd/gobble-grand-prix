@@ -283,7 +283,8 @@ fn drive(
     }
 }
 
-/// Gravity along the road: hills slow the climb and speed the run down. Also records the
+/// Gravity along the road: hills slow the climb and speed the run down, and banked
+/// corners hold the kart in. Also records the
 /// ground height under the kart.
 pub fn climb(
     kart: &mut Kart,
@@ -292,9 +293,16 @@ pub fn climb(
 ) {
     kart.ground = track.ground_at(spot);
     let grade = track.grade(spot.along);
-    if grade != 0.0 {
+    // Off the road the bank no longer holds the kart
+    let bank = if spot.lateral.abs() <= track.barrier() {
+        track.bank(spot.along)
+    } else {
+        0.0
+    };
+    if grade != 0.0 || bank != 0.0 {
         let (_, dir) = track.sample(spot.along);
-        kart.vel -= dir * (Kart::GRAVITY * grade * Kart::STEP);
+        // Down the slope, so a banked corner pulls towards its inside
+        kart.vel -= (dir * grade + dir.perp() * bank) * (Kart::GRAVITY * Kart::STEP);
     }
 }
 
