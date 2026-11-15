@@ -31,6 +31,7 @@ Hold drift while steering into a turn: sparks go white, then blue, then orange. 
 - 3 laps, 5 CPU racers with rubber banding, countdown, results board, options (volume, quality, controls).
 
 `gobble shots <track> [high|low] [racer] [seats] [top|side|diagonal]` runs a scripted tour and saves screenshots to `screenshots/`.
+Set `GOBBLE_BENCH=<file>` to run the tour without screenshots and write frame-time percentiles to that file (and the log).
 
 ## Changelog
 

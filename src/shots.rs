@@ -54,7 +54,7 @@ pub(super) fn plugin(app: &mut App) {
         racer,
         track,
         seed,
-        clock: 0.0,
+        clock: -crate::bench::hold(),
         step: 0,
     });
     app.add_plugins((
@@ -78,6 +78,9 @@ fn shoot(
     name: &str,
 ) {
     let _ = std::fs::create_dir_all("screenshots");
+    if crate::bench::path().is_some() {
+        return;
+    }
     let path = format!("screenshots/{name}.png");
     info!("Screenshot {path}");
     commands
@@ -156,7 +159,9 @@ fn tour(
         13 if t > 21.0 => shoot(&mut commands, &format!("{name}-racing")),
         14 if t > 29.0 => {
             shoot(&mut commands, &format!("{name}-pack"));
-            virtual_time.set_relative_speed(2.0);
+            if crate::bench::path().is_none() {
+                virtual_time.set_relative_speed(2.0);
+            }
         }
         15 if clock.is_some_and(|c| c.phase == Phase::Done) => {
             virtual_time.set_relative_speed(1.0);

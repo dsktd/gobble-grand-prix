@@ -2,6 +2,7 @@
 
 mod attract;
 mod audio;
+mod bench;
 mod camera;
 mod cpu;
 mod hud;
@@ -162,6 +163,7 @@ pub fn plugin(app: &mut App) {
         scenery::plugin,
         prompts::plugin,
         shots::plugin,
+        bench::plugin,
         style::plugin,
         track::plugin,
     ));
