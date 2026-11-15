@@ -201,15 +201,15 @@ fn cameras(
             age: 0.0,
             side: 1.0,
             spot: Vec3::ZERO,
-            aim: flat(start, 1.0),
+            aim: track.lift(start, 1.0),
         },
         Camera3d::default(),
         Projection::Perspective(PerspectiveProjection {
             fov: 50f32.to_radians(),
             ..default()
         }),
-        Transform::from_translation(flat(start - dir * 10.0, 4.0))
-            .looking_at(flat(start, 1.0), Vec3::Y),
+        Transform::from_translation(track.lift(start - dir * 10.0, 4.0))
+            .looking_at(track.lift(start, 1.0), Vec3::Y),
         scope,
     ));
     if options.high_quality {
@@ -288,7 +288,7 @@ fn direct(
         director.age = 0.0;
         director.side = if rng.random_bool(0.5) { 1.0 } else { -1.0 };
         let ahead = lead.along + rng.random_range(30.0..45.0);
-        director.spot = flat(
+        director.spot = track.lift(
             track.offset(ahead, director.side * (track.barrier() + 4.0)),
             1.2,
         );
@@ -307,7 +307,7 @@ fn framing(
     kart: &Kart,
     track: &Track,
 ) -> (Vec3, Vec3) {
-    let pos = flat(kart.pos, 0.0);
+    let pos = flat(kart.pos, kart.ground);
     let fwd = flat(kart.forward(), 0.0);
     let side = Vec3::new(fwd.z, 0.0, -fwd.x) * director.side;
     match director.shot {
@@ -324,7 +324,7 @@ fn framing(
         Shot::Dolly => {
             let along = track.locate(kart.pos).along;
             let rail = track.offset(along - 3.0, director.side * (track.barrier() + 2.5));
-            (flat(rail, 2.2), pos + Vec3::Y * 0.8)
+            (track.lift(rail, 2.2), pos + Vec3::Y * 0.8)
         }
         Shot::Low => (
             pos + side * 3.2 - fwd * 1.5 + Vec3::Y * 0.35,

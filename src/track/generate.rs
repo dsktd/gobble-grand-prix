@@ -20,6 +20,11 @@ pub const MIN_RADIUS: f32 = 13.0;
 /// Free space kept between two legs of road beyond their walls.
 const GAP: f32 = 4.0;
 const LENGTH: std::ops::Range<f32> = 650.0..1300.0;
+/// Steepest grade of a hill.
+pub const MAX_GRADE: f32 = 0.16;
+/// Most two nearby legs of road may differ in height, so the ground between them stays
+/// a slope rather than a cliff.
+const STEP_DOWN: f32 = 2.0;
 
 /// splitmix64: tiny, fast and the same on every machine.
 struct Dice(u64);
@@ -99,6 +104,7 @@ fn attempt_track(
         dists,
         length,
         half_width,
+        heights: Vec::new(),
         shortcuts: Vec::new(),
         boxes: Vec::new(),
         scenery: TRACKS[theme].scenery,
@@ -107,7 +113,8 @@ fn attempt_track(
     };
     track.boxes = boxes(&track);
     track.landmark = landmark(&track, 22.0);
-    Some(track)
+    track.heights = hills(&mut dice, &track.dists, length);
+    level(&track).then_some(track)
 }
 
 /// Control points of one candidate loop.
@@ -189,6 +196,78 @@ fn layout(dice: &mut Dice) -> Vec<Vec2> {
     let mut ordered = vec![mid];
     ordered.extend((1..=n).map(|k| points[(start + k) % n]));
     ordered
+}
+
+/// Road heights: a few hills and dips, often a sharp crest, flat around the start line.
+fn hills(
+    dice: &mut Dice,
+    dists: &[f32],
+    length: f32,
+) -> Vec<f32> {
+    // (centre, half width, height)
+    let mut bumps: Vec<(f32, f32, f32)> = (0..dice.range(2.0..5.0) as usize)
+        .map(|_| {
+            let height = dice.range(2.0..9.0) * dice.pick(&[-1.0, 1.0, 1.0]);
+            (dice.range(0.0..length), dice.range(50.0..140.0), height)
+        })
+        .collect();
+    if dice.unit() < 0.7 {
+        bumps.push((
+            dice.range(0.0..length),
+            dice.range(30.0..45.0),
+            dice.range(2.0..3.5),
+        ));
+    }
+    let mut heights: Vec<f32> = dists
+        .iter()
+        .map(|s| {
+            let raw: f32 = bumps
+                .iter()
+                .map(|(centre, half, height)| {
+                    let d = (s - centre).abs();
+                    let d = d.min(length - d);
+                    if d < *half {
+                        height * 0.5 * (1.0 + (std::f32::consts::PI * d / half).cos())
+                    } else {
+                        0.0
+                    }
+                })
+                .sum();
+            // Level ground for the grid and the start line
+            let d = s.min(length - s);
+            let calm = ((d - 30.0) / 50.0).clamp(0.0, 1.0);
+            raw * calm * calm * (3.0 - 2.0 * calm)
+        })
+        .collect();
+    let n = heights.len();
+    let steepest = (0..n)
+        .map(|i| (heights[(i + 1) % n] - heights[i]).abs() / Track::STEP)
+        .fold(0.0, f32::max);
+    if steepest > MAX_GRADE {
+        let k = MAX_GRADE / steepest;
+        for h in &mut heights {
+            *h *= k;
+        }
+    }
+    heights
+}
+
+/// Legs of road near each other sit at about the same height.
+fn level(track: &Track) -> bool {
+    let n = track.points.len();
+    let near = 2.0 * track.barrier() + 2.0 * Track::FALL;
+    let p = &track.points;
+    let h = &track.heights;
+    // Samples this close along the lap are one leg climbing its own hill
+    let same = (near * 2.0 / Track::STEP) as usize;
+    (0..n).step_by(2).all(|i| {
+        (0..n).step_by(2).all(|j| {
+            let apart = i.abs_diff(j);
+            apart.min(n - apart) < same
+                || (h[i] - h[j]).abs() <= STEP_DOWN
+                || p[i].distance_squared(p[j]) > near * near
+        })
+    })
 }
 
 /// Radius of the circle through three points.
@@ -318,6 +397,8 @@ mod test {
             assert!(smooth(&t.points), "seed {seed}");
             assert!(clear(&t.points, t.barrier()), "seed {seed}");
             assert_eq!(t.boxes.len(), 3);
+            assert!(level(&t), "seed {seed}");
+            assert!(t.hilly(), "seed {seed}: flat");
         }
     }
 

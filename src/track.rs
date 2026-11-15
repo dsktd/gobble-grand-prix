@@ -11,6 +11,7 @@ pub(crate) mod generate;
 
 pub(super) mod prelude {
     pub use super::Scenery;
+    pub use super::Spot;
     pub use super::TRACKS;
     pub use super::Theme;
     pub use super::Track;
@@ -197,6 +198,8 @@ pub struct Track {
     pub dists: Vec<f32>,
     pub length: f32,
     pub half_width: f32,
+    /// Road height at each centerline point.
+    pub heights: Vec<f32>,
     pub shortcuts: Vec<(Vec2, Vec2, f32)>,
     /// Item box rows as fractions of a lap.
     pub boxes: Vec<f32>,
@@ -207,16 +210,20 @@ pub struct Track {
 }
 impl Track {
     pub const STEP: f32 = 1.5;
+    /// Width of the slope from the road shelf down to the flat.
+    pub const FALL: f32 = 30.0;
 
     /// A hand-made track from [`TRACKS`].
     pub fn new(index: usize) -> Self {
         let def = &TRACKS[index];
         let control: Vec<Vec2> = def.points.iter().map(|(x, z)| Vec2::new(*x, *z)).collect();
         let (points, dists, length) = centerline(&control);
+        let heights = vec![0.0; points.len()];
         Self {
             name: def.name.to_string(),
             points,
             dists,
+            heights,
             length,
             half_width: def.half_width,
             shortcuts: def
@@ -269,22 +276,83 @@ impl Track {
         }
     }
 
-    /// Centerline point and direction at a distance along the lap.
-    pub fn sample(
+    /// Centerline segment and how far along it a distance along the lap falls.
+    fn segment(
         &self,
         along: f32,
-    ) -> (Vec2, Vec2) {
+    ) -> (usize, usize, f32) {
         let along = along.rem_euclid(self.length);
         let n = self.points.len();
         let i = match self.dists.binary_search_by(|d| d.total_cmp(&along)) {
             Ok(i) => i,
             Err(i) => i - 1,
         };
-        let a = self.points[i];
-        let b = self.points[(i + 1) % n];
         let seg = (self.dists.get(i + 1).copied().unwrap_or(self.length)) - self.dists[i];
-        let t = (along - self.dists[i]) / seg;
+        (i, (i + 1) % n, (along - self.dists[i]) / seg)
+    }
+
+    /// Centerline point and direction at a distance along the lap.
+    pub fn sample(
+        &self,
+        along: f32,
+    ) -> (Vec2, Vec2) {
+        let (i, j, t) = self.segment(along);
+        let (a, b) = (self.points[i], self.points[j]);
         (a.lerp(b, t), (b - a).normalize())
+    }
+
+    /// Road height at a distance along the lap.
+    pub fn height(
+        &self,
+        along: f32,
+    ) -> f32 {
+        let (i, j, t) = self.segment(along);
+        self.heights[i] + (self.heights[j] - self.heights[i]) * t
+    }
+
+    /// Rise per metre of road, positive uphill in the racing direction.
+    pub fn grade(
+        &self,
+        along: f32,
+    ) -> f32 {
+        (self.height(along + 1.0) - self.height(along - 1.0)) / 2.0
+    }
+
+    /// Whether the road ever leaves the flat.
+    pub fn hilly(&self) -> bool {
+        self.heights.iter().any(|h| *h != 0.0)
+    }
+
+    /// Ground height under a spot: the road's out to the walls, then easing down to
+    /// the flat over [`Self::FALL`].
+    pub fn ground_at(
+        &self,
+        spot: Spot,
+    ) -> f32 {
+        let past = ((spot.lateral.abs() - self.barrier()) / Self::FALL).clamp(0.0, 1.0);
+        let ease = past * past * (3.0 - 2.0 * past);
+        self.height(spot.along) * (1.0 - ease)
+    }
+
+    /// Ground height under a track-plane point.
+    pub fn ground(
+        &self,
+        p: Vec2,
+    ) -> f32 {
+        if self.hilly() {
+            self.ground_at(self.locate(p))
+        } else {
+            0.0
+        }
+    }
+
+    /// A track-plane point lifted to `y` above the ground.
+    pub fn lift(
+        &self,
+        p: Vec2,
+        y: f32,
+    ) -> Vec3 {
+        flat(p, self.ground(p) + y)
     }
 
     /// Centerline point shifted sideways, positive to the left.
@@ -396,6 +464,57 @@ fn quads(
     .with_inserted_indices(Indices::U32(indices))
 }
 
+/// A square grid of ground `size` wide following [`Track::ground`], a little below the
+/// road so its flat triangles never poke through. Built once per race.
+fn terrain(
+    track: &Track,
+    size: f32,
+    cell: f32,
+) -> Mesh {
+    let cells = (size / cell) as usize;
+    let side = cells + 1;
+    let half = size / 2.0;
+    let mut heights = Vec::with_capacity(side * side);
+    for row in 0..side {
+        for col in 0..side {
+            let p = Vec2::new(col as f32 * cell - half, row as f32 * cell - half);
+            heights.push(track.ground(p) - 0.25);
+        }
+    }
+    let at = |row: usize, col: usize| heights[row.min(cells) * side + col.min(cells)];
+    let mut positions = Vec::with_capacity(side * side);
+    let mut normals = Vec::with_capacity(side * side);
+    for row in 0..side {
+        for col in 0..side {
+            positions.push([
+                col as f32 * cell - half,
+                at(row, col),
+                row as f32 * cell - half,
+            ]);
+            let dx = at(row, col + 1) - at(row, col.saturating_sub(1));
+            let dz = at(row + 1, col) - at(row.saturating_sub(1), col);
+            normals.push(Vec3::new(-dx, 2.0 * cell, -dz).normalize().to_array());
+        }
+    }
+    let mut indices = Vec::with_capacity(cells * cells * 6);
+    for row in 0..cells {
+        for col in 0..cells {
+            let a = (row * side + col) as u32;
+            let (b, c, d) = (a + 1, a + side as u32, a + side as u32 + 1);
+            indices.extend([a, c, b, b, c, d]);
+        }
+    }
+    let uvs = vec![[0.0, 0.0]; positions.len()];
+    Mesh::new(
+        PrimitiveTopology::TriangleList,
+        RenderAssetUsages::default(),
+    )
+    .with_inserted_attribute(Mesh::ATTRIBUTE_POSITION, positions)
+    .with_inserted_attribute(Mesh::ATTRIBUTE_NORMAL, normals)
+    .with_inserted_attribute(Mesh::ATTRIBUTE_UV_0, uvs)
+    .with_inserted_indices(Indices::U32(indices))
+}
+
 /// Quads for a band between two lateral offsets along the whole lap.
 fn band(
     track: &Track,
@@ -408,11 +527,12 @@ fn band(
         .map(|i| {
             let a = track.dists[i];
             let b = a + Track::STEP;
+            let (ya, yb) = (track.height(a) + y, track.height(b) + y);
             [
-                flat(track.offset(a, inner), y),
-                flat(track.offset(a, outer), y),
-                flat(track.offset(b, inner), y),
-                flat(track.offset(b, outer), y),
+                flat(track.offset(a, inner), ya),
+                flat(track.offset(a, outer), ya),
+                flat(track.offset(b, inner), yb),
+                flat(track.offset(b, outer), yb),
             ]
         })
         .collect()
@@ -437,9 +557,14 @@ pub fn spawn_track(
         ..default()
     });
 
-    // Ground
+    // Ground: hills around a hilly road, a plain plane around a flat one
+    let ground = if track.hilly() {
+        terrain(&track, 900.0, 6.0)
+    } else {
+        Plane3d::default().mesh().size(900.0, 900.0).into()
+    };
     commands.spawn((
-        Mesh3d(meshes.add(Plane3d::default().mesh().size(900.0, 900.0))),
+        Mesh3d(meshes.add(ground)),
         MeshMaterial3d(materials.add(StandardMaterial {
             base_color: theme.ground,
             perceptual_roughness: 1.0,
@@ -489,11 +614,12 @@ pub fn spawn_track(
             let lat1 = lat0 + 2.0 * hw / cells as f32;
             let a = row as f32 * 1.2;
             let b = a + 1.2;
+            let (ya, yb) = (track.height(a) + 0.05, track.height(b) + 0.05);
             checks.push([
-                flat(track.offset(a, lat0), 0.05),
-                flat(track.offset(a, lat1), 0.05),
-                flat(track.offset(b, lat0), 0.05),
-                flat(track.offset(b, lat1), 0.05),
+                flat(track.offset(a, lat0), ya),
+                flat(track.offset(a, lat1), ya),
+                flat(track.offset(b, lat0), yb),
+                flat(track.offset(b, lat1), yb),
             ]);
             colors.push(match (row + col) % 2 {
                 0 => Color::WHITE,

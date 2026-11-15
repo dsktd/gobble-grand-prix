@@ -167,6 +167,8 @@ mod test {
                 drift: false,
                 item: false,
             };
+            let spot = track.locate(kart.pos);
+            crate::kart::climb(&mut kart, track, spot);
             crate::kart::step(&mut kart, &input, stats, top, Kart::STEP);
             let spot = track.locate(kart.pos);
             if spot.lateral.abs() > track.barrier() {

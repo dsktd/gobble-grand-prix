@@ -116,7 +116,7 @@ pub(super) fn spawn(
                     Crate { pos, hidden: 0.0 },
                     Mesh3d(crate_mesh.clone()),
                     MeshMaterial3d(crate_mat.clone()),
-                    Transform::from_translation(flat(pos, 1.3)),
+                    Transform::from_translation(track.lift(pos, 1.3)),
                     DespawnOnExit(GameState::Race),
                 ))
                 .with_child((
@@ -208,7 +208,7 @@ fn fire(
                     },
                     Mesh3d(looks.berry_mesh.clone()),
                     MeshMaterial3d(looks.berry.clone()),
-                    Transform::from_translation(flat(pos, 0.6)),
+                    Transform::from_translation(flat(pos, kart.ground + 0.6)),
                     DespawnOnExit(GameState::Race),
                 ));
                 if human {
@@ -221,7 +221,7 @@ fn fire(
                     Slick { life: 30.0 },
                     Mesh3d(looks.slick_mesh.clone()),
                     MeshMaterial3d(looks.slick.clone()),
-                    Transform::from_translation(flat(pos, 0.06)),
+                    Transform::from_translation(flat(pos, kart.ground + 0.06)),
                     DespawnOnExit(GameState::Race),
                 ));
                 if human {
@@ -274,7 +274,7 @@ fn roll(
             berry.vel = berry.vel.lerp(want, (dt * 1.5).min(1.0));
         }
         let pos = pos + berry.vel * dt;
-        transform.translation = flat(pos, 0.6);
+        transform.translation = track.lift(pos, 0.6);
         transform.rotate_local_x(-speed * dt / 0.6);
 
         let mut hit = false;

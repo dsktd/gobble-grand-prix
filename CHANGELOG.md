@@ -4,6 +4,7 @@ Newest first. One short line per change a player can see; the title screen shows
 Add yours under the heading below, at the top.
 
 ## Unreleased
+- Random tracks roll over hills, dips and crests; karts tilt with the ground and slow on the climbs.
 - Random tracks: a new course of hairpins, chicanes, esses and straights every race, with its seed shown to replay a good one.
 - Two-player split screen can be cut diagonally, corner to corner (Options, "2 players").
 

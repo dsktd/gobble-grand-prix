@@ -42,11 +42,15 @@ fn kit(
     }
 }
 
+/// One prop, standing on the ground wherever its transform puts it.
 fn put(
     commands: &mut Commands,
+    track: &Track,
     kit: &Kit,
-    transform: Transform,
+    mut transform: Transform,
 ) {
+    let at = transform.translation;
+    transform.translation.y += track.ground(Vec2::new(at.x, at.z));
     commands.spawn((
         Mesh3d(kit.mesh.clone()),
         MeshMaterial3d(kit.material.clone()),
@@ -128,11 +132,13 @@ pub(super) fn spawn(
                     let yaw = (-dir.x).atan2(-dir.y);
                     put(
                         &mut commands,
+                        &track,
                         &post,
                         Transform::from_translation(flat(p, 0.7)),
                     );
                     put(
                         &mut commands,
+                        &track,
                         &rail,
                         Transform::from_translation(flat(p, 1.0))
                             .with_rotation(Quat::from_rotation_y(yaw))
@@ -155,11 +161,13 @@ pub(super) fn spawn(
                 }
                 put(
                     &mut commands,
+                    &track,
                     &trunk,
                     Transform::from_translation(flat(p, 3.0)),
                 );
                 put(
                     &mut commands,
+                    &track,
                     &crowns[i % 3],
                     Transform::from_translation(flat(p, 7.5)).with_scale(Vec3::new(
                         1.0,
@@ -180,6 +188,7 @@ pub(super) fn spawn(
                 if rng.random_bool(0.5) {
                     put(
                         &mut commands,
+                        &track,
                         &hay,
                         Transform::from_translation(flat(p, 1.2))
                             .with_rotation(Quat::from_rotation_z(std::f32::consts::FRAC_PI_2)),
@@ -187,6 +196,7 @@ pub(super) fn spawn(
                 } else {
                     put(
                         &mut commands,
+                        &track,
                         &pumpkin,
                         Transform::from_translation(flat(p, 0.7))
                             .with_scale(Vec3::new(1.2, 0.8, 1.2)),
@@ -196,12 +206,14 @@ pub(super) fn spawn(
             if let Some(at) = track.landmark {
                 put(
                     &mut commands,
+                    &track,
                     &barn,
                     Transform::from_translation(flat(at, 5.0)),
                 );
                 for side in [-1.0f32, 1.0] {
                     put(
                         &mut commands,
+                        &track,
                         &roof,
                         Transform::from_translation(flat(at, 12.4) + Vec3::X * side * 4.3)
                             .with_rotation(Quat::from_rotation_z(side * -0.6)),
@@ -245,12 +257,14 @@ pub(super) fn spawn(
             if let Some(at) = track.landmark {
                 put(
                     &mut commands,
+                    &track,
                     &roast,
                     Transform::from_translation(flat(at, 4.0)).with_scale(Vec3::new(1.3, 0.7, 1.0)),
                 );
                 for side in [-1.0f32, 1.0] {
                     put(
                         &mut commands,
+                        &track,
                         &drum,
                         Transform::from_translation(
                             flat(at, 5.0) + Vec3::new(side * 16.0, 0.0, 8.0),
@@ -278,8 +292,13 @@ pub(super) fn spawn(
                 if !open(x, z, 9.5) {
                     continue;
                 }
-                put(&mut commands, &plate, Transform::from_xyz(x, 0.2, z));
-                put(&mut commands, &rim, Transform::from_xyz(x, 0.35, z));
+                put(
+                    &mut commands,
+                    &track,
+                    &plate,
+                    Transform::from_xyz(x, 0.2, z),
+                );
+                put(&mut commands, &track, &rim, Transform::from_xyz(x, 0.35, z));
             }
             for (x, z) in [
                 (-130.0, -60.0),
@@ -290,9 +309,15 @@ pub(super) fn spawn(
                 if !open(x, z, 1.5) {
                     continue;
                 }
-                put(&mut commands, &candle, Transform::from_xyz(x, 6.0, z));
                 put(
                     &mut commands,
+                    &track,
+                    &candle,
+                    Transform::from_xyz(x, 6.0, z),
+                );
+                put(
+                    &mut commands,
+                    &track,
                     &flame,
                     Transform::from_xyz(x, 12.8, z).with_scale(Vec3::new(1.0, 1.8, 1.0)),
                 );
@@ -305,12 +330,14 @@ pub(super) fn spawn(
                     match (along as i32 / 6) % 4 {
                         0 => put(
                             &mut commands,
+                            &track,
                             &roll,
                             Transform::from_translation(flat(p, 1.2))
                                 .with_scale(Vec3::new(1.0, 0.7, 1.4)),
                         ),
                         _ => put(
                             &mut commands,
+                            &track,
                             &pea,
                             Transform::from_translation(flat(p, 0.8)),
                         ),
@@ -362,18 +389,21 @@ pub(super) fn spawn(
                         let h = rng.random_range(0.85..1.2);
                         put(
                             &mut commands,
+                            &track,
                             &stalk,
                             Transform::from_translation(flat(p, 2.75 * h))
                                 .with_scale(Vec3::new(1.0, h, 1.0)),
                         );
                         put(
                             &mut commands,
+                            &track,
                             &tassel,
                             Transform::from_translation(flat(p, 5.5 * h + 0.4)),
                         );
                         if rng.random_bool(0.3) {
                             put(
                                 &mut commands,
+                                &track,
                                 &cob,
                                 Transform::from_translation(flat(p, 3.0 * h) + Vec3::X * 0.3)
                                     .with_rotation(Quat::from_rotation_z(-0.5)),
@@ -388,21 +418,25 @@ pub(super) fn spawn(
                 let p = track.offset(lap * frac, -(hw + 3.5));
                 put(
                     &mut commands,
+                    &track,
                     &pole,
                     Transform::from_translation(flat(p, 3.0)),
                 );
                 put(
                     &mut commands,
+                    &track,
                     &shirt,
                     Transform::from_translation(flat(p, 4.0)),
                 );
                 put(
                     &mut commands,
+                    &track,
                     &head,
                     Transform::from_translation(flat(p, 5.6)),
                 );
                 put(
                     &mut commands,
+                    &track,
                     &hat,
                     Transform::from_translation(flat(p, 6.5)),
                 );

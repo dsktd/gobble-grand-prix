@@ -163,8 +163,8 @@ fn spawn(
                 },
                 ..default()
             }),
-            Transform::from_translation(flat(start - dir * 10.0, 4.0))
-                .looking_at(flat(start, 1.0), Vec3::Y),
+            Transform::from_translation(track.lift(start - dir * 10.0, 4.0))
+                .looking_at(track.lift(start, 1.0), Vec3::Y),
             DespawnOnExit(GameState::Race),
         ));
         if let (1, Some(image)) = (slot, &p2_target) {
@@ -193,6 +193,7 @@ fn spawn(
 fn chase(
     time: Res<Time>,
     options: Res<Options>,
+    track: Res<Track>,
     karts: Query<(&Kart, &Human)>,
     cameras: Query<(&ChaseCam, &mut Rig, &mut Transform, &mut Projection)>,
 ) {
@@ -215,7 +216,7 @@ fn chase(
             *rig = Rig {
                 yaw: heading,
                 focus: kart.pos,
-                height: 0.0,
+                height: kart.ground,
                 fov: Tune::FOV,
                 ready: true,
                 ..default()
@@ -235,16 +236,22 @@ fn chase(
         rig.focus = Vec2::new(fx, fy);
         rig.focus_vel = Vec2::new(vx, vy);
 
-        // Ground height ignores hops and bumps (the track is flat; this keeps it smooth if not)
+        // Follow the ground, not hops and bumps
         let mut hv = rig.height_vel;
-        rig.height = smooth_damp(rig.height, 0.0, &mut hv, Tune::HEIGHT_LAG, 20.0, dt);
+        rig.height = smooth_damp(rig.height, kart.ground, &mut hv, Tune::HEIGHT_LAG, 20.0, dt);
         rig.height_vel = hv;
 
         let dir = Vec2::new(-rig.yaw.sin(), -rig.yaw.cos());
-        let mut eye = flat(rig.focus - dir * Tune::DISTANCE, rig.height + Tune::HEIGHT);
+        let behind = rig.focus - dir * Tune::DISTANCE;
+        let ahead = rig.focus + dir * Tune::LOOK_AHEAD;
+        // Stay above a hill climbing behind, and tip a little towards the road ahead
+        let mut eye = flat(
+            behind,
+            (rig.height + Tune::HEIGHT).max(track.ground(behind) + 1.0),
+        );
         let look = flat(
-            rig.focus + dir * Tune::LOOK_AHEAD,
-            rig.height + Tune::LOOK_HEIGHT,
+            ahead,
+            rig.height + Tune::LOOK_HEIGHT + (track.ground(ahead) - rig.height) * 0.5,
         );
 
         rig.shake = (rig.shake - dt).max(0.0);

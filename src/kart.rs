@@ -74,6 +74,8 @@ impl Drift {
 pub struct Kart {
     pub racer: usize,
     pub pos: Vec2,
+    /// Ground height under the kart, kept by the physics step.
+    pub ground: f32,
     pub yaw: f32,
     pub speed: f32,
     pub vel: Vec2,
@@ -104,6 +106,8 @@ pub struct Kart {
 }
 impl Kart {
     pub const TOP_SPEED: f32 = 34.0;
+    /// Pull of a slope along the road, m/s² per unit grade: arcade-light, not 9.8.
+    pub const GRAVITY: f32 = 7.0;
     pub const ACCEL: f32 = 20.0;
     /// Seconds for the steering input to ramp from centre to full lock.
     pub const STEER_RAMP: f32 = 0.15;
@@ -167,6 +171,7 @@ impl Kart {
         Self {
             racer,
             pos,
+            ground: 0.0,
             yaw,
             speed: 0.0,
             vel: Vec2::ZERO,
@@ -263,6 +268,7 @@ fn drive(
             if kart.boost > 0.0 {
                 top *= 1.4;
             }
+            climb(&mut kart, &track, spot);
             let before = kart.pos;
             step(&mut kart, input, stats, top, Kart::STEP);
 
@@ -274,6 +280,21 @@ fn drive(
             }
             kart.on_wall = hit;
         }
+    }
+}
+
+/// Gravity along the road: hills slow the climb and speed the run down. Also records the
+/// ground height under the kart.
+pub fn climb(
+    kart: &mut Kart,
+    track: &Track,
+    spot: Spot,
+) {
+    kart.ground = track.ground_at(spot);
+    let grade = track.grade(spot.along);
+    if grade != 0.0 {
+        let (_, dir) = track.sample(spot.along);
+        kart.vel -= dir * (Kart::GRAVITY * grade * Kart::STEP);
     }
 }
 
@@ -497,9 +518,13 @@ fn bump(mut karts: Query<&mut Kart>) {
 /// Copy physics state onto the model transform, with drift lean and spin.
 fn pose(
     time: Res<Time>,
+    track: Res<Track>,
     karts: Query<(&Kart, &mut Transform)>,
 ) {
     let t = time.elapsed_secs();
+    // Suspension: the body follows the ground a beat late
+    let ride = 1.0 - (-time.delta_secs() * 18.0).exp();
+    let hilly = track.hilly();
     for (kart, mut transform) in karts {
         let mut yaw = kart.yaw + kart.slide;
         yaw += kart.spin * 14.0;
@@ -514,8 +539,21 @@ fn pose(
         } else {
             0.0
         };
-        transform.translation = flat(kart.pos, hop + rumble);
-        transform.rotation = Quat::from_rotation_y(yaw) * Quat::from_rotation_z(doze);
+        // Sit on the ground's slope, felt over the kart's wheelbase
+        let tilt = if hilly {
+            let fwd = kart.forward();
+            let left = fwd.perp();
+            let dx = track.ground(kart.pos + fwd) - track.ground(kart.pos - fwd);
+            let dz = track.ground(kart.pos + left) - track.ground(kart.pos - left);
+            let normal = (Vec3::Y * 2.0 - flat(fwd, 0.0) * dx - flat(left, 0.0) * dz).normalize();
+            Quat::from_rotation_arc(Vec3::Y, normal)
+        } else {
+            Quat::IDENTITY
+        };
+        let y = transform.translation.y - hop - rumble;
+        let y = y + (kart.ground - y) * ride;
+        transform.translation = flat(kart.pos, y + hop + rumble);
+        transform.rotation = tilt * Quat::from_rotation_y(yaw) * Quat::from_rotation_z(doze);
     }
 }
 
@@ -576,7 +614,7 @@ fn tears(
         tear.life -= dt;
         tear.vel.y -= 12.0 * dt;
         transform.translation += tear.vel * dt;
-        if tear.life <= 0.0 || transform.translation.y < 0.0 {
+        if tear.life <= 0.0 {
             commands.entity(id).despawn();
         }
     }
@@ -609,7 +647,7 @@ fn tears(
                 0 => 1.0,
                 _ => -1.0,
             };
-            let head = flat(kart.pos, 1.85) + fwd * 0.6 + side * s * 0.25;
+            let head = flat(kart.pos, kart.ground + 1.85) + fwd * 0.6 + side * s * 0.25;
             commands.spawn((
                 Tear {
                     vel: -fwd * kart.speed * 0.25 + side * s * 2.0 + Vec3::Y * 2.0,
