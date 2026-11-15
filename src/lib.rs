@@ -24,6 +24,7 @@ mod roster;
 mod scenery;
 mod shots;
 mod style;
+mod textures;
 mod track;
 
 use bevy::prelude::*;
