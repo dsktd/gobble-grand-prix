@@ -5,6 +5,7 @@ Add yours under the heading below, at the top.
 
 ## Unreleased
 - Options (volume, music, quality, camera, split screen) are remembered between runs.
+- Harvest Lane rolls over farm hills and has a hay-bale kicker to fly off.
 - Random tracks can curl a sweeping corner into a half-pipe: run wide and ride the wall.
 - Some random tracks are figure eights, one road bridging over the other; the minimap outlines the bridge.
 - Random tracks have ramps to fly off and gaps to jump; miss one and you are set back past it.

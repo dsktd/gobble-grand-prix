@@ -8,6 +8,7 @@ use bevy::prelude::*;
 use crate::prelude::*;
 
 pub(crate) mod generate;
+mod handmade;
 
 pub(super) mod prelude {
     pub use super::Scenery;
@@ -81,7 +82,7 @@ pub const TRACKS: [TrackDef; 3] = [
         ],
         half_width: 9.0,
         shortcuts: &[],
-        boxes: &[0.18, 0.47, 0.76],
+        boxes: &[0.2, 0.47, 0.76],
         scenery: Scenery::Farm,
         landmark: (20.0, 60.0),
         theme: Theme {
@@ -239,7 +240,7 @@ impl Track {
         let (points, dists, length) = centerline(&control);
         let heights = vec![0.0; points.len()];
         let banks = heights.clone();
-        Self {
+        let mut track = Self {
             name: def.name.to_string(),
             points,
             dists,
@@ -260,7 +261,9 @@ impl Track {
             scenery: def.scenery,
             theme: def.theme,
             landmark: Some(Vec2::new(def.landmark.0, def.landmark.1)),
-        }
+        };
+        handmade::profile(index, &mut track);
+        track
     }
 
     /// The track a race setup asks for: hand-made, or generated from its seed.
