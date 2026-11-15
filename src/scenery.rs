@@ -15,6 +15,7 @@ use crate::prelude::*;
 use crate::textures;
 
 mod bar;
+mod neon;
 mod props;
 mod tournament;
 
@@ -539,7 +540,7 @@ pub(super) fn spawn(
     match track.scenery {
         Scenery::Bar => bar::dress(&mut dress),
         Scenery::Tournament => tournament::dress(&mut dress),
-        Scenery::Neon => {}
+        Scenery::Neon => neon::dress(&mut dress),
     }
     dust(&mut dress);
 }
