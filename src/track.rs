@@ -8,12 +8,11 @@ use bevy::prelude::*;
 use crate::prelude::*;
 
 pub(crate) mod generate;
-mod handmade;
 
 pub(super) mod prelude {
+    pub use super::LOOKS;
     pub use super::Scenery;
     pub use super::Spot;
-    pub use super::TRACKS;
     pub use super::Theme;
     pub use super::Track;
     pub use super::flat;
@@ -48,43 +47,15 @@ pub struct Theme {
     pub fog_end: f32,
 }
 
-pub struct TrackDef {
-    pub name: &'static str,
-    pub blurb: &'static str,
-    pub points: &'static [(f32, f32)],
-    pub half_width: f32,
-    /// Capsules (from, to, radius) where leaving the road is not punished.
-    pub shortcuts: &'static [((f32, f32), (f32, f32), f32)],
-    /// Item box rows as fractions of a lap.
-    pub boxes: &'static [f32],
+/// The looks a random track draws from.
+pub struct Look {
     pub scenery: Scenery,
     pub theme: Theme,
-    /// Open ground for the theme's big centrepiece (barn, roast).
-    pub landmark: (f32, f32),
 }
 
-pub const TRACKS: [TrackDef; 3] = [
-    TrackDef {
-        name: "Harvest Lane",
-        blurb: "A dirt farm road at sunset, past the barn and the pumpkin patch.",
-        points: &[
-            (-40.0, 0.0),
-            (40.0, 0.0),
-            (90.0, -15.0),
-            (125.0, 25.0),
-            (110.0, 80.0),
-            (60.0, 95.0),
-            (30.0, 140.0),
-            (-30.0, 150.0),
-            (-80.0, 110.0),
-            (-75.0, 50.0),
-            (-95.0, 10.0),
-        ],
-        half_width: 9.0,
-        shortcuts: &[],
-        boxes: &[0.2, 0.47, 0.76],
+pub const LOOKS: [Look; 3] = [
+    Look {
         scenery: Scenery::Farm,
-        landmark: (20.0, 60.0),
         theme: Theme {
             sky: Color::srgb(0.98, 0.62, 0.36),
             ground: Color::srgb(0.47, 0.42, 0.18),
@@ -100,27 +71,8 @@ pub const TRACKS: [TrackDef; 3] = [
             fog_end: 320.0,
         },
     },
-    TrackDef {
-        name: "Grand Feast Table",
-        blurb: "Around the plates and the giant roast. Brave the gravy river.",
-        points: &[
-            (-60.0, -45.0),
-            (60.0, -45.0),
-            (95.0, -30.0),
-            (100.0, 10.0),
-            (80.0, 45.0),
-            (35.0, 52.0),
-            (0.0, 8.0),
-            (-35.0, 52.0),
-            (-80.0, 45.0),
-            (-100.0, 10.0),
-            (-95.0, -30.0),
-        ],
-        half_width: 8.0,
-        shortcuts: &[((48.0, 55.0), (-48.0, 55.0), 6.0)],
-        boxes: &[0.22, 0.48, 0.8],
+    Look {
         scenery: Scenery::Table,
-        landmark: (0.0, -18.0),
         theme: Theme {
             sky: Color::srgb(0.22, 0.08, 0.06),
             ground: Color::srgb(0.45, 0.26, 0.14),
@@ -136,35 +88,8 @@ pub const TRACKS: [TrackDef; 3] = [
             fog_end: 380.0,
         },
     },
-    TrackDef {
-        name: "Maize Maze",
-        blurb: "Tight turns through a cornfield at dusk. Mind the scarecrows.",
-        points: &[
-            (-80.0, -70.0),
-            (70.0, -70.0),
-            (90.0, -50.0),
-            (90.0, -20.0),
-            (70.0, -5.0),
-            (20.0, -5.0),
-            (0.0, 15.0),
-            (20.0, 35.0),
-            (70.0, 35.0),
-            (90.0, 55.0),
-            (80.0, 85.0),
-            (50.0, 95.0),
-            (-60.0, 95.0),
-            (-85.0, 75.0),
-            (-85.0, 45.0),
-            (-55.0, 30.0),
-            (-55.0, 0.0),
-            (-85.0, -15.0),
-            (-95.0, -45.0),
-        ],
-        half_width: 7.0,
-        shortcuts: &[],
-        boxes: &[0.15, 0.42, 0.7],
+    Look {
         scenery: Scenery::Maze,
-        landmark: (0.0, 40.0),
         theme: Theme {
             sky: Color::srgb(0.36, 0.30, 0.52),
             ground: Color::srgb(0.30, 0.26, 0.12),
@@ -233,46 +158,9 @@ impl Track {
     /// Depth of a gap's pit below the road.
     pub const PIT: f32 = 7.0;
 
-    /// A hand-made track from [`TRACKS`].
-    pub fn new(index: usize) -> Self {
-        let def = &TRACKS[index];
-        let control: Vec<Vec2> = def.points.iter().map(|(x, z)| Vec2::new(*x, *z)).collect();
-        let (points, dists, length) = centerline(&control);
-        let heights = vec![0.0; points.len()];
-        let banks = heights.clone();
-        let mut track = Self {
-            name: def.name.to_string(),
-            points,
-            dists,
-            heights,
-            banks,
-            length,
-            half_width: def.half_width,
-            shortcuts: def
-                .shortcuts
-                .iter()
-                .map(|(a, b, r)| (Vec2::new(a.0, a.1), Vec2::new(b.0, b.1), *r))
-                .collect(),
-            ramps: Vec::new(),
-            gaps: Vec::new(),
-            decks: Vec::new(),
-            pipes: Vec::new(),
-            boxes: def.boxes.to_vec(),
-            scenery: def.scenery,
-            theme: def.theme,
-            landmark: Some(Vec2::new(def.landmark.0, def.landmark.1)),
-        };
-        handmade::profile(index, &mut track);
-        track
-    }
-
-    /// The track a race setup asks for: hand-made, or generated from its seed.
+    /// The track a race setup asks for, generated from its seed.
     pub fn of(setup: &Setup) -> Self {
-        if setup.track < TRACKS.len() {
-            Self::new(setup.track)
-        } else {
-            generate::track(setup.seed)
-        }
+        generate::track(setup.seed)
     }
 
     /// Distance from the centerline where the invisible wall stands.

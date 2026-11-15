@@ -26,7 +26,7 @@ Hold drift while steering into a turn: sparks go white, then blue, then orange. 
 ## What's in it
 
 - Racers: Tom Gobbler (turkey in a gravy boat), Patty Crust (pumpkin pie), Cranston Can (cranberry sauce), Kernel Cob (corn), Elder Spud (pilgrim potato), Marsha Mallow (sweet potato casserole).
-- Tracks: Harvest Lane (farm road at sunset), Grand Feast Table (around the roast, with a gravy-river shortcut), Maize Maze (cornfield at dusk).
+- Tracks: a new random track every race, in a farm, feast-table or cornfield look, with hills, ramps, gaps and the odd figure eight.
 - Items from harvest crates: Cranberry (homing), Gravy Slick (dropped behind), Stuffing Boost.
 - 3 laps, 5 CPU racers with rubber banding, countdown, results board, options (volume, quality, controls).
 

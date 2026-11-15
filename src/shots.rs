@@ -16,12 +16,9 @@ pub(super) fn plugin(app: &mut App) {
     if args.get(1).map(String::as_str) != Some("shots") {
         return;
     }
-    // A track index, or r<seed> for a generated track
-    let arg = args.get(2).map_or("0", String::as_str);
-    let (track, seed) = arg.strip_prefix('r').map_or_else(
-        || (arg.parse().unwrap_or(0).min(TRACKS.len() - 1), 1),
-        |seed| (TRACKS.len(), seed.parse().unwrap_or(1)),
-    );
+    // The seed of the random track, 1 by default
+    let arg = args.get(2).map_or("1", String::as_str);
+    let seed: u32 = arg.trim_start_matches('r').parse().unwrap_or(1);
     // Optional 6th argument: "diagonal" for the diagonal two-player split
     app.insert_resource(Options {
         high_quality: args.get(3).map(String::as_str) != Some("low"),
@@ -41,7 +38,6 @@ pub(super) fn plugin(app: &mut App) {
         app.insert_resource(Seats(vec![Device::Bot; seats]));
         app.insert_resource(Setup {
             racers: (0..seats).map(|s| s * 2 % ROSTER.len()).collect(),
-            track,
             seed,
             last_seed: seed,
         });
@@ -49,10 +45,9 @@ pub(super) fn plugin(app: &mut App) {
     let racer = args
         .get(4)
         .and_then(|a| a.parse().ok())
-        .unwrap_or(track * 2 % ROSTER.len());
+        .unwrap_or(seed as usize * 2 % ROSTER.len());
     app.insert_resource(Tour {
         racer,
-        track,
         seed,
         clock: -crate::bench::hold(),
         step: 0,
@@ -67,7 +62,6 @@ pub(super) fn plugin(app: &mut App) {
 #[derive(Resource, Clone, Debug)]
 struct Tour {
     racer: usize,
-    track: usize,
     seed: u32,
     clock: f32,
     step: usize,
@@ -125,10 +119,7 @@ fn tour(
 ) {
     tour.clock += time.delta_secs();
     let t = tour.clock;
-    let name = match TRACKS.get(tour.track) {
-        Some(def) => def.name.to_lowercase().replace(' ', "-"),
-        None => format!("random-{}", tour.seed),
-    };
+    let name = format!("random-{}", tour.seed);
     match tour.step {
         0 if t > 2.0 => shoot(&mut commands, "menu"),
         1 if t > 2.5 => whats.open = true,
@@ -146,7 +137,6 @@ fn tour(
         }
         8 if t > 9.0 => shoot(&mut commands, &format!("racer-{name}")),
         9 if t > 9.5 => {
-            setup.track = tour.track;
             next.set(GameState::PickTrack);
         }
         10 if t > 11.0 => shoot(&mut commands, &format!("track-{name}")),
