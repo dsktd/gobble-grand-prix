@@ -48,7 +48,7 @@ pub(super) fn profile(
     match index {
         0 => harvest(track),
         1 => feast(track),
-        _ => {}
+        _ => maze(track),
     }
 }
 
@@ -78,15 +78,32 @@ fn feast(track: &mut Track) {
     generate::curl(&mut track.pipes, 313, 350);
 }
 
+/// Gentle dips between the corn rows, banked turns and a wall-ride corner on
+/// the east side. The layout never crosses itself, so there is no bridge.
+fn maze(track: &mut Track) {
+    hills(
+        track,
+        &[
+            (300.0, 50.0, -1.5),
+            (480.0, 60.0, -2.0),
+            (700.0, 50.0, -1.0),
+        ],
+    );
+    track.banks = generate::banks(&track.points, 0.4);
+    track.pipes = vec![0.0; track.points.len()];
+    generate::curl(&mut track.pipes, 130, 163);
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::track::TRACKS;
 
     /// Each hand-made track keeps level ground at the start, and nearby legs of road stay
     /// at about the same height.
     #[test]
     fn test_profiles_are_sound() {
-        for index in 0..2 {
+        for index in 0..TRACKS.len() {
             let t = Track::new(index);
             let n = t.points.len();
             assert!(t.hilly(), "{}: flat", t.name);
@@ -95,11 +112,26 @@ mod test {
             for along in [0.0, 10.0, t.length - 10.0] {
                 assert!(t.height(along).abs() < 0.05, "{}: start not level", t.name);
             }
+            // A half-pipe lip alone is higher than the check allows, so it is judged
+            // apart, by how far the pipe stands from every other leg
+            let mut flat = t.clone();
+            flat.pipes.clear();
             assert!(
-                generate::level(&t, &vec![false; n]),
+                generate::level(&flat, &vec![false; n]),
                 "{}: legs at odds",
                 t.name
             );
+            let same = (80.0 / Track::STEP) as usize;
+            for (i, _) in t.pipes.iter().enumerate().filter(|(_, p)| **p > 0.0) {
+                for j in (0..n).filter(|j| i.abs_diff(*j).min(n - i.abs_diff(*j)) > same) {
+                    let d = t.points[i].distance(t.points[j]);
+                    assert!(
+                        d > 2.0 * t.barrier() + 15.0,
+                        "{}: pipe {d} m from a leg",
+                        t.name
+                    );
+                }
+            }
         }
     }
 
@@ -121,5 +153,13 @@ mod test {
         assert!(t.pipes.iter().any(|p| *p > 0.99));
         // The top of the table stands above the start
         assert!(t.height(200.0) > 3.0);
+    }
+
+    /// The Maize Maze dips and has a wall-ride corner.
+    #[test]
+    fn test_maze_features() {
+        let t = Track::new(2);
+        assert!(t.heights.iter().any(|h| *h < -1.0));
+        assert!(t.pipes.iter().any(|p| *p > 0.99));
     }
 }
