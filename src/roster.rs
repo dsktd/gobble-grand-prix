@@ -1,4 +1,4 @@
-//! The Thanksgiving racers and the primitive meshes they are built from.
+//! The pool-hall racers and the primitive meshes they are built from.
 
 use bevy::prelude::*;
 
@@ -37,12 +37,12 @@ pub struct Stats {
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub enum Body {
-    Turkey,
-    Pie,
-    Can,
-    Corn,
-    Potato,
-    Casserole,
+    EightBall,
+    Striped,
+    Chalk,
+    Rack,
+    Hustler,
+    Table,
     Cat,
 }
 
@@ -58,11 +58,11 @@ pub struct Racer {
 
 pub const ROSTER: [Racer; 7] = [
     Racer {
-        name: "Tom Gobbler",
-        blurb: "A turkey in a gravy boat. Balanced, and loud about it.",
-        kart: Color::srgb(0.93, 0.89, 0.80),
-        accent: Color::srgb(0.45, 0.25, 0.12),
-        body: Body::Turkey,
+        name: "Eight Ball Eddie",
+        blurb: "An 8-ball in a cue-ball kart. Balanced, and sure he is lucky.",
+        kart: Color::srgb(0.95, 0.95, 0.92),
+        accent: Color::srgb(0.06, 0.06, 0.07),
+        body: Body::EightBall,
         stats: Stats {
             top_speed: 1.0,
             accel: 1.0,
@@ -71,11 +71,11 @@ pub const ROSTER: [Racer; 7] = [
         },
     },
     Racer {
-        name: "Patty Crust",
-        blurb: "A pumpkin pie on wheels. Quick off the line, light on the corners.",
-        kart: Color::srgb(0.85, 0.47, 0.12),
-        accent: Color::srgb(0.87, 0.70, 0.42),
-        body: Body::Pie,
+        name: "Stripe Sally",
+        blurb: "A striped ball with somewhere to be. Quick off the break, light on the corners.",
+        kart: Color::srgb(0.92, 0.72, 0.10),
+        accent: Color::srgb(0.70, 0.12, 0.12),
+        body: Body::Striped,
         stats: Stats {
             top_speed: 0.96,
             accel: 1.25,
@@ -84,11 +84,11 @@ pub const ROSTER: [Racer; 7] = [
         },
     },
     Racer {
-        name: "Cranston Can",
-        blurb: "Jellied cranberry, ridges and all. Heavy and fast once rolling.",
-        kart: Color::srgb(0.55, 0.05, 0.12),
-        accent: Color::srgb(0.75, 0.75, 0.78),
-        body: Body::Can,
+        name: "Chalky Blue",
+        blurb: "A cube of tournament chalk. Heavy, dusty and fast once rolling.",
+        kart: Color::srgb(0.20, 0.42, 0.85),
+        accent: Color::srgb(0.12, 0.26, 0.60),
+        body: Body::Chalk,
         stats: Stats {
             top_speed: 1.07,
             accel: 0.85,
@@ -97,11 +97,11 @@ pub const ROSTER: [Racer; 7] = [
         },
     },
     Racer {
-        name: "Kernel Cob",
-        blurb: "A corn cob with husk wings. Turns on a kernel.",
-        kart: Color::srgb(0.96, 0.80, 0.20),
-        accent: Color::srgb(0.38, 0.55, 0.20),
-        body: Body::Corn,
+        name: "Rack Rita",
+        blurb: "Fifteen balls and a triangle, all moving as one. Turns on a dime.",
+        kart: Color::srgb(0.75, 0.55, 0.30),
+        accent: Color::srgb(0.10, 0.45, 0.22),
+        body: Body::Rack,
         stats: Stats {
             top_speed: 0.98,
             accel: 1.05,
@@ -110,11 +110,11 @@ pub const ROSTER: [Racer; 7] = [
         },
     },
     Racer {
-        name: "Elder Spud",
-        blurb: "A potato in a pilgrim hat. Steady, sturdy, buckled up.",
-        kart: Color::srgb(0.62, 0.45, 0.28),
-        accent: Color::srgb(0.08, 0.08, 0.08),
-        body: Body::Potato,
+        name: "Hustler Hank",
+        blurb: "Lost the first game on purpose. Steady, sturdy, wearing sunglasses indoors.",
+        kart: Color::srgb(0.85, 0.65, 0.50),
+        accent: Color::srgb(0.10, 0.10, 0.12),
+        body: Body::Hustler,
         stats: Stats {
             top_speed: 1.02,
             accel: 0.95,
@@ -123,11 +123,11 @@ pub const ROSTER: [Racer; 7] = [
         },
     },
     Racer {
-        name: "Marsha Mallow",
-        blurb: "Sweet potato casserole, toasted on top. Drifts like a dream.",
-        kart: Color::srgb(0.88, 0.42, 0.18),
+        name: "Felt Felicia",
+        blurb: "A whole pool table on wheels. Drifts like a dream.",
+        kart: Color::srgb(0.10, 0.52, 0.28),
         accent: Color::srgb(0.98, 0.95, 0.88),
-        body: Body::Casserole,
+        body: Body::Table,
         stats: Stats {
             top_speed: 1.0,
             accel: 1.1,
@@ -137,7 +137,7 @@ pub const ROSTER: [Racer; 7] = [
     },
     Racer {
         name: "Wailing Whiskers",
-        blurb: "Was told there is no turkey for cats. Has not stopped crying since.",
+        blurb: "Bet it all on the 8-ball and lost. Has not stopped crying since.",
         kart: Color::srgb(0.88, 0.88, 0.90),
         accent: Color::srgb(0.48, 0.48, 0.52),
         body: Body::Cat,
@@ -227,8 +227,8 @@ pub fn spawn_model(
     }
 
     match racer.body {
-        Body::Turkey => {
-            // Gravy boat hull with a spout at the front
+        Body::EightBall => {
+            // Cue-ball hull with a rail around it
             pieces.push(parts.part(
                 Sphere::new(1.0),
                 racer.kart,
@@ -236,7 +236,7 @@ pub fn spawn_model(
             ));
             pieces.push(parts.part(
                 Cylinder::new(0.8, 0.08),
-                Color::srgb(0.45, 0.25, 0.10),
+                Color::srgb(0.35, 0.18, 0.08),
                 at(0.0, 0.78, 0.0).with_scale(Vec3::new(0.95, 1.0, 1.4)),
             ));
             pieces.push(parts.part(
@@ -244,126 +244,104 @@ pub fn spawn_model(
                 racer.kart,
                 at(0.0, 0.75, -1.3).with_rotation(Quat::from_rotation_x(-1.2)),
             ));
-            // Turkey
-            pieces.push(parts.part(Sphere::new(0.6), racer.accent, at(0.0, 1.25, 0.15)));
+            // The 8-ball driver: black ball, white spot, a pair of eyes
+            pieces.push(parts.part(Sphere::new(0.75), racer.accent, at(0.0, 1.45, 0.1)));
             pieces.push(parts.part(
-                Capsule3d::new(0.12, 0.5),
-                racer.accent,
-                at(0.0, 1.8, -0.25).with_rotation(Quat::from_rotation_x(-0.3)),
+                Cylinder::new(0.3, 0.06),
+                Color::WHITE,
+                at(0.0, 1.55, -0.62).with_rotation(Quat::from_rotation_x(1.2)),
             ));
-            pieces.push(parts.part(
-                Sphere::new(0.22),
-                Color::srgb(0.55, 0.35, 0.22),
-                at(0.0, 2.15, -0.35),
-            ));
-            pieces.push(parts.part(
-                Cone::new(0.07, 0.22),
-                Color::srgb(0.95, 0.70, 0.10),
-                at(0.0, 2.12, -0.62).with_rotation(Quat::from_rotation_x(-1.57)),
-            ));
-            pieces.push(parts.part(
-                Sphere::new(0.09),
-                Color::srgb(0.85, 0.08, 0.08),
-                at(0.0, 1.98, -0.52).with_scale(Vec3::new(0.8, 1.6, 0.8)),
-            ));
-            for eye in [-0.1, 0.1] {
-                pieces.push(parts.part(Sphere::new(0.045), Color::BLACK, at(eye, 2.22, -0.53)));
+            for eye in [-0.2, 0.2] {
+                pieces.push(parts.part(Sphere::new(0.08), Color::WHITE, at(eye, 1.2, -0.67)));
+                pieces.push(parts.part(Sphere::new(0.04), Color::BLACK, at(eye, 1.2, -0.74)));
             }
-            // Tail fan
-            let feathers = [
-                Color::srgb(0.70, 0.20, 0.08),
-                Color::srgb(0.90, 0.55, 0.10),
-                Color::srgb(0.55, 0.30, 0.12),
-                Color::srgb(0.95, 0.75, 0.25),
+            // A fan of cue sticks out the back
+            let woods = [
+                Color::srgb(0.85, 0.65, 0.35),
+                Color::srgb(0.45, 0.25, 0.12),
+                Color::srgb(0.75, 0.50, 0.25),
+                Color::srgb(0.30, 0.16, 0.08),
             ];
-            for i in 0..9 {
-                let angle = -1.1 + i as f32 * 0.275;
-                let feather = Transform::from_xyz(0.0, 1.4, 0.7)
+            for i in 0..7 {
+                let angle = -0.9 + i as f32 * 0.3;
+                let cue = Transform::from_xyz(0.0, 1.0, 0.8)
                     .with_rotation(Quat::from_rotation_z(angle) * Quat::from_rotation_x(0.35))
-                    * Transform::from_xyz(0.0, 0.75, 0.0).with_scale(Vec3::new(1.0, 1.0, 0.25));
-                pieces.push(parts.part(Capsule3d::new(0.2, 0.9), feathers[i % 4], feather));
+                    * Transform::from_xyz(0.0, 0.8, 0.0);
+                pieces.push(parts.part(Capsule3d::new(0.06, 1.5), woods[i % 4], cue));
             }
         }
-        Body::Pie => {
+        Body::Striped => {
+            // A striped ball riding a round pocket liner
             pieces.push(parts.part(Cylinder::new(1.05, 0.45), racer.accent, at(0.0, 0.75, 0.0)));
-            pieces.push(parts.part(Cylinder::new(0.92, 0.47), racer.kart, at(0.0, 0.77, 0.0)));
+            pieces.push(parts.part(Cylinder::new(0.92, 0.47), Color::srgb(0.08, 0.08, 0.08), at(0.0, 0.77, 0.0)));
             pieces.push(parts.part(Torus::new(0.9, 1.12), racer.accent, at(0.0, 1.0, 0.0)));
-            // Whipped cream swirl driver
+            pieces.push(parts.part(Sphere::new(0.8), racer.kart, at(0.0, 1.55, 0.05)));
             pieces.push(parts.part(
-                Sphere::new(0.45),
-                Color::srgb(0.99, 0.97, 0.92),
-                at(0.0, 1.3, 0.1),
+                Cylinder::new(0.81, 0.4),
+                Color::WHITE,
+                at(0.0, 1.55, 0.05).with_rotation(Quat::from_rotation_x(1.57)),
             ));
-            pieces.push(parts.part(
-                Cone::new(0.3, 0.6),
-                Color::srgb(0.99, 0.97, 0.92),
-                at(0.0, 1.85, 0.1),
-            ));
-            for eye in [-0.15, 0.15] {
-                pieces.push(parts.part(Sphere::new(0.06), Color::BLACK, at(eye, 1.45, -0.33)));
+            for eye in [-0.2, 0.2] {
+                pieces.push(parts.part(Sphere::new(0.07), Color::BLACK, at(eye, 1.6, -0.78)));
             }
         }
-        Body::Can => {
+        Body::Chalk => {
             pieces.push(parts.part(
                 Cuboid::new(1.5, 0.3, 2.2),
                 Color::srgb(0.3, 0.3, 0.32),
                 at(0.0, 0.5, 0.0),
             ));
-            let gel = Transform::from_xyz(0.0, 1.05, 0.1)
-                .with_rotation(Quat::from_rotation_x(std::f32::consts::FRAC_PI_2));
-            pieces.push(parts.part(Cylinder::new(0.6, 1.6), racer.kart, gel));
-            for i in 0..4 {
-                let z = -0.55 + i as f32 * 0.37;
-                let ridge = Transform::from_xyz(0.0, 1.05, 0.1 + z)
-                    .with_rotation(Quat::from_rotation_x(std::f32::consts::FRAC_PI_2));
-                pieces.push(parts.part(Torus::new(0.58, 0.66), racer.kart, ridge));
-            }
+            // A big cube of blue chalk with the worn dimple on top
+            pieces.push(parts.part(Cuboid::new(1.3, 1.2, 1.3), racer.kart, at(0.0, 1.2, 0.1)));
             pieces.push(parts.part(
-                Cylinder::new(0.66, 0.4),
+                Cylinder::new(0.45, 0.08),
                 racer.accent,
-                at(0.0, 1.05, 1.0).with_rotation(Quat::from_rotation_x(1.57)),
+                at(0.0, 1.8, 0.1),
             ));
-            for eye in [-0.2, 0.2] {
-                pieces.push(parts.part(Sphere::new(0.08), Color::WHITE, at(eye, 1.2, -0.72)));
-                pieces.push(parts.part(Sphere::new(0.04), Color::BLACK, at(eye, 1.2, -0.79)));
+            for eye in [-0.25, 0.25] {
+                pieces.push(parts.part(Sphere::new(0.1), Color::WHITE, at(eye, 1.4, -0.58)));
+                pieces.push(parts.part(Sphere::new(0.05), Color::BLACK, at(eye, 1.4, -0.67)));
             }
         }
-        Body::Corn => {
+        Body::Rack => {
             pieces.push(parts.part(Cuboid::new(1.4, 0.3, 2.1), racer.accent, at(0.0, 0.5, 0.0)));
-            pieces.push(parts.part(
-                Capsule3d::new(0.42, 1.0),
-                racer.kart,
-                at(0.0, 1.35, 0.2).with_rotation(Quat::from_rotation_x(0.35)),
-            ));
-            // Kernel bumps
-            for i in 0..6 {
-                for j in 0..6 {
-                    let a = j as f32 * std::f32::consts::TAU / 6.0 + i as f32 * 0.5;
-                    let y = -0.5 + i as f32 * 0.2;
-                    let kernel = Transform::from_xyz(0.0, 1.35, 0.2)
-                        .with_rotation(Quat::from_rotation_x(0.35))
-                        * Transform::from_xyz(a.cos() * 0.42, y, a.sin() * 0.42);
-                    pieces.push(parts.part(
-                        Sphere::new(0.09),
-                        Color::srgb(0.99, 0.88, 0.35),
-                        kernel,
-                    ));
+            // Fifteen balls, minus a few: a rack triangle on wheels
+            let colors = [
+                Color::srgb(0.95, 0.80, 0.15),
+                Color::srgb(0.15, 0.30, 0.80),
+                Color::srgb(0.80, 0.15, 0.15),
+                Color::srgb(0.45, 0.15, 0.55),
+                Color::srgb(0.90, 0.45, 0.10),
+                Color::srgb(0.10, 0.50, 0.25),
+            ];
+            let mut n = 0;
+            for row in 0..4 {
+                for col in 0..=row {
+                    let x = (col as f32 - row as f32 / 2.0) * 0.52;
+                    let z = -0.7 + row as f32 * 0.5;
+                    pieces.push(parts.part(Sphere::new(0.25), colors[n % 6], at(x, 0.9, z)));
+                    n += 1;
                 }
             }
+            // Wooden triangle frame, one bar per side of the rack
+            pieces.push(parts.part(Cuboid::new(2.2, 0.18, 0.12), racer.kart, at(0.0, 0.85, 1.05)));
             for side in [-1.0f32, 1.0] {
-                let husk = Transform::from_xyz(side * 0.5, 1.0, 0.6)
-                    .with_rotation(Quat::from_rotation_z(side * -0.7) * Quat::from_rotation_x(0.6))
-                    .with_scale(Vec3::new(1.0, 1.0, 0.2));
-                pieces.push(parts.part(Capsule3d::new(0.25, 1.1), racer.accent, husk));
+                pieces.push(parts.part(
+                    Cuboid::new(0.12, 0.18, 2.2),
+                    racer.kart,
+                    at(side * 0.95, 0.85, 0.15).with_rotation(Quat::from_rotation_y(side * 0.45)),
+                ));
             }
+            // The driver peeks over the top row
+            pieces.push(parts.part(Sphere::new(0.4), Color::WHITE, at(0.0, 1.45, -0.1)));
             for eye in [-0.15, 0.15] {
-                pieces.push(parts.part(Sphere::new(0.07), Color::BLACK, at(eye, 1.75, -0.2)));
+                pieces.push(parts.part(Sphere::new(0.07), Color::BLACK, at(eye, 1.55, -0.45)));
             }
         }
-        Body::Potato => {
+        Body::Hustler => {
             pieces.push(parts.part(
                 Cuboid::new(1.5, 0.35, 2.2),
-                Color::srgb(0.35, 0.22, 0.12),
+                Color::srgb(0.12, 0.10, 0.10),
                 at(0.0, 0.5, 0.0),
             ));
             pieces.push(parts.part(
@@ -371,48 +349,47 @@ pub fn spawn_model(
                 racer.kart,
                 at(0.0, 1.25, 0.1).with_scale(Vec3::new(1.0, 1.15, 0.9)),
             ));
-            // Pilgrim hat with buckle
-            pieces.push(parts.part(Cylinder::new(0.75, 0.06), racer.accent, at(0.0, 1.98, 0.1)));
-            pieces.push(parts.part(Cylinder::new(0.42, 0.65), racer.accent, at(0.0, 2.3, 0.1)));
+            // Pool-hall fedora with a red band
+            pieces.push(parts.part(Cylinder::new(0.85, 0.06), racer.accent, at(0.0, 1.9, 0.1)));
+            pieces.push(parts.part(Cylinder::new(0.45, 0.5), racer.accent, at(0.0, 2.15, 0.1)));
             pieces.push(parts.part(
-                Cylinder::new(0.43, 0.12),
-                Color::srgb(0.95, 0.93, 0.9),
-                at(0.0, 2.08, 0.1),
+                Cylinder::new(0.46, 0.12),
+                Color::srgb(0.70, 0.10, 0.12),
+                at(0.0, 2.0, 0.1),
             ));
+            // Shades
+            pieces.push(parts.part(Cuboid::new(0.8, 0.14, 0.06), Color::BLACK, at(0.0, 1.5, -0.6)));
+            // A cue over the shoulder
             pieces.push(parts.part(
-                Cuboid::new(0.22, 0.16, 0.05),
-                Color::srgb(0.95, 0.78, 0.2),
-                at(0.0, 2.08, -0.33),
+                Capsule3d::new(0.05, 2.4),
+                Color::srgb(0.75, 0.50, 0.25),
+                at(0.7, 1.6, 0.4).with_rotation(Quat::from_rotation_z(-0.3)),
             ));
-            for eye in [-0.2, 0.2] {
-                pieces.push(parts.part(Sphere::new(0.08), Color::WHITE, at(eye, 1.5, -0.52)));
-                pieces.push(parts.part(Sphere::new(0.04), Color::BLACK, at(eye, 1.5, -0.59)));
-            }
         }
-        Body::Casserole => {
+        Body::Table => {
+            // A little pool table: wooden rails, a felt top, diamond sights and a ball pilot
             pieces.push(parts.part(
                 Cuboid::new(1.7, 0.6, 2.4),
-                Color::srgb(0.92, 0.92, 0.95),
+                Color::srgb(0.35, 0.18, 0.08),
                 at(0.0, 0.7, 0.0),
             ));
             pieces.push(parts.part(Cuboid::new(1.5, 0.2, 2.2), racer.kart, at(0.0, 0.95, 0.0)));
-            let mut seed = 7u32;
-            for _ in 0..14 {
-                seed = seed.wrapping_mul(1_103_515_245).wrapping_add(12345);
-                let x = (seed >> 8) as f32 / 16_777_216.0 * 1.2 - 0.6;
-                seed = seed.wrapping_mul(1_103_515_245).wrapping_add(12345);
-                let z = (seed >> 8) as f32 / 16_777_216.0 * 1.8 - 0.9;
-                pieces.push(parts.part(Cylinder::new(0.15, 0.18), racer.accent, at(x, 1.12, z)));
+            for i in 0..5 {
+                let z = -0.9 + i as f32 * 0.45;
+                for x in [-0.8, 0.8] {
+                    pieces.push(parts.part(
+                        Cuboid::new(0.1, 0.06, 0.1),
+                        racer.accent,
+                        at(x, 1.07, z).with_rotation(Quat::from_rotation_y(0.78)),
+                    ));
+                }
             }
-            // A toasted marshmallow pilot
-            pieces.push(parts.part(Cylinder::new(0.38, 0.7), racer.accent, at(0.0, 1.5, 0.3)));
-            pieces.push(parts.part(
-                Cylinder::new(0.39, 0.12),
-                Color::srgb(0.75, 0.50, 0.25),
-                at(0.0, 1.85, 0.3),
-            ));
+            for (x, z) in [(-0.75, -1.05), (0.75, -1.05), (-0.75, 1.05), (0.75, 1.05)] {
+                pieces.push(parts.part(Cylinder::new(0.14, 0.05), Color::BLACK, at(x, 1.07, z)));
+            }
+            pieces.push(parts.part(Sphere::new(0.4), racer.accent, at(0.0, 1.5, 0.3)));
             for eye in [-0.12, 0.12] {
-                pieces.push(parts.part(Sphere::new(0.06), Color::BLACK, at(eye, 1.6, -0.07)));
+                pieces.push(parts.part(Sphere::new(0.06), Color::BLACK, at(eye, 1.58, -0.04)));
             }
         }
         Body::Cat => {
@@ -420,7 +397,7 @@ pub fn spawn_model(
             let dark = Color::srgb(0.30, 0.30, 0.34);
             let white = Color::srgb(0.97, 0.97, 0.97);
             let pink = Color::srgb(0.95, 0.55, 0.62);
-            // A licked-clean turkey platter
+            // A ball-return tray
             pieces.push(parts.part(
                 Cylinder::new(1.1, 0.18),
                 racer.kart,

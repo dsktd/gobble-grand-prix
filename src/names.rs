@@ -47,7 +47,7 @@ pub fn sanitize(raw: &str) -> Option<String> {
     (!clean.is_empty()).then_some(clean)
 }
 
-const THEMED: [&str; 4] = ["Gravy", "Drumstick", "Biscuit", "Cobbler"];
+const THEMED: [&str; 4] = ["Chalk", "Cue", "Rack", "Scratch"];
 
 fn fallback(slot: usize) -> String {
     format!("{} {}", THEMED[slot % THEMED.len()], slot + 1)

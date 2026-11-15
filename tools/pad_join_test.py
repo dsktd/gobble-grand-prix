@@ -67,7 +67,7 @@ RACE_CONTROLS = "#gas, #brake, #drift, #item"
 ENGINES = os.environ.get("PAD_ENGINES", "chromium webkit").split()
 SEAT = {"t": "seat", "p": 2, "color": "#4fa3e0", "name": "Cal"}
 LONG_SEAT = {"t": "seat", "p": 4, "color": "#b3203c", "name": "Wwwwwwwwwwww"}
-RACERS = ["Tom Gobbler", "Patty Crust", "Cranston Can", "Kernel Cob", "Elder Spud", "Marsha Mallow"]
+RACERS = ["Eight Ball Eddie", "Stripe Sally", "Chalky Blue", "Rack Rita", "Hustler Hank", "Felt Felicia"]
 PICK = {"t": "racers", "pick": 2, "locked": False, "list": RACERS}
 
 
