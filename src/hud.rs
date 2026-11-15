@@ -284,7 +284,7 @@ fn spawn(
                             Size::LABEL * k,
                             12.0 * k,
                             Weight::Bold,
-                            Tone::BROWN_900,
+                            Tone::FELT_900,
                             176.0 * k,
                             1,
                         ));
@@ -348,7 +348,7 @@ fn spawn(
                             "",
                             Size::HUD_PLACE * k,
                             Weight::Bold,
-                            Tone::PUMPKIN,
+                            Tone::BRASS,
                             60.0 * k,
                             1,
                         ),
@@ -357,7 +357,7 @@ fn spawn(
                     chip.spawn((
                         Seat(slot),
                         Part::Suffix,
-                        fit_text("", Size::H2 * k, Weight::Bold, Tone::PUMPKIN, 60.0 * k, 1),
+                        fit_text("", Size::H2 * k, Weight::Bold, Tone::BRASS, 60.0 * k, 1),
                         place_text(k, 72.0, 18.0, 60.0),
                     ));
                     chip.spawn((
@@ -449,7 +449,7 @@ fn spawn(
                                         height: percent(100),
                                         ..default()
                                     },
-                                    BackgroundColor(Tone::BROWN_900),
+                                    BackgroundColor(Tone::FELT_900),
                                 ));
                             }
                         });
@@ -472,7 +472,7 @@ fn spawn(
                     row_gap: px(Space::XS),
                     ..default()
                 },
-                BackgroundColor(Tone::BROWN_900),
+                BackgroundColor(Tone::FELT_900),
                 ChildOf(hud),
             ))
             .with_children(|panel| {
@@ -480,7 +480,7 @@ fn spawn(
                     "Standings",
                     Size::H2,
                     Weight::Bold,
-                    Tone::PUMPKIN,
+                    Tone::BRASS,
                     500.0,
                     1,
                 ));
@@ -509,13 +509,13 @@ fn spawn(
             root.spawn((
                 Banner,
                 shadowed(),
-                fit_text("", Size::BANNER, Weight::Bold, Tone::PUMPKIN, 1000.0, 1),
+                fit_text("", Size::BANNER, Weight::Bold, Tone::BRASS, 1000.0, 1),
             ));
         });
 
     commands.spawn((
         Board,
-        BackgroundColor(Tone::BROWN_900.with_alpha(0.98)),
+        BackgroundColor(Tone::FELT_900.with_alpha(0.98)),
         Node {
             position_type: PositionType::Absolute,
             width: percent(100),
@@ -596,8 +596,8 @@ fn drift(
         let tier = kart.drift.map_or(0, |d| d.tier());
         let stage = match tier {
             0 => Tone::CREAM_100,
-            1 => Tone::PUMPKIN,
-            _ => Tone::CRANBERRY,
+            1 => Tone::BRASS,
+            _ => Tone::BALL_RED,
         };
         match part {
             Part::DriftMeter => {
@@ -639,7 +639,7 @@ fn banner(
         _ if time.is_paused() => "PAUSED".to_string(),
         Phase::Countdown if clock.countdown <= 3.0 => format!("{}", clock.countdown.ceil() as u32),
         Phase::Countdown => String::new(),
-        Phase::Running if clock.time < 1.2 => "GOBBLE!".to_string(),
+        Phase::Running if clock.time < 1.2 => "BREAK!".to_string(),
         Phase::Running if finished => "FINISH!".to_string(),
         _ => String::new(),
     };
@@ -775,12 +775,12 @@ pub(crate) fn spawn_results(
                     ));
                     for (i, row) in rows.iter().enumerate() {
                         let (fill, ink) = if row.mine {
-                            (Tone::PUMPKIN, Tone::BROWN_900)
+                            (Tone::BRASS, Tone::FELT_900)
                         } else {
-                            (Tone::BROWN_800, Tone::CREAM_100)
+                            (Tone::FELT_800, Tone::CREAM_100)
                         };
                         let place_ink = if row.place == 1 && !row.mine {
-                            Tone::PUMPKIN
+                            Tone::BRASS
                         } else {
                             ink
                         };

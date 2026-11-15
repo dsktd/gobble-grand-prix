@@ -40,27 +40,27 @@ pub struct Tone;
 // The design tokens are a palette: entries stay even when nothing uses them yet.
 #[allow(dead_code)]
 impl Tone {
-    pub const BROWN_900: Color = Color::srgb_u8(0x2A, 0x17, 0x0E);
-    pub const BROWN_800: Color = Color::srgb_u8(0x3E, 0x23, 0x16);
-    pub const BROWN_700: Color = Color::srgb_u8(0x5B, 0x34, 0x21);
-    pub const CRANBERRY: Color = Color::srgb_u8(0xB3, 0x20, 0x3C);
-    pub const PUMPKIN: Color = Color::srgb_u8(0xF2, 0x8C, 0x28);
+    pub const FELT_900: Color = Color::srgb_u8(0x0B, 0x25, 0x1A);
+    pub const FELT_800: Color = Color::srgb_u8(0x12, 0x3A, 0x28);
+    pub const FELT_700: Color = Color::srgb_u8(0x1E, 0x58, 0x3B);
+    pub const BALL_RED: Color = Color::srgb_u8(0xB3, 0x20, 0x3C);
+    pub const BRASS: Color = Color::srgb_u8(0xF2, 0xC2, 0x3A);
     pub const CREAM_100: Color = Color::srgb_u8(0xFF, 0xF4, 0xE0);
     pub const CREAM_300: Color = Color::srgb_u8(0xD9, 0xC3, 0xA0);
-    /// HUD chip background: brown/800 at 0.85.
+    /// HUD chip background: felt/800 at 0.85.
     pub const CHIP: Color = Color::srgba(
-        0x3E as f32 / 255.0,
-        0x23 as f32 / 255.0,
-        0x16 as f32 / 255.0,
+        0x12 as f32 / 255.0,
+        0x3A as f32 / 255.0,
+        0x28 as f32 / 255.0,
         0.85,
     );
 
     // Older names, kept while screens move over to the spec
-    pub const GOLD: Color = Self::PUMPKIN;
+    pub const GOLD: Color = Self::BRASS;
     pub const CREAM: Color = Self::CREAM_100;
     pub const DIM: Color = Self::CREAM_300;
     pub const PANEL: Color = Self::CHIP;
-    pub const MENU_BG: Color = Self::BROWN_900;
+    pub const MENU_BG: Color = Self::FELT_900;
 }
 
 /// Type scale tokens (px).
@@ -550,7 +550,7 @@ pub fn bar(
                     border_radius: pill(8.0),
                     ..boxed(label + 4.0, 8.0, bar_track(width), 16.0)
                 },
-                BackgroundColor(Tone::BROWN_700),
+                BackgroundColor(Tone::FELT_700),
             ));
             bar.spawn(fill);
         });
@@ -576,7 +576,7 @@ pub fn hint_bar(
                 border: UiRect::top(px(2)),
                 ..default()
             },
-            BackgroundColor(Tone::BROWN_900.with_alpha(0.9)),
+            BackgroundColor(Tone::FELT_900.with_alpha(0.9)),
             BorderColor::all(Tone::CREAM_300.with_alpha(0.3)),
         ))
         .with_children(|bar| {
@@ -634,9 +634,9 @@ pub fn prompt(
 /// Each seat's colour, shared by its HUD badge and its phone page.
 pub const fn seat_color(slot: usize) -> Color {
     match slot {
-        0 => Tone::PUMPKIN,
+        0 => Tone::BRASS,
         1 => Color::srgb_u8(0x4F, 0xA3, 0xE0),
         2 => Color::srgb_u8(0x6C, 0xC2, 0x4A),
-        _ => Tone::CRANBERRY,
+        _ => Tone::BALL_RED,
     }
 }

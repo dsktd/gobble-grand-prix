@@ -137,11 +137,11 @@ pub fn art(
             (a * 255.0) as u8,
         ]
     };
-    let void_a = shade(Tone::BROWN_900, 0.75);
-    let void_b = shade(Tone::BROWN_900, 0.45);
+    let void_a = shade(Tone::FELT_900, 0.75);
+    let void_b = shade(Tone::FELT_900, 0.45);
     let road = shade(Tone::CREAM_300, 0.95);
     let cut = shade(Tone::CREAM_300, 0.45);
-    let edge = shade(Tone::BROWN_900, 1.0);
+    let edge = shade(Tone::FELT_900, 1.0);
     let deck = shade(Tone::CREAM_100, 1.0);
     let mut data = vec![0u8; w * h * 4];
     for y in 0..h {
@@ -163,7 +163,7 @@ pub fn art(
     if let [a, b, ..] = track.points[..] {
         let dir = (b - a).normalize_or_zero();
         let side = dir.perp();
-        let line = shade(Tone::CRANBERRY, 1.0);
+        let line = shade(Tone::BALL_RED, 1.0);
         for i in -10..=10 {
             for j in -1..=1 {
                 let world =
@@ -250,7 +250,7 @@ pub fn spawn(
     };
     chip.overflow = Overflow::clip();
     parent
-        .spawn((chip, BackgroundColor(Tone::BROWN_800.with_alpha(0.7))))
+        .spawn((chip, BackgroundColor(Tone::FELT_800.with_alpha(0.7))))
         .with_children(|chip| {
             chip.spawn((
                 ImageNode::new(art.clone()),
@@ -270,7 +270,7 @@ pub fn spawn(
                             seat,
                             kind: Kind::Crate(i),
                         },
-                        dot(k, 6.0, Tone::PUMPKIN, 0.0),
+                        dot(k, 6.0, Tone::BRASS, 0.0),
                     ));
                 }
                 for i in 0..SLICKS {
@@ -279,7 +279,7 @@ pub fn spawn(
                             seat,
                             kind: Kind::Slick(i),
                         },
-                        dot(k, 10.0, Tone::BROWN_700, 0.0),
+                        dot(k, 10.0, Tone::FELT_700, 0.0),
                     ));
                 }
                 for i in 0..BERRIES {
@@ -288,7 +288,7 @@ pub fn spawn(
                             seat,
                             kind: Kind::Berry(i),
                         },
-                        dot(k, 6.0, Tone::CRANBERRY, 0.0),
+                        dot(k, 6.0, Tone::BALL_RED, 0.0),
                     ));
                 }
                 for (racer, look) in ROSTER.iter().enumerate() {
@@ -353,9 +353,9 @@ fn dots(
                 };
                 let pos = kart.pos;
                 let (scale, color, edge, layer) = match human {
-                    Some(h) if h.0 == dot.seat => (1.0, Tone::PUMPKIN, Tone::BROWN_900, 3),
+                    Some(h) if h.0 == dot.seat => (1.0, Tone::BRASS, Tone::FELT_900, 3),
                     Some(h) => (0.9, seat_color(h.0), Tone::CREAM_100, 2),
-                    None => (0.75, ROSTER[racer].kart, Tone::BROWN_900, 1),
+                    None => (0.75, ROSTER[racer].kart, Tone::FELT_900, 1),
                 };
                 if fill.0 != color {
                     fill.0 = color;
