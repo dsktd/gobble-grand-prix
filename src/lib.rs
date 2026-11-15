@@ -2,6 +2,7 @@
 
 mod attract;
 mod audio;
+mod bench;
 mod camera;
 mod cpu;
 mod hud;
@@ -14,6 +15,7 @@ mod menu;
 mod minimap;
 mod music;
 mod names;
+mod options_file;
 mod phone;
 mod prompts;
 mod race;
@@ -24,6 +26,7 @@ mod style;
 mod track;
 
 use bevy::prelude::*;
+use serde::{Deserialize, Serialize};
 
 pub(crate) mod prelude {
     pub use super::GameState;
@@ -84,7 +87,8 @@ impl Default for Setup {
 }
 
 /// Player-chosen settings from the options menu.
-#[derive(Resource, Copy, Clone, Debug)]
+#[derive(Resource, Copy, Clone, Debug, Serialize, Deserialize)]
+#[serde(default)]
 pub struct Options {
     /// 0 to 10.
     pub volume: u8,
@@ -100,7 +104,7 @@ pub struct Options {
 }
 
 /// How two seats share the window. Three and four seats always use the 2x2 grid.
-#[derive(Copy, Clone, Debug, Default, Eq, PartialEq)]
+#[derive(Copy, Clone, Debug, Default, Eq, PartialEq, Serialize, Deserialize)]
 pub enum Split {
     #[default]
     TopBottom,
@@ -136,7 +140,8 @@ impl Default for Options {
 pub fn plugin(app: &mut App) {
     app.init_state::<GameState>();
     app.init_resource::<Setup>();
-    app.init_resource::<Options>();
+    app.insert_resource(options_file::load());
+    app.add_systems(Update, options_file::autosave);
     app.add_plugins((
         attract::plugin,
         audio::plugin,
@@ -158,6 +163,7 @@ pub fn plugin(app: &mut App) {
         scenery::plugin,
         prompts::plugin,
         shots::plugin,
+        bench::plugin,
         style::plugin,
         track::plugin,
     ));
