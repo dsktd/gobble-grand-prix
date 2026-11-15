@@ -1,8 +1,9 @@
 //! Seeded random tracks: a loop around a centre, bent by a mix of corner kinds.
 //!
-//! Control points sit at increasing angles around the origin, so the loop starts out
-//! free of crossings; hairpins, chicanes, esses, sweepers and straights then push them
-//! in, out or onto a line. Every candidate is checked for curves the karts cannot make
+//! Control points sit at increasing angles around the origin, on an outline of random
+//! lobes and a random stretch, so the loop starts out free of crossings but far from a
+//! ring; chicanes, esses, sweepers and straights then push them in, out or onto a line,
+//! and hairpins cut a narrow U into the outline. Most seeds get at least one. Every candidate is checked for curves the karts cannot make
 //! and for legs of road that come too close, and the next attempt is tried until one
 //! passes. The same seed always gives the same track.
 
@@ -19,7 +20,7 @@ use super::centerline;
 pub const MIN_RADIUS: f32 = 13.0;
 /// Free space kept between two legs of road beyond their walls.
 const GAP: f32 = 4.0;
-const LENGTH: std::ops::Range<f32> = 650.0..1300.0;
+const LENGTH: std::ops::Range<f32> = 650.0..1500.0;
 /// Steepest grade of a hill.
 pub const MAX_GRADE: f32 = 0.16;
 /// Steepest cross-slope of a banked corner.
@@ -96,10 +97,16 @@ fn attempt_track(
     let half_width = dice.range(7.5..9.0);
     // The seed alone picks the kind, so a figure eight keeps trying as one
     let eight = Dice(u64::from(seed)).unit() < 0.3;
+    // Most seeds get a hairpin, so it takes a layout that managed to cut one
+    let hairpin = Dice(u64::from(seed) ^ 0x5EED).unit() < 0.7;
     let control = if eight {
         figure_eight(&mut dice)
     } else {
-        layout(&mut dice)
+        let (control, cut) = layout(&mut dice);
+        if hairpin && cut == 0 {
+            return None;
+        }
+        control
     };
     let (points, dists, length) = centerline(&control);
     let barrier = half_width + 5.0;
@@ -137,7 +144,7 @@ fn attempt_track(
     track.landmark = landmark(&track, 22.0);
     track.banks = banks(&track.points, dice.range(0.6..1.0));
     jumps(&mut dice, &mut track, &zone);
-    if dice.unit() < 0.5 {
+    if dice.unit() < 0.85 {
         track.pipes = pipes(&track, &zone);
     }
     level(&track, &zone).then_some(track)
@@ -226,37 +233,59 @@ fn zone(track: &Track) -> Vec<bool> {
 }
 
 /// Control points of one candidate loop.
-fn layout(dice: &mut Dice) -> Vec<Vec2> {
+fn layout(dice: &mut Dice) -> (Vec<Vec2>, usize) {
     let n = dice.range(14.0..22.0) as usize;
-    let base = dice.range(95.0..135.0);
-    let mut radius = vec![base; n];
-    let mut angle: Vec<f32> = (0..n)
-        .map(|i| (i as f32 + dice.range(-0.25..0.25)) * TAU / n as f32)
+    let base = dice.range(100.0..170.0);
+    // A few lobes of random size and phase make the outline lopsided: bays, peninsulas
+    // and doglegs rather than a ring
+    let lobes: Vec<(f32, f32, f32)> = (2..=5)
+        .map(|k| {
+            (
+                k as f32,
+                dice.range(0.0..TAU),
+                dice.range(0.0..0.6) / (k as f32 * 0.5),
+            )
+        })
+        .collect();
+    let mut radius: Vec<f32> = (0..n)
+        .map(|i| {
+            let t = i as f32 * TAU / n as f32;
+            let wave: f32 = lobes.iter().map(|(k, ph, a)| a * (k * t + ph).sin()).sum();
+            base * (1.0 + wave).clamp(0.3, 1.7)
+        })
+        .collect();
+    let angle: Vec<f32> = (0..n)
+        .map(|i| (i as f32 + dice.range(-0.3..0.3)) * TAU / n as f32)
         .collect();
     let mut straights = Vec::new();
+    let mut hairpins = Vec::new();
 
     let mut i = 0;
     while i < n {
         let corner = dice.pick(&[
             Corner::Hairpin,
+            Corner::Hairpin,
             Corner::Chicane,
-            Corner::Esses,
             Corner::Esses,
             Corner::Sweeper,
             Corner::Straight,
             Corner::Straight,
             Corner::Plain,
+            Corner::Plain,
+            Corner::Plain,
         ]);
+        // Two hairpins make a lap; more and few layouts leave room for all of them
+        let corner = match corner {
+            Corner::Hairpin if hairpins.len() >= 2 => Corner::Plain,
+            c => c,
+        };
         if i + corner.span() > n {
             break;
         }
         match corner {
             Corner::Hairpin => {
-                // Dive deep towards the centre and back out on close angles
-                radius[i + 1] *= dice.range(0.35..0.5);
-                let mid = angle[i + 1];
-                angle[i] = mid - (mid - angle[i]) * 0.6;
-                angle[i + 2] = mid + (angle[i + 2] - mid) * 0.6;
+                // Dives deep towards the centre and back out, once the points are placed
+                hairpins.push((i, dice.range(0.6..0.85)));
             }
             Corner::Chicane => {
                 let kick = dice.range(10.0..16.0) * dice.pick(&[-1.0, 1.0]);
@@ -281,7 +310,7 @@ fn layout(dice: &mut Dice) -> Vec<Vec2> {
         i += corner.span();
     }
 
-    let stretch = Vec2::new(dice.range(0.75..1.3), 1.0);
+    let stretch = Vec2::new(dice.range(0.55..1.5), 1.0);
     let turn = Vec2::from_angle(dice.range(0.0..TAU));
     let mut points: Vec<Vec2> = (0..n)
         .map(|i| turn.rotate(Vec2::from_angle(angle[i]) * radius[i] * stretch))
@@ -293,7 +322,97 @@ fn layout(dice: &mut Dice) -> Vec<Vec2> {
         points[i + 1] = a.lerp(b, 1.0 / 3.0);
         points[i + 2] = a.lerp(b, 2.0 / 3.0);
     }
-    start_on_straight(&points)
+    let (points, cut) = with_hairpins(points, &hairpins);
+    (start_on_straight(&points), cut)
+}
+
+/// Cut a narrow U into the loop at each `(i, depth)`: between points `i` and `i + 2`,
+/// replacing the one in between, a pair of straight legs dive towards the centre `depth`
+/// of the way and meet in a half circle. The curve through the points only keeps a small
+/// radius if they are evenly spaced, so the U is laid out in dense points on true arcs and
+/// lines, and the spacing grows again over the road on either side.
+fn with_hairpins(
+    points: Vec<Vec2>,
+    hairpins: &[(usize, f32)],
+) -> (Vec<Vec2>, usize) {
+    const ROUND: f32 = 24.0;
+    let n = points.len();
+    let quarter = std::f32::consts::FRAC_PI_2;
+    // Spacing halves towards the U: points this far from it, on its axis
+    let lead = [40.0, 20.0, 10.0];
+    let mut out = Vec::new();
+    let mut cuts = 0;
+    let mut skip = false;
+    let mut after: Option<(Vec2, Vec2, Vec2)> = None;
+    for (i, p) in points.iter().enumerate() {
+        if std::mem::take(&mut skip) {
+            continue;
+        }
+        let next = points[(i + 2) % n];
+        let cut = hairpins.iter().find(|(h, _)| *h == i && i + 3 < n);
+        let gap = p.distance(next);
+        let w = gap * 0.5 - ROUND;
+        let mid = p.midpoint(next);
+        let along = (next - *p) / gap;
+        let inward = along.perp() * along.perp().dot(-mid).signum();
+        let rise = cut.map_or(0.0, |(_, depth)| (-mid).dot(inward) * depth - w);
+        // The road must already run about the way the U opens, or it kinks on the way in
+        let road_in = (*p - points[(i + n - 1) % n]).normalize_or_zero();
+        let road_out = (points[(i + 3) % n] - next).normalize_or_zero();
+        let cut = cut.filter(|_| {
+            rise >= ROUND + 10.0
+                && w >= 17.0
+                && road_in.dot(along) > 0.4
+                && road_out.dot(along) > 0.4
+        });
+        // Turn from the road's own heading to the U's over the lead points
+        if cut.is_some() {
+            let road = (*p - points[(i + n - 1) % n]).normalize_or_zero();
+            out.extend(lead.iter().enumerate().map(|(k, d)| {
+                let t = (k + 1) as f32 / (lead.len() + 1) as f32;
+                *p - road.lerp(along, t).normalize_or_zero() * *d
+            }));
+        }
+        out.push(*p);
+        if let Some((end, along, road)) = after.take() {
+            out.extend(lead.iter().enumerate().rev().map(|(k, d)| {
+                let t = (k + 1) as f32 / (lead.len() + 1) as f32;
+                end + road.lerp(along, t).normalize_or_zero() * *d
+            }));
+        }
+        if cut.is_none() {
+            continue;
+        }
+        cuts += 1;
+        skip = true;
+        after = Some((
+            next,
+            along,
+            (points[(i + 3) % n] - next).normalize_or_zero(),
+        ));
+        let at = |x: f32, y: f32| mid + along * x + inward * y;
+        let arc = |cx: f32, cy: f32, r: f32, from: f32, to: f32| -> Vec<Vec2> {
+            let steps = (r * (to - from).abs() / 6.0).ceil().max(1.0) as usize;
+            (1..steps)
+                .map(|s| {
+                    let t = from + (to - from) * s as f32 / steps as f32;
+                    at(cx + r * t.cos(), cy + r * t.sin())
+                })
+                .collect()
+        };
+        let leg = |x: f32, from: f32, to: f32| -> Vec<Vec2> {
+            let steps = ((to - from).abs() / 10.0).ceil().max(1.0) as usize;
+            (0..=steps)
+                .map(|s| at(x, from + (to - from) * s as f32 / steps as f32))
+                .collect()
+        };
+        out.extend(arc(-w - ROUND, ROUND, ROUND, -quarter, 0.0));
+        out.extend(leg(-w, ROUND, rise));
+        out.extend(arc(0.0, rise, w, 2.0 * quarter, 0.0));
+        out.extend(leg(w, rise, ROUND));
+        out.extend(arc(w + ROUND, ROUND, ROUND, 2.0 * quarter, 3.0 * quarter));
+    }
+    (out, cuts)
 }
 
 /// The same loop starting halfway along its longest leg, so the grid has a straight.
@@ -311,7 +430,8 @@ fn start_on_straight(points: &[Vec2]) -> Vec<Vec2> {
     ordered
 }
 
-/// Road heights: a few hills and dips, often a sharp crest, flat around the start line.
+/// Road heights: a climb ahead of the start, a few more hills and dips, often a sharp
+/// crest, flat around the start line.
 fn hills(
     dice: &mut Dice,
     dists: &[f32],
@@ -320,10 +440,16 @@ fn hills(
     // (centre, half width, height)
     let mut bumps: Vec<(f32, f32, f32)> = (0..dice.range(2.0..5.0) as usize)
         .map(|_| {
-            let height = dice.range(2.0..9.0) * dice.pick(&[-1.0, 1.0, 1.0]);
-            (dice.range(0.0..length), dice.range(50.0..140.0), height)
+            let height = dice.range(3.0..11.0) * dice.pick(&[-1.0, 1.0, 1.0]);
+            (dice.range(0.0..length), dice.range(60.0..150.0), height)
         })
         .collect();
+    // A climb to a crest ahead of the grid, in plain view from the start line
+    bumps.push((
+        dice.range(200.0..270.0),
+        dice.range(90.0..120.0),
+        dice.range(5.0..9.0),
+    ));
     if dice.unit() < 0.7 {
         bumps.push((
             dice.range(0.0..length),
@@ -413,7 +539,7 @@ fn jumps(
     let straight = |i: usize| bend(p[(i + n - 16) % n], p[i], p[(i + 16) % n]);
     let boxes: Vec<f32> = track.boxes.iter().map(|f| f * track.length).collect();
     let mut sites: Vec<f32> = Vec::new();
-    for _ in 0..dice.range(1.0..3.0) as usize {
+    for _ in 0..dice.range(2.0..4.0) as usize {
         let site = (0..n)
             .step_by(4)
             .filter(|i| !zone[*i])
@@ -433,11 +559,11 @@ fn jumps(
             });
         let Some(site) = site else { break };
         // Only fairly straight road; a ramp mid-corner throws karts at the wall
-        if straight((site / Track::STEP) as usize % n) < 60.0 {
+        if straight((site / Track::STEP) as usize % n) < 45.0 {
             break;
         }
         sites.push(site);
-        kicker(track, site, dice.unit() < 0.45);
+        kicker(track, site, dice.unit() < 0.5);
     }
 }
 
@@ -480,7 +606,7 @@ fn pipes(
 ) -> Vec<f32> {
     let n = track.points.len();
     let p = &track.points;
-    let sweep = |i: usize| (25.0..70.0).contains(&bend(p[(i + n - 8) % n], p[i], p[(i + 8) % n]));
+    let sweep = |i: usize| (22.0..110.0).contains(&bend(p[(i + n - 8) % n], p[i], p[(i + 8) % n]));
     let free = |i: usize| {
         let s = track.dists[i];
         let start = s.min(track.length - s) > 60.0;
@@ -506,7 +632,7 @@ fn pipes(
             _ => {}
         }
     }
-    let least = (40.0 / Track::STEP) as usize;
+    let least = (30.0 / Track::STEP) as usize;
     runs.retain(|(a, b)| b - a >= least);
     runs.sort_by_key(|(a, b)| std::cmp::Reverse(b - a));
     let mut pipes = vec![0.0; n];
@@ -670,6 +796,80 @@ fn name(
     format!("{} {}", dice.pick(first), dice.pick(second))
 }
 
+/// Numbers that tell one layout from another.
+#[cfg(test)]
+struct Shape {
+    /// Long side over short side of the track's principal axes.
+    aspect: f32,
+    /// Area of the loop over the area of its convex hull: 1 for a convex loop.
+    solidity: f32,
+    /// Highest minus lowest road.
+    relief: f32,
+    /// Height change over the 300 m after the start line.
+    view: f32,
+    /// Sharp corners (tighter than 30 m radius).
+    turns: usize,
+}
+
+#[cfg(test)]
+fn shape(t: &Track) -> Shape {
+    let n = t.points.len();
+    let p = &t.points;
+    let mean = p.iter().sum::<Vec2>() / n as f32;
+    let (mut xx, mut yy, mut xy) = (0.0, 0.0, 0.0);
+    for q in p {
+        let d = *q - mean;
+        xx += d.x * d.x;
+        yy += d.y * d.y;
+        xy += d.x * d.y;
+    }
+    let tr = xx.midpoint(yy);
+    let det = xx.mul_add(yy, -(xy * xy)).max(0.0);
+    let gap = (tr * tr - det).max(0.0).sqrt();
+    let aspect = ((tr + gap) / (tr - gap).max(1e-3)).sqrt();
+    let area = |poly: &[Vec2]| {
+        (0..poly.len())
+            .map(|i| poly[i].perp_dot(poly[(i + 1) % poly.len()]))
+            .sum::<f32>()
+            .abs()
+            / 2.0
+    };
+    let mut pts: Vec<Vec2> = p.clone();
+    pts.sort_by(|a, b| a.x.total_cmp(&b.x).then(a.y.total_cmp(&b.y)));
+    let mut hull: Vec<Vec2> = Vec::new();
+    for pass in 0..2 {
+        let start = hull.len();
+        for q in &pts {
+            while hull.len() >= start + 2
+                && (hull[hull.len() - 1] - hull[hull.len() - 2]).perp_dot(*q - hull[hull.len() - 1])
+                    <= 0.0
+            {
+                hull.pop();
+            }
+            hull.push(*q);
+        }
+        hull.pop();
+        pts.reverse();
+        let _ = pass;
+    }
+    let hmax = t.heights.iter().copied().fold(f32::MIN, f32::max);
+    let hmin = t.heights.iter().copied().fold(f32::MAX, f32::min);
+    let ahead = (300.0 / Track::STEP) as usize;
+    let view = (0..=ahead)
+        .map(|i| t.heights[i.min(n - 1)])
+        .fold((f32::MAX, f32::MIN), |(lo, hi), h| (lo.min(h), hi.max(h)));
+    let turns = (0..n)
+        .filter(|&i| bend(p[(i + n - 8) % n], p[i], p[(i + 8) % n]) < 30.0)
+        .count();
+    Shape {
+        aspect,
+        solidity: area(p) / area(&hull).max(1.0),
+        relief: hmax - hmin,
+        view: view.1 - view.0,
+        turns,
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
@@ -762,5 +962,58 @@ mod test {
         unique.sort_unstable();
         unique.dedup();
         assert!(unique.len() >= 8, "{lengths:?}");
+    }
+
+    /// Layouts differ in outline: some long and narrow, most with bays and doglegs
+    /// that cut into the loop, none a plain ring.
+    #[test]
+    fn test_layouts_vary() {
+        let shapes: Vec<Shape> = (0..40)
+            .map(track)
+            .filter(|t| t.decks.is_empty())
+            .map(|t| shape(&t))
+            .collect();
+        let count = |f: fn(&Shape) -> bool| shapes.iter().filter(|s| f(s)).count();
+        assert!(count(|s| s.aspect > 1.6) >= 8, "long tracks");
+        assert!(count(|s| s.aspect < 1.3) >= 3, "squat tracks");
+        assert!(count(|s| s.solidity < 0.9) >= shapes.len() / 2, "bays");
+        assert!(count(|s| s.solidity > 0.97) == 0, "a plain ring");
+    }
+
+    /// Most tracks climb: real relief, and a rise in view of the grid.
+    #[test]
+    fn test_elevation() {
+        let shapes: Vec<Shape> = (0..40).map(|s| shape(&track(s))).collect();
+        let count = |f: fn(&Shape) -> bool| shapes.iter().filter(|s| f(s)).count();
+        assert!(count(|s| s.relief >= 8.0) >= 28, "relief");
+        assert!(
+            count(|s| s.view >= 4.0) >= 20,
+            "a hill in view of the start"
+        );
+        assert!(count(|s| s.relief < 4.0) == 0, "a flat track");
+    }
+
+    /// Most tracks have plenty of tight corners: hairpins and the bends around them.
+    #[test]
+    fn test_hairpins() {
+        let tight = (0..40)
+            .map(|s| shape(&track(s)))
+            .filter(|s| s.turns >= 40)
+            .count();
+        assert!(tight >= 20, "{tight} tracks with tight corners");
+    }
+
+    /// Features turn up on most tracks, not just somewhere in the set.
+    #[test]
+    fn test_features_common() {
+        let tracks: Vec<Track> = (0..40).map(track).collect();
+        let count = |f: fn(&Track) -> bool| tracks.iter().filter(|t| f(t)).count();
+        assert!(count(|t| !t.ramps.is_empty()) >= 36, "kickers");
+        assert!(count(|t| !t.gaps.is_empty()) >= 20, "gaps");
+        assert!(
+            count(|t| t.pipes.iter().any(|p| *p > 0.99)) >= 24,
+            "half-pipes"
+        );
+        assert!(count(|t| !t.decks.is_empty()) >= 4, "bridges");
     }
 }
