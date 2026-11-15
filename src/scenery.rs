@@ -491,7 +491,7 @@ pub(super) fn spawn(
     }
 }
 
-/// Chalk dust drifts down and wrap around the first chase camera.
+/// Chalk dust drifts down and wraps around the first chase camera.
 fn fall(
     time: Res<Time>,
     cameras: Query<(&ChaseCam, &Transform), Without<Dust>>,
