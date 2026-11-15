@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """The Pages pad must join a game over iroh from Chromium and WebKit (iOS browsers are all
 WebKit). pad-host stands in for the game; the page is served from a local copy of the site
-(pad/site.sh). Then every screen of the pad is laid out on phone viewports with their safe-area
-insets: nothing may leave the safe area, clip its text, or be a touch target under 56 px.
+(pad/site.sh). Then every screen of the pad is laid out on phone and iPad viewports with their
+safe-area insets: nothing may leave the safe area, clip its text, or be a touch target under 56 px,
+and on tablets the race controls must sit within thumb reach of a bottom corner.
 
     pad_join_test.py <pad-host binary> <site dir> [screenshot dir]
 """
@@ -47,8 +48,21 @@ DEVICES = {
     "iphone-l": ((852, 393), (0, 59, 21, 59)),
     "iphone-p": ((393, 852), (59, 0, 34, 0)),
     "android-l": ((915, 412), (0, 0, 16, 40)),
+    # iPads (Safari): status bar on top, home indicator below; Split View and Stage Manager sizes
+    "ipad-air-p": ((820, 1180), (24, 0, 20, 0)),
+    "ipad-air-l": ((1180, 820), (24, 0, 20, 0)),
+    "ipad-pro-p": ((1024, 1366), (24, 0, 20, 0)),
+    "ipad-pro-l": ((1366, 1024), (24, 0, 20, 0)),
+    "ipad-mini-p": ((744, 1133), (24, 0, 20, 0)),
+    "ipad-split-s": ((375, 1024), (24, 0, 20, 0)),
+    "ipad-split-m": ((507, 1024), (24, 0, 20, 0)),
+    "ipad-split-l": ((690, 1024), (24, 0, 20, 0)),
+    "ipad-stage": ((900, 700), (24, 0, 20, 0)),
 }
 HIT = 56
+# Tablet layout (the page's media query): race controls within REACH px of a bottom corner
+REACH = 260
+RACE_CONTROLS = "#gas, #brake, #drift, #item"
 # CI runs both; PAD_ENGINES=chromium where WebKit cannot start
 ENGINES = os.environ.get("PAD_ENGINES", "chromium webkit").split()
 SEAT = {"t": "seat", "p": 2, "color": "#4fa3e0", "name": "Cal"}
@@ -84,8 +98,9 @@ STATES = [
 ]
 
 # Every visible element must sit inside the safe area; buttons must be big enough and not clip
-CHECK = """([t, r, b, l, hit]) => {
+CHECK = """([t, r, b, l, hit, reach, REACH]) => {
   const W = innerWidth, H = innerHeight, bad = [];
+  const tablet = matchMedia("(min-width: 500px) and (min-height: 600px)").matches;
   const name = (el) => el.id || `${el.tagName.toLowerCase()}.${el.className || ""} "${el.textContent.trim().slice(0, 20)}"`;
   for (const el of document.body.querySelectorAll("*")) {
     if (el.closest("template") || el.classList.contains("safe")) continue;
@@ -98,6 +113,12 @@ CHECK = """([t, r, b, l, hit]) => {
       if (el.scrollWidth > el.clientWidth + 1 || el.scrollHeight > el.clientHeight + 1) bad.push(`${name(el)} clips its text`);
     }
   }
+  if (tablet && document.getElementById("app").dataset.view === "race")
+    for (const el of document.querySelectorAll(reach)) {
+      const box = el.getBoundingClientRect();
+      const dy = H - (box.top + box.height / 2), dx = Math.min(box.left + box.width / 2, W - box.left - box.width / 2);
+      if (Math.max(dx, dy) > REACH) bad.push(`${name(el)} is ${Math.round(Math.max(dx, dy))} px from a bottom corner`);
+    }
   if (!document.fonts.check("600 20px Fredoka")) bad.push("Fredoka not loaded");
   for (const img of document.images) if (img.getBoundingClientRect().width && !img.naturalWidth) bad.push(`glyph ${img.src} missing`);
   return bad;
@@ -122,7 +143,7 @@ async def layout(p, engine, url, shots):
             )
             if shots:
                 await page.screenshot(path=str(shots / f"{state}-{device}-{engine}.png"))
-            for problem in await page.evaluate(CHECK, [t, r, b, l, HIT]):
+            for problem in await page.evaluate(CHECK, [t, r, b, l, HIT, RACE_CONTROLS, REACH]):
                 failures.append(f"{engine} {device} {state}: {problem}")
         await page.close()
     await browser.close()
@@ -157,7 +178,7 @@ async def main(host_bin, site, shots=None):
         page = f"http://127.0.0.1:{server.server_port}/pad/#pin=1234&lan=127.0.0.1:7777"
         for engine in ENGINES:
             problems = await layout(p, engine, page, shots)
-            print(f"{engine}: {len(STATES)} screens x {len(DEVICES)} phones, {len(problems)} layout problems")
+            print(f"{engine}: {len(STATES)} screens x {len(DEVICES)} viewports, {len(problems)} layout problems")
             for problem in problems:
                 print(f"  {problem}")
             failed |= bool(problems)

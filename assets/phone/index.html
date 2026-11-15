@@ -149,6 +149,37 @@
     #bar .chip { padding: 0 12px; }
     #seat { padding: 0 14px 0 12px; gap: 8px; }
   }
+  /* Tablets (iPad, Split View down to ~500 px): the phone layout above is untouched. Controls keep
+     a physical size and sit in the bottom corners within thumb reach; menus use a centred column. */
+  @media (min-width: 500px) and (min-height: 600px) {
+    body { font-size: 26px; }
+    h1 { font-size: 48px; } h2 { font-size: 38px; }
+    .label { font-size: 22px; }
+    .safe { padding: calc(var(--sa-t) + 24px) calc(var(--sa-r) + 24px) calc(var(--sa-b) + 24px) calc(var(--sa-l) + 24px); }
+    #cover > * { max-width: 520px; }
+    #full .panel { max-width: 520px; }
+    #body > #lobby, #body > #pick { inset: 0 auto 0 50%; width: min(100%, 760px); transform: translateX(-50%); }
+    #lobby { justify-content: center; }
+    .keys { --s: 72px; --k: 104px; }
+    .dpad button { font-size: 36px; }
+    #picks, #app[data-view=pick] #picks { grid-template-columns: repeat(3, 1fr); grid-auto-rows: minmax(var(--hit), 88px); }
+    #lock { align-self: center; width: min(100%, 480px); min-height: 72px; }
+    #race { display: block; }
+    #steer { position: absolute; left: 0; bottom: 0; width: min(46%, 520px); height: 268px; }
+    #drive { position: absolute; right: 0; bottom: 0; width: 268px; height: 268px; grid-template: 1fr 1fr / 1fr 1fr; }
+    #item { grid-area: 1 / 1; }
+    #drift { grid-area: 1 / 2; flex-direction: column; gap: 4px; }
+    #brake { grid-area: 2 / 1; }
+    #gas { grid-area: 2 / 2; }
+    #sheet.open { display: flex; align-items: center; justify-content: center; }
+    #sheet .panel { width: min(100%, 760px); height: auto; max-height: 100%; }
+    #sheet .keys { --s: 64px; --k: 80px; }
+  }
+  /* A pointer with hover (iPad with a trackpad or mouse) */
+  @media (hover: hover) and (pointer: fine) {
+    button, .btn { cursor: pointer; }
+    button:hover:not(:disabled):not(.on):not(:active) { filter: brightness(1.15); }
+  }
 </style>
 </head>
 <body>
