@@ -197,7 +197,7 @@ mod test {
     /// make, no spot it gets stuck in.
     #[test]
     fn test_generated_tracks_lap() {
-        for seed in 0..50 {
+        for seed in 0..100 {
             let track = crate::track::generate::track(seed);
             // The first lap starts from a standstill; time the second
             let (laps, walls) = solo(&track, 2, 240.0);

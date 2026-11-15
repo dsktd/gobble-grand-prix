@@ -2,7 +2,7 @@
 # Headless-ish tuning check on the desktop: run the screenshot tour on each track with every kart
 # CPU-driven and print finish times and wall contacts per racer.
 #   tools/laps.sh [binary] [tracks...]   (default target/release/gobble, tracks 0 1 2;
-#   r<seed> races a generated track; `cargo test test_generated_tracks_lap` covers 50 seeds)
+#   r<seed> races a generated track; `cargo test test_generated_tracks_lap` covers 100 seeds)
 set -euo pipefail
 cd "$(dirname "$0")/.."
 bin=${1:-target/release/gobble}
