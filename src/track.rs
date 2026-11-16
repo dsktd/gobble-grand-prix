@@ -25,9 +25,12 @@ pub(super) fn plugin(app: &mut App) {
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub enum Scenery {
-    Farm,
-    Table,
-    Maze,
+    /// Classic green felt in a corner bar.
+    Bar,
+    /// Blue tournament felt under big lamps.
+    Tournament,
+    /// A neon pool hall after midnight.
+    Neon,
 }
 
 #[derive(Copy, Clone, Debug)]
@@ -45,6 +48,8 @@ pub struct Theme {
     pub ambient_brightness: f32,
     pub fog: Color,
     pub fog_end: f32,
+    /// The room's floor, far below the table.
+    pub floor: Color,
 }
 
 /// The looks a random track draws from.
@@ -55,54 +60,57 @@ pub struct Look {
 
 pub const LOOKS: [Look; 3] = [
     Look {
-        scenery: Scenery::Farm,
+        scenery: Scenery::Bar,
         theme: Theme {
-            sky: Color::srgb(0.98, 0.62, 0.36),
-            ground: Color::srgb(0.47, 0.42, 0.18),
-            road: Color::srgb(0.55, 0.40, 0.26),
-            curb_a: Color::srgb(0.93, 0.85, 0.55),
-            curb_b: Color::srgb(0.75, 0.30, 0.10),
-            sun: Color::srgb(1.0, 0.72, 0.45),
-            sun_lux: 9000.0,
-            sun_dir: Vec3::new(0.6, -0.35, 0.7),
-            ambient: Color::srgb(1.0, 0.75, 0.6),
-            ambient_brightness: 600.0,
-            fog: Color::srgb(0.98, 0.66, 0.42),
+            sky: Color::srgb(0.30, 0.18, 0.10),
+            ground: Color::srgb(0.04, 0.27, 0.13),
+            road: Color::srgb(0.10, 0.50, 0.25),
+            curb_a: Color::srgb(0.95, 0.93, 0.85),
+            curb_b: Color::srgb(0.4, 0.2, 0.08),
+            sun: Color::srgb(1.0, 0.85, 0.55),
+            sun_lux: 5500.0,
+            sun_dir: Vec3::new(0.6, -0.5, 0.7),
+            ambient: Color::srgb(1.0, 0.82, 0.6),
+            ambient_brightness: 500.0,
+            fog: Color::srgb(0.30, 0.18, 0.10),
             fog_end: 320.0,
+            floor: Color::srgb(1.0, 0.95, 0.9),
         },
     },
     Look {
-        scenery: Scenery::Table,
+        scenery: Scenery::Tournament,
         theme: Theme {
-            sky: Color::srgb(0.22, 0.08, 0.06),
-            ground: Color::srgb(0.45, 0.26, 0.14),
-            road: Color::srgb(0.90, 0.84, 0.70),
-            curb_a: Color::srgb(0.70, 0.12, 0.10),
-            curb_b: Color::srgb(0.95, 0.80, 0.35),
-            sun: Color::srgb(1.0, 0.85, 0.6),
-            sun_lux: 7000.0,
-            sun_dir: Vec3::new(-0.3, -0.8, 0.4),
-            ambient: Color::srgb(1.0, 0.8, 0.6),
-            ambient_brightness: 700.0,
-            fog: Color::srgb(0.22, 0.08, 0.06),
-            fog_end: 380.0,
+            sky: Color::srgb(0.50, 0.56, 0.68),
+            ground: Color::srgb(0.04, 0.13, 0.42),
+            road: Color::srgb(0.10, 0.30, 0.76),
+            curb_a: Color::srgb(0.95, 0.95, 0.95),
+            curb_b: Color::srgb(0.85, 0.7, 0.25),
+            sun: Color::srgb(0.85, 0.9, 1.0),
+            sun_lux: 6500.0,
+            sun_dir: Vec3::new(-0.1, -0.95, 0.2),
+            ambient: Color::srgb(0.85, 0.9, 1.0),
+            ambient_brightness: 1400.0,
+            fog: Color::srgb(0.50, 0.56, 0.68),
+            fog_end: 430.0,
+            floor: Color::srgb(0.92, 0.95, 1.0),
         },
     },
     Look {
-        scenery: Scenery::Maze,
+        scenery: Scenery::Neon,
         theme: Theme {
-            sky: Color::srgb(0.36, 0.30, 0.52),
-            ground: Color::srgb(0.30, 0.26, 0.12),
-            road: Color::srgb(0.46, 0.34, 0.22),
-            curb_a: Color::srgb(0.85, 0.75, 0.35),
-            curb_b: Color::srgb(0.55, 0.20, 0.40),
-            sun: Color::srgb(0.95, 0.60, 0.65),
-            sun_lux: 5000.0,
-            sun_dir: Vec3::new(-0.7, -0.3, -0.5),
-            ambient: Color::srgb(0.6, 0.6, 1.0),
-            ambient_brightness: 700.0,
-            fog: Color::srgb(0.36, 0.30, 0.52),
-            fog_end: 220.0,
+            sky: Color::srgb(0.07, 0.03, 0.16),
+            ground: Color::srgb(0.10, 0.05, 0.18),
+            road: Color::srgb(0.22, 0.20, 0.32),
+            curb_a: Color::srgb(0.15, 0.95, 0.9),
+            curb_b: Color::srgb(0.95, 0.15, 0.7),
+            sun: Color::srgb(0.8, 0.45, 1.0),
+            sun_lux: 2200.0,
+            sun_dir: Vec3::new(-0.7, -0.45, -0.5),
+            ambient: Color::srgb(0.6, 0.45, 1.0),
+            ambient_brightness: 1100.0,
+            fog: Color::srgb(0.07, 0.03, 0.16),
+            fog_end: 210.0,
+            floor: Color::srgb(0.8, 0.7, 1.0),
         },
     },
 ];
@@ -161,6 +169,24 @@ impl Track {
     /// The track a race setup asks for, generated from its seed.
     pub fn of(setup: &Setup) -> Self {
         generate::track(setup.seed)
+    }
+
+    /// How far the table reaches past the road, so props have felt to stand on.
+    pub const MARGIN: f32 = 75.0;
+    /// How far the floor lies below the table top.
+    pub const DROP: f32 = 45.0;
+    /// Metres of felt or floor per repeat of a texture.
+    pub const TILE: f32 = 14.0;
+
+    /// Corners of the table top, a rectangle around the whole road.
+    pub fn table(&self) -> (Vec2, Vec2) {
+        let (mut lo, mut hi) = (Vec2::splat(f32::MAX), Vec2::splat(f32::MIN));
+        for p in &self.points {
+            lo = lo.min(*p);
+            hi = hi.max(*p);
+        }
+        let room = Vec2::splat(self.barrier() + Self::MARGIN);
+        ((lo - room).floor(), (hi + room).ceil())
     }
 
     /// Distance from the centerline where the invisible wall stands.
@@ -498,17 +524,18 @@ fn quads(
 ) -> Mesh {
     let mut positions = Vec::new();
     let mut vertex_colors = Vec::new();
+    let mut uvs = Vec::new();
     let mut indices = Vec::new();
     for (quad, color) in corners.iter().zip(colors) {
         let base = positions.len() as u32;
         for corner in quad {
             positions.push(corner.to_array());
+            uvs.push([corner.x / Track::TILE, corner.z / Track::TILE]);
             vertex_colors.push(color.to_linear().to_f32_array());
         }
         indices.extend([base, base + 2, base + 1, base + 1, base + 2, base + 3]);
     }
     let normals = vec![[0.0, 1.0, 0.0]; positions.len()];
-    let uvs = vec![[0.0, 0.0]; positions.len()];
     Mesh::new(
         PrimitiveTopology::TriangleList,
         RenderAssetUsages::default(),
@@ -520,47 +547,53 @@ fn quads(
     .with_inserted_indices(Indices::U32(indices))
 }
 
-/// A square grid of ground `size` wide following [`Track::ground`], a little below the
-/// road so its flat triangles never poke through. Built once per race.
+/// A grid of ground over the table following [`Track::ground`], a little below the road so
+/// its flat triangles never poke through. Built once per race.
 fn terrain(
     track: &Track,
-    size: f32,
     cell: f32,
 ) -> Mesh {
-    let cells = (size / cell) as usize;
-    let side = cells + 1;
-    let half = size / 2.0;
-    let mut heights = Vec::with_capacity(side * side);
-    for row in 0..side {
-        for col in 0..side {
-            let p = Vec2::new(col as f32 * cell - half, row as f32 * cell - half);
-            heights.push(track.ground(p) - 0.25);
+    let (lo, hi) = track.table();
+    let (cols, rows) = (
+        ((hi.x - lo.x) / cell).ceil() as usize,
+        ((hi.y - lo.y) / cell).ceil() as usize,
+    );
+    let side = cols + 1;
+    // The grid runs a little past `hi` when the table is not a whole number of cells
+    let corner = |row: usize, col: usize| {
+        Vec2::new(
+            (lo.x + col as f32 * cell).min(hi.x),
+            (lo.y + row as f32 * cell).min(hi.y),
+        )
+    };
+    let mut heights = Vec::with_capacity(side * (rows + 1));
+    for row in 0..=rows {
+        for col in 0..=cols {
+            heights.push(track.ground(corner(row, col)) - 0.25);
         }
     }
-    let at = |row: usize, col: usize| heights[row.min(cells) * side + col.min(cells)];
-    let mut positions = Vec::with_capacity(side * side);
-    let mut normals = Vec::with_capacity(side * side);
-    for row in 0..side {
-        for col in 0..side {
-            positions.push([
-                col as f32 * cell - half,
-                at(row, col),
-                row as f32 * cell - half,
-            ]);
+    let at = |row: usize, col: usize| heights[row.min(rows) * side + col.min(cols)];
+    let mut positions = Vec::with_capacity(heights.len());
+    let mut normals = Vec::with_capacity(heights.len());
+    let mut uvs = Vec::with_capacity(heights.len());
+    for row in 0..=rows {
+        for col in 0..=cols {
+            let p = corner(row, col);
+            positions.push([p.x, at(row, col), p.y]);
+            uvs.push([p.x / Track::TILE, p.y / Track::TILE]);
             let dx = at(row, col + 1) - at(row, col.saturating_sub(1));
             let dz = at(row + 1, col) - at(row.saturating_sub(1), col);
             normals.push(Vec3::new(-dx, 2.0 * cell, -dz).normalize().to_array());
         }
     }
-    let mut indices = Vec::with_capacity(cells * cells * 6);
-    for row in 0..cells {
-        for col in 0..cells {
+    let mut indices = Vec::with_capacity(cols * rows * 6);
+    for row in 0..rows {
+        for col in 0..cols {
             let a = (row * side + col) as u32;
             let (b, c, d) = (a + 1, a + side as u32, a + side as u32 + 1);
             indices.extend([a, c, b, b, c, d]);
         }
     }
-    let uvs = vec![[0.0, 0.0]; positions.len()];
     Mesh::new(
         PrimitiveTopology::TriangleList,
         RenderAssetUsages::default(),
@@ -600,6 +633,7 @@ pub fn spawn_track(
     options: Res<Options>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
+    mut images: ResMut<Assets<Image>>,
 ) {
     let track = Track::of(&setup);
     let theme = track.theme;
@@ -613,22 +647,27 @@ pub fn spawn_track(
         ..default()
     });
 
-    // Ground: hills around a hilly road, a plain plane around a flat one
-    let ground = if track.hilly() {
-        terrain(&track, 900.0, 6.0)
-    } else {
-        Plane3d::default().mesh().size(900.0, 900.0).into()
-    };
+    // The table top: felt over hills around a hilly road, flat around a flat one
+    let nap = images.add(crate::textures::felt());
     commands.spawn((
-        Mesh3d(meshes.add(ground)),
+        Mesh3d(meshes.add(terrain(&track, 6.0))),
         MeshMaterial3d(materials.add(StandardMaterial {
             base_color: theme.ground,
+            base_color_texture: Some(nap.clone()),
             perceptual_roughness: 1.0,
             ..default()
         })),
         Transform::from_xyz(0.0, -0.02, 0.0),
         scope.clone(),
     ));
+    // The lane's own felt, so it reads as worn cloth under the tyres
+    let lane = materials.add(StandardMaterial {
+        base_color: Color::WHITE,
+        base_color_texture: Some(nap),
+        perceptual_roughness: 0.95,
+        cull_mode: None,
+        ..default()
+    });
 
     // Road, slightly darker down the middle for a worn racing line
     // A half-pipe needs strips across the road to curve; a flat road takes one
@@ -641,14 +680,18 @@ pub fn spawn_track(
         .collect();
     let colors: Vec<Color> = (0..road.len())
         .map(|i| {
-            let wobble = ((i as f32 * 0.37).sin() * 0.03) + 1.0;
+            // Cloth wears unevenly: slow drifts along the lap plus a little per-quad grain
+            let wobble = 1.0
+                + (i as f32 * 0.37).sin() * 0.02
+                + (i as f32 * 0.021).sin() * 0.05
+                + (i as f32 * 0.07 + 1.3).cos() * 0.03;
             let c = theme.road.to_srgba();
             Color::srgb(c.red * wobble, c.green * wobble, c.blue * wobble)
         })
         .collect();
     commands.spawn((
         Mesh3d(meshes.add(quads(&road, &colors))),
-        MeshMaterial3d(painted.clone()),
+        MeshMaterial3d(lane),
         scope.clone(),
     ));
 
@@ -768,7 +811,7 @@ pub fn spawn_track(
         scope.clone(),
     ));
 
-    // Gravy rivers
+    // Pocket tunnels
     for (a, b, r) in &track.shortcuts {
         let ab = *b - *a;
         let mid = (*a + *b) / 2.0;
@@ -776,7 +819,7 @@ pub fn spawn_track(
         commands.spawn((
             Mesh3d(meshes.add(Capsule2d::new(*r, ab.length()))),
             MeshMaterial3d(materials.add(StandardMaterial {
-                base_color: Color::srgb(0.48, 0.27, 0.10),
+                base_color: Color::srgb(0.03, 0.03, 0.04),
                 perceptual_roughness: 0.15,
                 reflectance: 0.7,
                 ..default()

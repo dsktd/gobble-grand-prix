@@ -1,4 +1,4 @@
-//! Music: the player's own files from the music folder, else the bundled bluegrass
+//! Music: the player's own files from the music folder, else the bundled acoustic
 //! soundtrack (see CREDITS.md). Cues crossfade; the final lap speeds the race tune up.
 
 use bevy::audio::AudioSinkPlayback;
@@ -86,9 +86,9 @@ impl Track {
     }
 }
 
-/// `$XDG_DATA_HOME/gobble-gp/music`, usually `~/.local/share/gobble-gp/music`.
+/// `$XDG_DATA_HOME/super-slop-kart/music`, usually `~/.local/share/super-slop-kart/music`.
 fn folder() -> Option<std::path::PathBuf> {
-    Some(dirs::data_dir()?.join("gobble-gp").join("music"))
+    Some(crate::options_file::data_dir()?.join("music"))
 }
 
 fn playable(path: &std::path::Path) -> bool {

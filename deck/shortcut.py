@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Add or refresh the "Gobble Grand Prix" entry in Steam's shortcuts.vdf (runs on the Steam Deck, python3 only).
+"""Add or refresh the "Super Slop Kart" entry in Steam's shortcuts.vdf (runs on the Steam Deck, python3 only).
 
-    shortcut.py [--steam ~/.local/share/Steam] [--exe ~/Games/gobble-gp/gobble] [--art ~/Games/gobble-gp/art]
+    shortcut.py [--steam ~/.local/share/Steam] [--exe ~/Games/super-slop-kart/super-slop-kart] [--art ~/Games/super-slop-kart/art]
 
 Writes every user's config/shortcuts.vdf (a .bak beside it), refuses while Steam runs: Steam keeps the file in memory
 and overwrites it on exit. Uses the `vdf` module when installed, else the small binary-VDF reader and writer below.
@@ -14,7 +14,7 @@ import subprocess
 import sys
 import zlib
 
-NAME = "Gobble Grand Prix"
+NAME = "Super Slop Kart"
 
 
 # Binary VDF (the KeyValues format): a map is a sequence of typed entries, ended by 0x08.
@@ -134,10 +134,10 @@ def steam_running():
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--steam", default=os.path.expanduser("~/.local/share/Steam"))
-    ap.add_argument("--exe", default=os.path.expanduser("~/Games/gobble-gp/gobble"))
-    ap.add_argument("--start-dir", default=os.path.expanduser("~/Games/gobble-gp"))
+    ap.add_argument("--exe", default=os.path.expanduser("~/Games/super-slop-kart/super-slop-kart"))
+    ap.add_argument("--start-dir", default=os.path.expanduser("~/Games/super-slop-kart"))
     ap.add_argument("--options", default="")
-    ap.add_argument("--art", default=os.path.expanduser("~/Games/gobble-gp/art"))
+    ap.add_argument("--art", default=os.path.expanduser("~/Games/super-slop-kart/art"))
     ap.add_argument("--force", action="store_true", help="write even while Steam runs (it will overwrite the file)")
     a = ap.parse_args()
     if steam_running() and not a.force:

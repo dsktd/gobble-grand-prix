@@ -6,15 +6,15 @@ build:
 
 # Play
 run: build
-    nix develop -c ./target/release/gobble
+    nix develop -c ./target/release/super-slop-kart
 
 # Play with Mesa's RADV driver (inside the Claude container)
 run-radv: build
-    VK_ICD_FILENAMES={{mesa}}/share/vulkan/icd.d/radeon_icd.x86_64.json nix develop -c ./target/release/gobble
+    VK_ICD_FILENAMES={{mesa}}/share/vulkan/icd.d/radeon_icd.x86_64.json nix develop -c ./target/release/super-slop-kart
 
 # Scripted screenshot tour of one track (0, 1 or 2) into screenshots/
 shots track="0": build
-    VK_ICD_FILENAMES={{mesa}}/share/vulkan/icd.d/radeon_icd.x86_64.json nix develop -c ./target/release/gobble shots {{track}}
+    VK_ICD_FILENAMES={{mesa}}/share/vulkan/icd.d/radeon_icd.x86_64.json nix develop -c ./target/release/super-slop-kart shots {{track}}
 
 # Steam Deck test binary (glibc 2.35, Zen 2) in target/deck/x86_64-unknown-linux-gnu/deck-dev/; add --release for tags
 deck-build *args:

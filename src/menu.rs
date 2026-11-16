@@ -13,7 +13,7 @@ pub(super) mod prelude {
 }
 
 /// The build's version line, from build.rs.
-pub const VERSION: &str = env!("GOBBLE_VERSION");
+pub const VERSION: &str = env!("SLOP_VERSION");
 
 /// CHANGELOG.md, embedded.
 const CHANGELOG: &str = include_str!("../CHANGELOG.md");
@@ -42,7 +42,7 @@ struct NewsBox;
 /// A new build opens the box on its first launch; the build line is stored to tell.
 #[cfg(not(test))]
 fn first_launch(mut whats: ResMut<Whats>) {
-    let Some(path) = dirs::data_dir().map(|d| d.join("gobble-gp").join("last-seen")) else {
+    let Some(path) = crate::options_file::data_dir().map(|d| d.join("last-seen")) else {
         return;
     };
     // The build time changes on every compile; the tag, count and sha say what it is
@@ -357,8 +357,8 @@ fn stage(
                 UiPosition::CENTER,
                 RadialGradientShape::FarthestCorner,
                 vec![
-                    ColorStop::percent(Tone::BROWN_900.with_alpha(inner), 30.0),
-                    ColorStop::percent(Tone::BROWN_900.with_alpha(outer), 100.0),
+                    ColorStop::percent(Tone::FELT_900.with_alpha(inner), 30.0),
+                    ColorStop::percent(Tone::FELT_900.with_alpha(outer), 100.0),
                 ],
             )),
             DespawnOnExit(state),
@@ -437,10 +437,10 @@ fn button(
             Slot(slot),
             Ring,
             Fill {
-                idle: Tone::BROWN_700,
-                focus: Tone::PUMPKIN,
+                idle: Tone::FELT_700,
+                focus: Tone::BRASS,
             },
-            BackgroundColor(Tone::BROWN_700),
+            BackgroundColor(Tone::FELT_700),
             BorderColor::all(Color::NONE),
             Node {
                 align_items: AlignItems::Center,
@@ -455,7 +455,7 @@ fn button(
                 Slot(slot),
                 Ink {
                     idle: Tone::CREAM_100,
-                    focus: Tone::BROWN_900,
+                    focus: Tone::FELT_900,
                 },
                 fit_text(
                     value,
@@ -482,10 +482,10 @@ fn list_row(
         .spawn((
             Slot(slot),
             Fill {
-                idle: Tone::BROWN_800,
-                focus: Tone::PUMPKIN,
+                idle: Tone::FELT_800,
+                focus: Tone::BRASS,
             },
-            BackgroundColor(Tone::BROWN_800),
+            BackgroundColor(Tone::FELT_800),
             Node {
                 align_items: AlignItems::Center,
                 padding: UiRect::horizontal(px(Space::L)),
@@ -499,7 +499,7 @@ fn list_row(
                 Slot(slot),
                 Ink {
                     idle: Tone::CREAM_100,
-                    focus: Tone::BROWN_900,
+                    focus: Tone::FELT_900,
                 },
                 fit_text(
                     value,
@@ -535,16 +535,16 @@ fn option_row(
 ) {
     let ink = Ink {
         idle: Tone::CREAM_100,
-        focus: Tone::BROWN_900,
+        focus: Tone::FELT_900,
     };
     stage
         .spawn((
             Slot(slot),
             Fill {
-                idle: Tone::BROWN_800,
-                focus: Tone::PUMPKIN,
+                idle: Tone::FELT_800,
+                focus: Tone::BRASS,
             },
-            BackgroundColor(Tone::BROWN_800),
+            BackgroundColor(Tone::FELT_800),
             Node {
                 border_radius: pill(Space::RADIUS_S),
                 ..boxed(at.0, at.1, 600.0, 72.0)
@@ -576,10 +576,10 @@ fn option_row(
                         Bind::Pip(opt, i),
                         Slot(slot),
                         Fill {
-                            idle: Tone::BROWN_700,
+                            idle: Tone::FELT_700,
                             focus: Tone::CREAM_100,
                         },
-                        BackgroundColor(Tone::BROWN_700),
+                        BackgroundColor(Tone::FELT_700),
                         Node {
                             border_radius: pill(4.0),
                             ..boxed(356.0 + f32::from(i) * 18.0, 24.0, 14.0, 24.0)
@@ -658,9 +658,9 @@ fn title(commands: &mut Commands) {
                 justify_content: JustifyContent::Center,
                 ..boxed(720.0, 96.0, 512.0, 44.0)
             },
-            BackgroundColor(Tone::CRANBERRY),
+            BackgroundColor(Tone::BALL_RED),
             children![fit_text(
-                "THANKSGIVING KART RACING",
+                "POOL HALL KART RACING",
                 Size::LABEL,
                 Weight::SemiBold,
                 Tone::CREAM_100,
@@ -673,10 +673,10 @@ fn title(commands: &mut Commands) {
             (720.0, 154.0),
             (512.0, 108.0),
             fit_text(
-                "GOBBLE",
+                "SUPER SLOP",
                 Size::DISPLAY,
                 Weight::Bold,
-                Tone::PUMPKIN,
+                Tone::BRASS,
                 512.0,
                 1,
             ),
@@ -687,7 +687,7 @@ fn title(commands: &mut Commands) {
             (720.0, 262.0),
             (512.0, 78.0),
             fit_text(
-                "GRAND PRIX",
+                "KART",
                 Size::DISPLAY_SUB,
                 Weight::Bold,
                 Tone::CREAM_100,
@@ -741,7 +741,7 @@ fn news_box(stage: &mut ChildSpawnerCommands) {
                 border_radius: pill(Space::RADIUS_M),
                 ..boxed(320.0, 160.0, 640.0, 440.0)
             },
-            BackgroundColor(Tone::BROWN_800),
+            BackgroundColor(Tone::FELT_800),
             BorderColor::all(Tone::CREAM_100),
         ))
         .with_children(|b| {
@@ -749,7 +749,7 @@ fn news_box(stage: &mut ChildSpawnerCommands) {
                 "What's new",
                 Size::H2,
                 Weight::Bold,
-                Tone::PUMPKIN,
+                Tone::BRASS,
                 584.0,
                 1,
             ));
@@ -853,7 +853,7 @@ fn invite(
                         "Phone controller",
                         Size::BODY,
                         Weight::Medium,
-                        Tone::PUMPKIN,
+                        Tone::BRASS,
                         w,
                         1,
                     ));
@@ -898,7 +898,7 @@ fn options(commands: &mut Commands) {
                     border_radius: pill(Space::RADIUS_M),
                     ..boxed(672.0, 120.0, 560.0, 488.0)
                 },
-                BackgroundColor(Tone::BROWN_800),
+                BackgroundColor(Tone::FELT_800),
             ))
             .with_children(|panel| {
                 caption(
@@ -918,7 +918,7 @@ fn options(commands: &mut Commands) {
                 for (i, (action, name)) in CONTROLS.into_iter().enumerate() {
                     let y = 72.0 + i as f32 * 50.0;
                     if i > 0 {
-                        panel.spawn((boxed(24.0, y, 512.0, 2.0), BackgroundColor(Tone::BROWN_700)));
+                        panel.spawn((boxed(24.0, y, 512.0, 2.0), BackgroundColor(Tone::FELT_700)));
                     }
                     panel.spawn((
                         Glyph(action, None),
@@ -953,10 +953,10 @@ fn lobby_screen(commands: &mut Commands) {
                 .spawn((
                     Bind::Seat(slot),
                     Fill {
-                        idle: Tone::BROWN_800,
-                        focus: Tone::BROWN_800,
+                        idle: Tone::FELT_800,
+                        focus: Tone::FELT_800,
                     },
-                    BackgroundColor(Tone::BROWN_800),
+                    BackgroundColor(Tone::FELT_800),
                     Node {
                         align_items: AlignItems::Center,
                         padding: UiRect::horizontal(px(Space::L)),
@@ -976,7 +976,7 @@ fn lobby_screen(commands: &mut Commands) {
                     border_radius: pill(Space::RADIUS_M),
                     ..boxed(672.0, 120.0, 560.0, 200.0)
                 },
-                BackgroundColor(Tone::BROWN_800),
+                BackgroundColor(Tone::FELT_800),
             ))
             .with_child((
                 Bind::LobbyHelp,
@@ -1065,7 +1065,7 @@ fn seat_card(
     let inner = width - 16.0;
     stage
         .spawn((
-            BackgroundColor(Tone::BROWN_800),
+            BackgroundColor(Tone::FELT_800),
             BorderColor::all(seat_color(seat)),
             Node {
                 border: UiRect::all(px(3)),
@@ -1199,10 +1199,10 @@ fn tracks(commands: &mut Commands) {
                     Slot(i),
                     Ring,
                     Fill {
-                        idle: Tone::BROWN_800,
-                        focus: Tone::PUMPKIN,
+                        idle: Tone::FELT_800,
+                        focus: Tone::BRASS,
                     },
-                    BackgroundColor(Tone::BROWN_800),
+                    BackgroundColor(Tone::FELT_800),
                     BorderColor::all(Color::NONE),
                     Node {
                         border: UiRect::all(px(Space::FOCUS)),
@@ -1232,7 +1232,7 @@ fn tracks(commands: &mut Commands) {
                     ));
                     let ink = Ink {
                         idle: Tone::CREAM_100,
-                        focus: Tone::BROWN_900,
+                        focus: Tone::FELT_900,
                     };
                     caption(
                         card,
@@ -1251,7 +1251,7 @@ fn tracks(commands: &mut Commands) {
                             Slot(i),
                             Ink {
                                 idle: Tone::CREAM_300,
-                                focus: Tone::BROWN_900,
+                                focus: Tone::FELT_900,
                             },
                             fit_text(
                                 blurb,
@@ -1271,7 +1271,7 @@ fn tracks(commands: &mut Commands) {
                                 SeedLabel,
                                 Ink {
                                     idle: Tone::CREAM_300,
-                                    focus: Tone::BROWN_900,
+                                    focus: Tone::FELT_900,
                                 },
                                 fit_text(
                                     "Seed 0000000000",
@@ -1434,12 +1434,12 @@ fn bind(
                 let on = opt.level(&options).is_some_and(|level| i < level);
                 *fill = if on {
                     Fill {
-                        idle: Tone::PUMPKIN,
-                        focus: Tone::BROWN_900,
+                        idle: Tone::BRASS,
+                        focus: Tone::FELT_900,
                     }
                 } else {
                     Fill {
-                        idle: Tone::BROWN_700,
+                        idle: Tone::FELT_700,
                         focus: Tone::CREAM_100,
                     }
                 };
@@ -1447,9 +1447,9 @@ fn bind(
             Bind::Seat(slot) => {
                 let joined = seats.0.get(slot).is_some();
                 let c = if joined {
-                    Tone::CRANBERRY
+                    Tone::BALL_RED
                 } else {
-                    Tone::BROWN_800
+                    Tone::FELT_800
                 };
                 *fill = Fill { idle: c, focus: c };
             }
@@ -1461,9 +1461,9 @@ fn bind(
                     Some(seat) if setup.racers.len() > 1 => {
                         let c = seat_color(seat);
                         // Kept dark enough for the cream name on top
-                        c.mix(&Tone::BROWN_800, if locked(seat) { 0.35 } else { 0.7 })
+                        c.mix(&Tone::FELT_800, if locked(seat) { 0.35 } else { 0.7 })
                     }
-                    _ => Tone::BROWN_800,
+                    _ => Tone::FELT_800,
                 };
             }
             _ => {}
@@ -1546,7 +1546,7 @@ fn backdrop(
             Camera3d::default(),
             Camera {
                 order: 2 + seat as isize,
-                clear_color: ClearColorConfig::Custom(Tone::BROWN_900),
+                clear_color: ClearColorConfig::Custom(Tone::FELT_900),
                 is_active: false,
                 ..default()
             },

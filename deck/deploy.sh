@@ -10,22 +10,22 @@ D=~/claude/.services/deckupdate/deckjob
 dk=~/claude/nx2navi/tools/deck/dk
 profile=deck-dev
 [ "${1:-}" = "--release" ] && profile=release
-bin=target/deck/x86_64-unknown-linux-gnu/$profile/gobble
+bin=target/deck/x86_64-unknown-linux-gnu/$profile/super-slop-kart
 commit=$(git describe --always --dirty)
 
 stage() {
-  "$D" cargo "Gobble GP" -- ./deck-build.sh "$@" || return 1
+  "$D" cargo "Super Slop Kart" -- ./deck-build.sh "$@" || return 1
   local sum built
   sum=$(sha256sum "$bin" | cut -d' ' -f1)
   built=$(date -u -r "$bin" +%FT%TZ)
-  "$D" copy "Gobble GP" "$bin" deck:/tmp/gobble.new || return 1
-  "$D" run "Gobble GP" swap -- "$dk" "
+  "$D" copy "Super Slop Kart" "$bin" deck:/tmp/ssk.new || return 1
+  "$D" run "Super Slop Kart" swap -- "$dk" "
     set -e
-    cd ~/Games/gobble-gp
-    install -m755 /tmp/gobble.new gobble.new
-    [ \"\$(sha256sum gobble.new | cut -d' ' -f1)\" = '$sum' ]
-    ! ldd gobble.new | grep 'not found'
-    mv gobble.new gobble
+    cd ~/Games/super-slop-kart
+    install -m755 /tmp/ssk.new ssk.new
+    [ \"\$(sha256sum ssk.new | cut -d' ' -f1)\" = '$sum' ]
+    ! ldd ssk.new | grep 'not found'
+    mv ssk.new super-slop-kart
     printf 'commit %s\nprofile %s\nbuilt %s\nsha256 %s\n' '$commit' '$profile' '$built' '${sum:0:16}' > BUILD.txt
     cat BUILD.txt" || return 1
 }

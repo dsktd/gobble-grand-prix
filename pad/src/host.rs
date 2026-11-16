@@ -15,8 +15,8 @@ async fn main() {
         .and_then(|s| s.parse().ok())
         .unwrap_or(120);
     let endpoint = Endpoint::builder(presets::N0)
-        .relay_mode(gobble_pad::relays())
-        .alpns(vec![gobble_pad::ALPN.to_vec()])
+        .relay_mode(slop_pad::relays())
+        .alpns(vec![slop_pad::ALPN.to_vec()])
         .bind()
         .await
         .expect("iroh endpoint");

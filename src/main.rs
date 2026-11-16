@@ -17,19 +17,24 @@ fn main() {
         .add_plugins((
             DefaultPlugins.set(WindowPlugin {
                 primary_window: Some(Window {
-                    title: "Gobble Grand Prix".to_string(),
+                    title: "Super Slop Kart".to_string(),
                     resolution: if fullscreen {
                         WindowResolution::new(1280, 800).with_scale_factor_override(1.0)
                     } else {
                         (1280, 800).into()
                     },
                     mode,
-                    present_mode: PresentMode::AutoVsync,
+                    // Benchmarks run uncapped so frame times show the real cost
+                    present_mode: if std::env::var_os("SLOP_BENCH").is_some() {
+                        PresentMode::AutoNoVsync
+                    } else {
+                        PresentMode::AutoVsync
+                    },
                     ..default()
                 }),
                 ..default()
             }),
-            gobble::plugin,
+            super_slop_kart::plugin,
         ))
         .run();
 }

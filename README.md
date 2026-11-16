@@ -1,6 +1,6 @@
-# Gobble Grand Prix
+# Super Slop Kart
 
-A small Thanksgiving kart racer in Rust and Bevy. Every mesh and sound is made in code.
+A small pool-hall kart racer, for some reason, in Rust and Bevy. Every mesh and sound is made in code.
 
 ## Play
 
@@ -25,13 +25,13 @@ Hold drift while steering into a turn: sparks go white, then blue, then orange. 
 
 ## What's in it
 
-- Racers: Tom Gobbler (turkey in a gravy boat), Patty Crust (pumpkin pie), Cranston Can (cranberry sauce), Kernel Cob (corn), Elder Spud (pilgrim potato), Marsha Mallow (sweet potato casserole).
-- Tracks: a new random track every race, in a farm, feast-table or cornfield look, with hills, ramps, gaps and the odd figure eight.
-- Items from harvest crates: Cranberry (homing), Gravy Slick (dropped behind), Stuffing Boost.
+- Racers: Eight Ball Eddie, Stripe Sally, Chalky Blue (a cube of chalk), Rack Rita (a rack of balls), Hustler Hank, Felt Felicia (a pool table) and Wailing Whiskers (a cat).
+- Tracks: a new random track every race, in a corner-bar green felt, blue tournament felt or neon pool hall look, with hills, ramps, gaps and the odd figure eight.
+- Items from chalk boxes: Cue Ball (homing), Spilled Drink (dropped behind), Cue Kick (boost).
 - 3 laps, 5 CPU racers with rubber banding, countdown, results board, options (volume, quality, controls).
 
-`gobble shots <track> [high|low] [racer] [seats] [top|side|diagonal]` runs a scripted tour and saves screenshots to `screenshots/`.
-Set `GOBBLE_BENCH=<file>` to run the tour without screenshots and write frame-time percentiles to that file (and the log).
+`super-slop-kart shots <track> [high|low] [racer] [seats] [top|side|diagonal]` runs a scripted tour and saves screenshots to `screenshots/`.
+Set `SLOP_BENCH=<file>` to run the tour without screenshots and write frame-time percentiles to that file (and the log).
 
 ## Changelog
 
@@ -51,13 +51,13 @@ normal releases. `ci/` holds the helper scripts.
 ## Steam Deck
 
 `just deck-build` makes the Deck binary. `deck/art.sh` turns the screenshot tour into library art, and
-`deck/shortcut.py` (run on the Deck as `deck`, with Steam stopped) adds the "Gobble Grand Prix" non-Steam shortcut
+`deck/shortcut.py` (run on the Deck as `deck`, with Steam stopped) adds the "Super Slop Kart" non-Steam shortcut
 with that art. On the Deck the game runs borderless fullscreen at 1280x800.
 
 ## Music
 
-The game ships a CC0 bluegrass soundtrack (see `CREDITS.md`): a menu loop and three race loops, one per race in
-turn, that speed up a touch on the final lap; cues crossfade. To use your own music, put files in `~/.local/share/gobble-gp/music/` (`$XDG_DATA_HOME/gobble-gp/music/`):
+The game ships a CC0 acoustic soundtrack (see `CREDITS.md`): a menu loop and three race loops, one per race in
+turn, that speed up a touch on the final lap; cues crossfade. To use your own music, put files in `~/.local/share/super-slop-kart/music/` (`$XDG_DATA_HOME/super-slop-kart/music/`):
 
 - `menu.ogg` / `menu.mp3` / `menu.flac` plays on the menus, `race.*` during races;
 - with neither name present, every other file there becomes the race playlist.

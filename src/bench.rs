@@ -1,7 +1,8 @@
-//! Frame-time benchmark: `GOBBLE_BENCH=<file> gobble shots ...` runs the screenshot tour without
+//! Frame-time benchmark: `SLOP_BENCH=<file> super-slop-kart shots ...` runs the screenshot tour without
 //! screenshots or fast-forward and writes frame-time stats per game state to `<file>` at exit.
-//! `GOBBLE_BENCH_SECS=<secs>` ends the run early.
-//! `GOBBLE_BENCH_HOLD=<secs>` stays on the title screen (attract race) that much longer.
+//! The window is uncapped (no vsync) while benchmarking.
+//! `SLOP_BENCH_SECS=<secs>` ends the run early.
+//! `SLOP_BENCH_HOLD=<secs>` stays on the title screen (attract race) that much longer.
 
 use std::collections::BTreeMap;
 use std::fmt::Write as _;
@@ -13,12 +14,12 @@ use crate::prelude::*;
 
 /// Where to write the stats, if benchmarking.
 pub(super) fn path() -> Option<String> {
-    std::env::var("GOBBLE_BENCH").ok()
+    std::env::var("SLOP_BENCH").ok()
 }
 
 /// Extra seconds on the title screen before the tour moves on.
 pub(super) fn hold() -> f32 {
-    std::env::var("GOBBLE_BENCH_HOLD")
+    std::env::var("SLOP_BENCH_HOLD")
         .ok()
         .and_then(|s| s.parse().ok())
         .unwrap_or(0.0)
@@ -31,12 +32,12 @@ pub(super) fn plugin(app: &mut App) {
     }
 }
 
-/// Ends the run after `GOBBLE_BENCH_SECS` of wall time, if set.
+/// Ends the run after `SLOP_BENCH_SECS` of wall time, if set.
 fn stop(
     time: Res<Time<Real>>,
     mut exit: MessageWriter<AppExit>,
 ) {
-    let secs = std::env::var("GOBBLE_BENCH_SECS")
+    let secs = std::env::var("SLOP_BENCH_SECS")
         .ok()
         .and_then(|s| s.parse().ok());
     if secs.is_some_and(|s: f32| time.elapsed_secs() > s) {

@@ -116,7 +116,7 @@ fn clip(sfx: Sfx) -> Vec<f32> {
     match sfx {
         Sfx::Beep => render(0.2, |t, p| sine(t * 440.0) * 0.6 * (1.0 - p)),
         Sfx::Go => {
-            // A rising turkey gobble: warbling pitch with stutter
+            // A rising air-horn warble: warbling pitch with stutter
             render(0.7, |t, p| {
                 let f = 330.0 + 140.0 * p + 60.0 * sine(t * 22.0);
                 let stutter = 0.6 + 0.4 * sine(t * 11.0).abs();

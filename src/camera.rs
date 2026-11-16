@@ -333,7 +333,7 @@ struct DiagonalMask {
 }
 impl UiMaterial for DiagonalMask {
     fn fragment_shader() -> bevy::shader::ShaderRef {
-        "embedded://gobble/diagonal.wesl".into()
+        "embedded://super_slop_kart/diagonal.wesl".into()
     }
 }
 
